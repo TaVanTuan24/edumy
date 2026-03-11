@@ -1,0 +1,33 @@
+<% layout('/layouts/boilerplate')%>
+
+    <h2>Lịch sử quét vật thể</h2>
+
+    <table border="1" cellpadding="8" class="table table-striped">
+        <tr>
+            <th>#</th>
+            <th>Tên vật thể</th>
+            <th>Thời gian</th>
+            <th>Hành động</th>
+        </tr>
+
+        <% logs.forEach((log, index)=> { %>
+            <tr>
+                <td>
+                    <%= index + 1 %>
+                </td>
+                <td>
+                    <%= log.targetName %>
+                </td>
+                <td>
+                    <%= log.scannedAt %>
+                </td>
+                <td>
+                    <form method="POST" action="/dashboard/delete/<%= log.id %>"
+                        onsubmit="return confirm('Xóa log này?')">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                    <a href="/dashboard/edit/<%= log.id %>" class="btn btn-primary">Edit</a>
+                </td>
+            </tr>
+            <% }) %>
+    </table>

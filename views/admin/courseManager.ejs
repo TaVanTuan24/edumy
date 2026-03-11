@@ -1,0 +1,97 @@
+<% layout('/layouts/boilerplate')%>
+    <h1>Course Manager</h1>
+
+    <div class="accordion" id="courseAccordion">
+
+        <% courses.forEach((course, courseIndex)=> { %>
+
+            <div class="accordion-item">
+
+                <h2 class="accordion-header">
+
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#course<%=courseIndex%>">
+
+                        <%= course.title %>
+                    </button>
+                    <a class="btn btn-primary" href="/admin/courses/<%= course._id %>/editor">Edit</a>
+
+
+                </h2>
+
+                <div id="course<%=courseIndex%>" class="accordion-collapse collapse" data-bs-parent="#courseAccordion">
+
+                    <div class="accordion-body">
+
+
+                        <!-- Sections -->
+
+                        <div class="accordion" id="sectionAccordion<%=courseIndex%>">
+
+                            <% course.driveStructure.forEach((section, sectionIndex)=>{ %>
+
+                                <div class="accordion-item">
+
+                                    <h2 class="accordion-header">
+
+                                        <button class="accordion-button collapsed" type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#section<%=courseIndex%><%=sectionIndex%>">
+
+                                            <%= section.section %>
+
+                                        </button>
+
+                                    </h2>
+
+                                    <div id="section<%=courseIndex%><%=sectionIndex%>"
+                                        class="accordion-collapse collapse">
+
+                                        <div class="accordion-body">
+
+
+                                            <!-- Lessons -->
+
+                                            <ul class="list-group">
+
+                                                <% section.videos.forEach((video, videoIndex)=>{ %>
+
+                                                    <li class="list-group-item">
+
+                                                        <b>
+                                                            <%= video.name %>
+                                                        </b>
+
+                                                        <br>
+
+                                                        <a href="<%= video.preview %>" target="_blank">
+
+                                                            <%= video.preview %>
+
+                                                        </a>
+
+                                                    </li>
+
+                                                    <% }) %>
+
+                                            </ul>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                                <% }) %>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <% }) %>
+
+    </div>

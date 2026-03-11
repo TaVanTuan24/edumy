@@ -17,6 +17,9 @@ const userRoutes = require('./routes/users');
 const courseRoutes = require('./routes/courses');
 const reviewRoutes = require('./routes/reviews');
 const exploreRoutes = require('./routes/explore');
+const dashboardRoutes = require("./routes/dashboard");
+const adminRoutes = require('./routes/admin');
+
 const { content } = require('googleapis/build/src/apis/content');
 const mongoStore = require('connect-mongo');
 
@@ -50,7 +53,7 @@ const store = mongoStore.create({
 });
 store.on("error", function (e) {
     console.log("SESSION STORE ERROR", e);
-}); 
+});
 
 const sessionConfig = {
     store: store,
@@ -122,7 +125,8 @@ app.use('/', userRoutes)
 app.use('/courses', courseRoutes)
 app.use('/explore', exploreRoutes)
 app.use('/courses/:id/reviews', reviewRoutes)
-
+app.use("/dashboard", dashboardRoutes);
+app.use('/admin', adminRoutes);
 
 app.get('/', (req, res) => {
     res.render('home')

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+    <title>Course Editor</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            margin: 40px;
+            background: #f4f4f4;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        .section {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .sectionTitle {
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .lessonList {
+            margin-top: 10px;
+            display: none;
+        }
+
+        .lesson {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .lesson button {
+            padding: 4px 10px;
+            cursor: pointer;
+        }
+
+        .popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .popupContent {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 400px;
+        }
+
+        .popupContent input {
+            width: 100%;
+            padding: 6px;
+            margin-bottom: 10px;
+        }
+
+        .popupButtons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .lesson {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .dragHandle {
+            cursor: grab;
+            margin-right: 10px;
+            font-size: 18px;
+        }
+
+        .dragHandle:active {
+            cursor: grabbing;
+        }
+
+        .dragging {
+            opacity: 0.5;
+        }
+    </style>
+
+</head>
+
+
+<body>
+
+    <h1>
+        <%= course.title %>
+    </h1>
+
+
+    <div id="sections">
+        <button id="addSectionBtn">
+            + Add Section
+        </button>
+        <% course.driveStructure.forEach((section,sIndex)=>{ %>
+
+            <div class="section">
+
+                <div class="sectionTitle" data-index="<%=sIndex%>">
+
+                    <span class="sectionName">
+                        <%= section.section %>
+                    </span>
+
+                    <button class="editSectionBtn" data-section="<%=sIndex%>">
+
+                        Edit
+
+                    </button>
+
+                </div>
+
+
+                <button class="addLessonBtn" data-section="<%=sIndex%>">
+
+                    + Add Lesson
+
+                </button>
+
+
+                <div class="lessonList sortableLessons" id="section-<%=sIndex%>" data-section="<%=sIndex%>"
+                    style="display:none">
+
+                    <% section.videos.forEach((video,lIndex)=>{ %>
+
+                        <div class="lesson">
+
+                            <span class="dragHandle">☰</span>
+
+                            <span class="lessonName">
+                                <%= video.name %>
+                            </span>
+
+                            <div>
+
+                                <button class="editBtn" data-section="<%=sIndex%>" data-lesson="<%=lIndex%>">
+
+                                    Edit
+
+                                </button>
+
+                                <button class="deleteBtn" data-section="<%=sIndex%>" data-lesson="<%=lIndex%>">
+
+                                    Delete
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <% }) %>
+
+                </div>
+
+            </div>
+
+            <% }) %>
+
+    </div>
+
+
+
+    <!-- EDIT POPUP -->
+
+    <div id="popup" class="popup">
+
+        <div class="popupContent">
+
+            <h3>Edit Lesson</h3>
+
+            <label>Lesson Name</label>
+            <input id="lessonName">
+
+            <label>Video URL</label>
+            <input id="lessonUrl">
+
+            <div class="popupButtons">
+
+                <button id="saveBtn">Save</button>
+                <button id="cancelBtn">Cancel</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div id="addPopup" class="popup">
+
+        <div class="popupContent">
+
+            <h3>Add Lesson</h3>
+
+            <label>Lesson Name</label>
+            <input id="newLessonName">
+
+            <label>Video URL</label>
+            <input id="newLessonUrl">
+
+            <div class="popupButtons">
+
+                <button id="addSaveBtn">Add</button>
+                <button id="addCancelBtn">Cancel</button>
+
+            </div>
+
+        </div>
+
+
+    </div>
+    <div id="editSectionPopup" class="popup" style="display:none">
+
+        <div class="popupContent">
+
+            <h3>Edit Section</h3>
+
+            <label>Section Name</label>
+
+            <input id="sectionNameInput">
+
+            <div class="popupButtons">
+
+                <button id="saveaddSectionBtn">Save</button>
+
+                <button id="cancelSectionBtn">Cancel</button>
+
+            </div>
+
+        </div>
+
+    </div>
+    <div id="addSectionPopup" class="popup" style="display:none">
+
+        <div class="popupContent">
+
+            <h3>Add Section</h3>
+
+            <label>Section name</label>
+            <input id="newSectionName">
+
+            <div class="popupButtons">
+
+                <button id="saveSectionBtn">Save</button>
+                <button id="cancelAddSectionBtn">Cancel</button>
+
+            </div>
+
+        </div>
+
+    </div>
+    <script>
+
+        const courseId = "<%=course._id%>"
+
+        const courseData = <% - JSON.stringify(course.driveStructure) %>
+
+            let editLessonIndex = null
+        let editSectionIndex = null
+
+
+        // TOGGLE SECTION
+
+        document.querySelectorAll(".sectionTitle")
+            .forEach(el => {
+
+                el.addEventListener("click", () => {
+
+                    const index = el.dataset.index
+
+                    const lessonList = document.getElementById("section-" + index)
+
+                    lessonList.style.display =
+                        lessonList.style.display === "block" ? "none" : "block"
+
+                })
+
+            })
+
+
+
+
+        // OPEN EDIT POPUP
+
+        document.querySelectorAll(".editBtn")
+            .forEach(btn => {
+
+                btn.addEventListener("click", () => {
+
+                    editSectionIndex = Number(btn.dataset.section)
+                    editLessonIndex = Number(btn.dataset.lesson)
+
+                    const lesson = courseData[editSectionIndex].videos[editLessonIndex]
+
+                    document.getElementById("lessonName").value = lesson.name
+                    document.getElementById("lessonUrl").value = lesson.preview
+
+                    document.getElementById("popup").style.display = "flex"
+
+                })
+
+            })
+
+
+
+
+        // CLOSE POPUP
+
+        document.getElementById("cancelBtn")
+            .addEventListener("click", () => {
+
+                document.getElementById("popup").style.display = "none"
+
+            })
+
+
+
+
+        // SAVE EDIT
+
+
+        document.getElementById("saveBtn")
+            .addEventListener("click", async () => {
+
+                const name = document.getElementById("lessonName").value
+                const url = document.getElementById("lessonUrl").value
+
+                console.log(editSectionIndex, editLessonIndex)
+
+                const res = await fetch(`/admin/course/${courseId}/lesson/edit`, {
+
+                    method: "PUT",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        sectionIndex: editSectionIndex,
+                        lessonIndex: editLessonIndex,
+                        name: name,
+                        url: url
+
+                    })
+
+                })
+
+                const data = await res.text()
+
+                console.log(data)
+
+                location.reload()
+
+            })
+        document.querySelectorAll(".deleteBtn")
+            .forEach(btn => {
+
+                btn.addEventListener("click", async () => {
+
+                    const sectionIndex = Number(btn.dataset.section)
+                    const lessonIndex = Number(btn.dataset.lesson)
+
+                    if (!confirm("Delete this lesson?")) return
+
+                    const res = await fetch(`/admin/course/${courseId}/lesson/delete`, {
+
+                        method: "DELETE",
+
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            sectionIndex,
+                            lessonIndex
+                        })
+
+                    })
+
+                    const data = await res.json()
+
+                    if (data.success) {
+                        location.reload()
+                    } else {
+                        alert("Delete failed")
+                    }
+
+                })
+
+            })
+        let addSectionIndex = null
+
+
+
+        // OPEN ADD POPUP
+
+        document.querySelectorAll(".addLessonBtn")
+            .forEach(btn => {
+
+                btn.addEventListener("click", () => {
+
+                    addSectionIndex = Number(btn.dataset.section)
+
+                    document.getElementById("newLessonName").value = ""
+                    document.getElementById("newLessonUrl").value = ""
+
+                    document.getElementById("addPopup").style.display = "flex"
+
+                })
+
+            })
+
+
+
+        // CLOSE ADD POPUP
+
+        document.getElementById("addCancelBtn")
+            .addEventListener("click", () => {
+
+                document.getElementById("addPopup").style.display = "none"
+
+            })
+
+
+
+
+        // SAVE ADD LESSON
+
+        document.getElementById("addSaveBtn")
+            .addEventListener("click", async () => {
+
+                const name = document.getElementById("newLessonName").value
+                const url = document.getElementById("newLessonUrl").value
+
+                await fetch(`/admin/course/${courseId}/lesson/add`, {
+
+                    method: "PUT",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        sectionIndex: addSectionIndex,
+                        name,
+                        url
+
+                    })
+
+                })
+
+                location.reload()
+
+            })
+        document.addEventListener("DOMContentLoaded", function () {
+
+            document.querySelectorAll(".sortableLessons")
+                .forEach(section => {
+
+                    new Sortable(section, {
+
+                        animation: 150,
+
+                        handle: ".dragHandle",
+
+                        onEnd: async function (evt) {
+
+                            const sectionIndex = Number(section.dataset.section)
+
+                            const lessons = []
+
+                            section.querySelectorAll(".lesson")
+                                .forEach(lesson => {
+
+                                    const title = lesson.querySelector("span:nth-child(2)").innerText
+
+                                    const found = courseData[sectionIndex].videos.find(v => v.name === title)
+
+                                    if (found) lessons.push(found)
+
+                                })
+
+                            await fetch(`/admin/course/${courseId}/lesson/reorder`, {
+
+                                method: "PUT",
+
+                                headers: {
+                                    "Content-Type": "application/json"
+                                },
+
+                                body: JSON.stringify({
+
+                                    sectionIndex,
+                                    lessons
+
+                                })
+
+                            })
+
+                        }
+
+                    })
+
+                })
+        })
+        editSectionIndex = null
+
+
+        // OPEN POPUP
+
+        document.querySelectorAll(".editSectionBtn")
+            .forEach(btn => {
+
+                btn.addEventListener("click", () => {
+
+                    editSectionIndex = Number(btn.dataset.section)
+
+                    const sectionName =
+                        courseData[editSectionIndex].section
+
+                    document.getElementById("sectionNameInput").value =
+                        sectionName
+
+                    document.getElementById("editSectionPopup").style.display =
+                        "flex"
+
+                })
+
+            })
+
+
+
+
+        // CLOSE POPUP
+
+        document.getElementById("cancelSectionBtn")
+            .addEventListener("click", () => {
+
+                document.getElementById("editSectionPopup").style.display =
+                    "none"
+
+            })
+
+
+
+
+        // SAVE SECTION NAME
+
+        document.getElementById("saveaddSectionBtn")
+            .addEventListener("click", async () => {
+
+                const newName =
+                    document.getElementById("sectionNameInput").value
+
+                await fetch(`/admin/course/${courseId}/section/edit`, {
+
+                    method: "PUT",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        sectionIndex: editSectionIndex,
+                        name: newName
+
+                    })
+
+                })
+
+                location.reload()
+
+            })
+        // document.querySelectorAll("button")
+        //         .forEach(btn => {
+
+        //             btn.addEventListener("click", (e) => {
+        //                 e.stopPropagation()
+        //             })
+
+        //         })  
+        // OPEN POPUP
+
+        document
+            .getElementById("addSectionBtn")
+            .addEventListener("click", () => {
+
+                document
+                    .getElementById("addSectionPopup")
+                    .style.display = "flex"
+
+            })
+
+
+        // CLOSE POPUP
+
+        document
+            .getElementById("cancelAddSectionBtn")
+            .addEventListener("click", () => {
+
+                document
+                    .getElementById("addSectionPopup")
+                    .style.display = "none"
+
+            })
+
+
+
+
+        // SAVE SECTION
+
+        document.addEventListener("DOMContentLoaded", () => {
+
+            const saveBtn = document.getElementById("saveSectionBtn")
+
+            if (saveBtn) {
+
+                saveBtn.addEventListener("click", async () => {
+
+                    const name =
+                        document.getElementById("newSectionName").value
+
+                    if (!name) {
+                        alert("Section name required")
+                        return
+                    }
+
+                    console.log("Save clicked")
+
+                    await fetch(`/admin/course/${courseId}/section/add`, {
+
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+
+                        body: JSON.stringify({ name })
+
+                    })
+
+                    location.reload()
+
+                })
+
+            }
+
+        })            
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+</body>
+
+</html>
