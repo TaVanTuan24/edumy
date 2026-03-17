@@ -122,4 +122,114 @@ router.post("/course/:id/section/add", async (req, res) => {
     res.json({ success: true })
 
 })
+router.post("/course/:id/quiz/add", async (req, res) => {
+
+    const { sectionIndex, name } = req.body
+
+    await Course.findByIdAndUpdate(
+        req.params.id,
+        {
+            $push: {
+                [`driveStructure.${sectionIndex}.videos`]: {
+                    type: "quiz",
+                    name: name,
+                    questions: []
+                }
+            }
+        }
+    )
+
+    res.json({ success: true })
+
+})
+router.get(
+    "/course/:courseId/quiz/:sectionIndex/:quizIndex",
+    async (req, res) => {
+
+        const { courseId, sectionIndex, quizIndex } = req.params
+
+        const course = await Course.findById(courseId)
+
+        const quiz =
+            course.driveStructure[sectionIndex].videos[quizIndex]
+
+        res.render("admin/quizEditor", {
+            course,
+            quiz,
+            sectionIndex,
+            quizIndex
+        })
+
+    })
+router.post(
+    "/course/:courseId/quiz/question/add",
+    async (req, res) => {
+
+        const { courseId } = req.params
+        const { sectionIndex, quizIndex, question, options, correct } = req.body
+
+        const quizPath =
+            `driveStructure.${sectionIndex}.videos.${quizIndex}.questions`
+
+        const optionObjects =
+            options.map((text, i) => ({
+                text,
+                correct: i === correct
+            }))
+
+        await Course.updateOne(
+            { _id: courseId },
+            {
+                $push: {
+                    [quizPath]: {
+                        question,
+                        options: optionObjects
+                    }
+                }
+            }
+        )
+
+        res.json({ success: true })
+
+    })
+router.put(
+    "/course/:courseId/quiz/question/reorder",
+    async (req, res) => {
+
+        const { courseId } = req.params
+        const { sectionIndex, quizIndex, order } = req.body
+
+        const course = await Course.findById(courseId)
+
+        let questions =
+            course.driveStructure[sectionIndex]
+                .videos[quizIndex]
+                .questions
+
+        questions =
+            order.map(i => questions[i])
+
+        course.driveStructure[sectionIndex]
+            .videos[quizIndex]
+            .questions = questions
+
+        await course.save()
+
+        res.json({ success: true })
+
+    })
+router.get(
+    "/course/:courseId/quiz/:sectionIndex/:quizIndex",
+    async (req, res) => {
+
+        const { courseId, sectionIndex, quizIndex } = req.params
+
+        const course = await Course.findById(courseId)
+
+        const quiz =
+            course.driveStructure[sectionIndex].videos[quizIndex]
+
+        res.render("quizPlayer", { quiz })
+
+    })
 module.exports = router

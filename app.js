@@ -19,7 +19,7 @@ const reviewRoutes = require('./routes/reviews');
 const exploreRoutes = require('./routes/explore');
 const dashboardRoutes = require("./routes/dashboard");
 const adminRoutes = require('./routes/admin');
-
+const aiRoutes = require('./routes/ai');
 const { content } = require('googleapis/build/src/apis/content');
 const mongoStore = require('connect-mongo');
 
@@ -127,6 +127,7 @@ app.use('/explore', exploreRoutes)
 app.use('/courses/:id/reviews', reviewRoutes)
 app.use("/dashboard", dashboardRoutes);
 app.use('/admin', adminRoutes);
+app.use('/ai', aiRoutes);
 
 app.get('/', (req, res) => {
     res.render('home')

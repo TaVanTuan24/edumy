@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>AI Chat</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            font-family: Arial;
+            background: #343541;
+            color: white;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #202123;
+            padding: 10px;
+            overflow: auto;
+        }
+
+        .new-chat {
+            background: #444654;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .chat-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #2f3036;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 20px;
+        }
+
+        .user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 650px;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .user .message-content {
+            background: #0b93f6;
+        }
+
+        .ai .message-content {
+            background: #444654;
+        }
+
+        .input-area {
+            display: flex;
+            padding: 15px;
+            background: #40414f;
+        }
+
+        #input {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+        }
+
+        button {
+            margin-left: 10px;
+            padding: 10px;
+            border: none;
+            background: #19c37d;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="sidebar">
+
+        <div class="new-chat" onclick="newChat()">+ New Chat</div>
+
+        <div id="chatList"></div>
+
+    </div>
+
+    <div class="main">
+
+        <div id="messages" class="messages"></div>
+
+        <div class="input-area">
+
+            <input id="input" placeholder="Send message">
+
+            <button onclick="sendMessage()">Send</button>
+
+        </div>
+
+    </div>
+
+    <script>
+
+        let currentChat = null
+
+        const messagesDiv = document.getElementById("messages")
+
+        function addMessage(text, type) {
+
+            const div = document.createElement("div")
+
+            div.className = "message " + type
+
+            const content = document.createElement("div")
+
+            content.className = "message-content"
+
+            content.innerHTML = marked.parse(text)
+
+            div.appendChild(content)
+
+            messagesDiv.appendChild(div)
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight
+
+        }
+
+        async function sendMessage() {
+
+            const input = document.getElementById("input")
+
+            const text = input.value.trim()
+
+            if (!text) return
+
+            addMessage(text, "user")
+
+            input.value = ""
+
+            const res = await fetch("/ai/chat", {
+
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+                    message: text,
+                    chatId: currentChat
+                })
+
+            })
+
+            const data = await res.json()
+
+            currentChat = data.chatId
+
+            addMessage(data.reply, "ai")
+
+            loadChats()
+
+        }
+
+        function newChat() {
+
+            messagesDiv.innerHTML = ""
+
+            currentChat = null
+
+        }
+
+        async function loadChats() {
+
+            const res = await fetch("/ai/list")
+
+            const chats = await res.json()
+
+            const list = document.getElementById("chatList")
+
+            list.innerHTML = ""
+
+            chats.forEach(chat => {
+
+                const div = document.createElement("div")
+
+                div.className = "chat-item"
+
+                div.innerText = chat.title
+
+                div.onclick = () => loadChat(chat._id)
+
+                list.appendChild(div)
+
+            })
+
+        }
+
+        async function loadChat(id) {
+
+            currentChat = id
+
+            messagesDiv.innerHTML = ""
+
+            const res = await fetch("/ai/messages/" + id)
+
+            const messages = await res.json()
+
+            messages.forEach(m => {
+                addMessage(m.content, m.role === "user" ? "user" : "ai")
+            })
+
+        }
+
+        loadChats()
+
+    </script>
+
+</body>
+
+</html>

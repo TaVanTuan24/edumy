@@ -1,0 +1,157 @@
+<h2>
+    <%= quiz.name %>
+</h2>
+
+<button id="addQuestionBtn">+ Add Question</button>
+
+<div id="questions">
+
+    <% quiz.questions.forEach((q,qIndex)=>{ %>
+
+        <div class="question" data-index="<%=qIndex%>">
+
+            <span class="dragHandle">☰</span>
+
+            <h3>Question <%=qIndex+1%>
+            </h3>
+
+            <p>
+                <%=q.question%>
+            </p>
+
+            <ul>
+
+                <% q.options.forEach(opt=>{ %>
+
+                    <li>
+                        <%=opt.text%>
+
+                            <% if(opt.correct){ %>
+                                ✔
+                                <% } %>
+
+                    </li>
+
+                    <% }) %>
+
+            </ul>
+
+        </div>
+
+        <% }) %>
+
+</div>
+<div id="questionPopup" style="display:none">
+
+    <input id="questionText" placeholder="Question">
+
+    <input class="optionInput" placeholder="Option A">
+    <input class="optionInput" placeholder="Option B">
+    <input class="optionInput" placeholder="Option C">
+    <input class="optionInput" placeholder="Option D">
+
+    <label>Correct answer index</label>
+
+    <input id="correctIndex" type="number">
+
+    <button id="saveQuestionBtn">Save</button>
+
+</div>
+<script>
+    const courseId = "<%=course._id%>"
+        const sectionIndex = "<%=sectionIndex%>"
+        const quizIndex = "<%=quizIndex%>"
+
+        document
+            .getElementById("addQuestionBtn")
+            .onclick = () => {
+
+                document
+                    .getElementById("questionPopup")
+                    .style.display = "block"
+
+            }
+
+
+        document
+            .getElementById("saveQuestionBtn")
+            .onclick = async () => {
+
+                const question =
+                    document.getElementById("questionText").value
+
+                const options =
+                    Array.from(document.querySelectorAll(".optionInput"))
+                        .map(o => o.value)
+
+                const correct =
+                    parseInt(
+                        document.getElementById("correctIndex").value
+                    )
+
+                await fetch(
+                    `/admin/course/${courseId}/quiz/question/add`,
+                    {
+
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+
+                        body: JSON.stringify({
+
+                            sectionIndex,
+                            quizIndex,
+                            question,
+                            options,
+                            correct
+
+                        })
+
+                    })
+
+                location.reload()
+
+            }
+            new Sortable(
+                    document.getElementById("questions"),
+                    {
+
+                        handle: ".dragHandle",
+
+                        animation: 150,
+
+                        onEnd: async function () {
+
+                            const order =
+                                Array.from(
+                                    document.querySelectorAll(".question")
+                                ).map(q => q.dataset.index)
+
+
+                            await fetch(
+                                `/admin/course/${courseId}/quiz/question/reorder`,
+                                {
+
+                                    method: "PUT",
+
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+
+                                    body: JSON.stringify({
+
+                                        sectionIndex,
+                                        quizIndex,
+                                        order
+
+                                    })
+
+                                })
+
+                        }
+
+                    })
+</script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>

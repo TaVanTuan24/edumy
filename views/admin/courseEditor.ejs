@@ -140,7 +140,11 @@
                     + Add Lesson
 
                 </button>
+                <button class="addQuestionBtn" data-section="<%=sIndex%>">
 
+                    + Add Question
+
+                </button>
 
                 <div class="lessonList sortableLessons" id="section-<%=sIndex%>" data-section="<%=sIndex%>"
                     style="display:none">
@@ -157,11 +161,21 @@
 
                             <div>
 
-                                <button class="editBtn" data-section="<%=sIndex%>" data-lesson="<%=lIndex%>">
-
-                                    Edit
-
-                                </button>
+                                <% if(video.type==="quiz" ){ %>
+                                
+                                    <a href="/admin/course/<%=course._id%>/quiz/<%=sIndex%>/<%=lIndex%>">
+                                        Edit
+                                    </a>
+                                
+                                    <% } else { %>
+                                
+                                        <button class="editBtn" data-section="<%=sIndex%>" data-lesson="<%=lIndex%>">
+                                
+                                            Edit
+                                
+                                        </button>
+                                
+                                        <% } %>
 
                                 <button class="deleteBtn" data-section="<%=sIndex%>" data-lesson="<%=lIndex%>">
 
@@ -672,7 +686,41 @@
 
             }
 
-        })            
+        })
+        document
+                .querySelectorAll(".addQuestionBtn")
+                .forEach(btn => {
+
+                    btn.addEventListener("click", async () => {
+
+                        const sectionIndex = btn.dataset.section
+
+                        const name = prompt("Question title")
+
+                        if (!name) return
+
+                        await fetch(`/admin/course/${courseId}/quiz/add`, {
+
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+
+                            body: JSON.stringify({
+
+                                sectionIndex,
+                                name
+
+                            })
+
+                        })
+
+                        location.reload()
+
+                    })
+
+                })            
     </script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </body>
