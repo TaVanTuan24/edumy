@@ -1,0 +1,566 @@
+<!-- Content Library Modal -->
+<div class="modal fade" id="contentLibraryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-library me-2"></i>Content Library
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <!-- Tabs -->
+                <ul class="nav nav-tabs mb-3" id="libraryTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="lessons-tab" data-bs-toggle="tab" 
+                            data-bs-target="#lessons" type="button" role="tab">
+                            <i class="fas fa-play-circle me-1"></i> Lessons
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="slides-tab" data-bs-toggle="tab" 
+                            data-bs-target="#slides" type="button" role="tab">
+                            <i class="fas fa-file-alt me-1"></i> Slides
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="quizzes-tab" data-bs-toggle="tab" 
+                            data-bs-target="#quizzes" type="button" role="tab">
+                            <i class="fas fa-question-circle me-1"></i> Quizzes
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="libraryTabContent">
+                    <!-- Lessons Tab -->
+                    <div class="tab-pane fade show active" id="lessons" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Video Lessons</h6>
+                            <button class="btn btn-sm btn-primary" onclick="addNewToLibrary('lesson')">
+                                <i class="fas fa-plus me-1"></i> Add Lesson
+                            </button>
+                        </div>
+                        <div class="library-items" id="libraryLessons">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin"></i> Loading...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Slides Tab -->
+                    <div class="tab-pane fade" id="slides" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Slide Presentations</h6>
+                            <button class="btn btn-sm btn-primary" onclick="addNewToLibrary('slide')">
+                                <i class="fas fa-plus me-1"></i> Add Slide
+                            </button>
+                        </div>
+                        <div class="library-items" id="librarySlides">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin"></i> Loading...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quizzes Tab -->
+                    <div class="tab-pane fade" id="quizzes" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Quiz Collections</h6>
+                            <button class="btn btn-sm btn-primary" onclick="addNewToLibrary('quiz')">
+                                <i class="fas fa-plus me-1"></i> Add Quiz
+                            </button>
+                        </div>
+                        <div class="library-items" id="libraryQuizzes">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin"></i> Loading...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Library Item Modal -->
+<div class="modal fade" id="libraryItemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="libraryItemModalTitle">Add to Library</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="libraryItemModalBody">
+                <!-- Dynamic content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveLibraryItem()">
+                    <i class="fas fa-save me-1"></i> Save to Library
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .library-items {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .library-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        margin-bottom: 8px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        cursor: grab;
+        transition: all 0.2s ease;
+    }
+
+    .library-item:hover {
+        background: #e9ecef;
+        border-color: #adb5bd;
+    }
+
+    .library-item:active {
+        cursor: grabbing;
+    }
+
+    .library-item.dragging {
+        opacity: 0.5;
+        background: #e9ecef;
+    }
+
+    .library-item-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        border-radius: 8px;
+        margin-right: 12px;
+        font-size: 18px;
+    }
+
+    .library-item-content {
+        flex: 1;
+    }
+
+    .library-item-title {
+        font-weight: 600;
+        margin-bottom: 2px;
+        color: #212529;
+    }
+
+    .library-item-meta {
+        font-size: 12px;
+        color: #6c757d;
+    }
+
+    .library-item-actions {
+        display: flex;
+        gap: 4px;
+    }
+
+    .library-item-actions button {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+
+    .empty-library {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+    }
+
+    .empty-library i {
+        font-size: 48px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+</style>
+
+<script>
+    // Current library item type being edited
+    let currentLibraryType = null;
+    let currentLibraryItem = null;
+
+    // Load library items when modal opens
+    document.getElementById('contentLibraryModal').addEventListener('shown.bs.modal', function() {
+        loadLibraryItems();
+    });
+
+    // Load all library items
+    async function loadLibraryItems() {
+        try {
+            const response = await fetch('/api/admin/library');
+            const data = await response.json();
+
+            if (data.success) {
+                renderLibraryItems(data.items);
+            }
+        } catch (error) {
+            console.error('Error loading library:', error);
+        }
+    }
+
+    // Render library items by type
+    function renderLibraryItems(items) {
+        const lessonsItems = items.filter(i => i.type === 'lesson');
+        const slidesItems = items.filter(i => i.type === 'slide');
+        const quizzesItems = items.filter(i => i.type === 'quiz');
+
+        document.getElementById('libraryLessons').innerHTML = renderItemsList(lessonsItems, 'lesson');
+        document.getElementById('librarySlides').innerHTML = renderItemsList(slidesItems, 'slide');
+        document.getElementById('libraryQuizzes').innerHTML = renderItemsList(quizzesItems, 'quiz');
+
+        // Make items draggable
+        initLibraryDrag();
+    }
+
+    function renderItemsList(items, type) {
+        if (items.length === 0) {
+            return `
+                <div class="empty-library">
+                    <i class="fas fa-${type === 'lesson' ? 'play-circle' : type === 'slide' ? 'file-alt' : 'question-circle'}"></i>
+                    <p>No ${type}s in library yet</p>
+                    <button class="btn btn-sm btn-outline-primary" onclick="addNewToLibrary('${type}')">
+                        <i class="fas fa-plus me-1"></i> Add ${type}
+                    </button>
+                </div>
+            `;
+        }
+
+        const icons = {
+            lesson: 'fa-play-circle',
+            slide: 'fa-file-alt',
+            quiz: 'fa-question-circle'
+        };
+
+        const colors = {
+            lesson: '#dc3545',
+            slide: '#0d6efd',
+            quiz: '#198754'
+        };
+
+        return items.map(item => `
+            <div class="library-item" draggable="true" data-id="${item._id}" data-type="${type}">
+                <div class="library-item-icon" style="color: ${colors[type]}">
+                    <i class="fas ${icons[type]}"></i>
+                </div>
+                <div class="library-item-content">
+                    <div class="library-item-title">${item.title}</div>
+                    <div class="library-item-meta">${item.preview || 'No content'}</div>
+                </div>
+                <div class="library-item-actions">
+                    <button class="btn btn-sm btn-outline-primary" onclick="useLibraryItem('${item._id}', '${type}')" title="Add to section">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteLibraryItem('${item._id}')" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Initialize drag functionality for library items
+    function initLibraryDrag() {
+        const items = document.querySelectorAll('.library-item');
+        
+        items.forEach(item => {
+            item.addEventListener('dragstart', function(e) {
+                this.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', JSON.stringify({
+                    type: 'library',
+                    itemId: this.dataset.id,
+                    itemType: this.dataset.type
+                }));
+            });
+
+            item.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+            });
+        });
+    }
+
+    // Add new item to library
+    function addNewToLibrary(type) {
+        currentLibraryType = type;
+        currentLibraryItem = null;
+
+        const modal = new bootstrap.Modal(document.getElementById('libraryItemModal'));
+        const modalTitle = document.getElementById('libraryItemModalTitle');
+        const modalBody = document.getElementById('libraryItemModalBody');
+
+        modalTitle.textContent = `Add ${type.charAt(0).toUpperCase() + type.slice(1)} to Library`;
+
+        if (type === 'lesson') {
+            modalBody.innerHTML = `
+                <div class="mb-3">
+                    <label class="form-label">Title</label>
+                    <input type="text" class="form-control" id="libraryTitle" placeholder="Enter lesson title">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Video URL</label>
+                    <input type="text" class="form-control" id="libraryVideoUrl" placeholder="Enter video URL (YouTube, Vimeo, etc.)">
+                </div>
+            `;
+        } else if (type === 'slide') {
+            modalBody.innerHTML = `
+                <div class="mb-3">
+                    <label class="form-label">Title</label>
+                    <input type="text" class="form-control" id="libraryTitle" placeholder="Enter slide presentation title">
+                </div>
+                <div id="librarySlidesEditor">
+                    <div class="mb-2 d-flex justify-content-between align-items-center">
+                        <label class="form-label mb-0">Slides</label>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSlideToLibrary()">
+                            <i class="fas fa-plus"></i> Add Slide
+                        </button>
+                    </div>
+                    <div id="librarySlidesList"></div>
+                </div>
+            `;
+        } else if (type === 'quiz') {
+            modalBody.innerHTML = `
+                <div class="mb-3">
+                    <label class="form-label">Title</label>
+                    <input type="text" class="form-control" id="libraryTitle" placeholder="Enter quiz title">
+                </div>
+                <div id="libraryQuizEditor">
+                    <div class="mb-2 d-flex justify-content-between align-items-center">
+                        <label class="form-label mb-0">Questions</label>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addQuestionToLibrary()">
+                            <i class="fas fa-plus"></i> Add Question
+                        </button>
+                    </div>
+                    <div id="libraryQuizList"></div>
+                </div>
+            `;
+        }
+
+        modal.show();
+    }
+
+    // Add slide to library editor
+    let librarySlideCount = 0;
+    function addSlideToLibrary() {
+        const container = document.getElementById('librarySlidesList');
+        const slideHtml = `
+            <div class="card mb-2" id="librarySlide_${librarySlideCount}">
+                <div class="card-body">
+                    <div class="mb-2">
+                        <input type="text" class="form-control" placeholder="Slide title" data-slide-title>
+                    </div>
+                    <div class="mb-2">
+                        <textarea class="form-control" placeholder="Slide content (Markdown supported)" rows="3" data-slide-content></textarea>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSlideFromLibrary(${librarySlideCount})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', slideHtml);
+        librarySlideCount++;
+    }
+
+    function removeSlideFromLibrary(id) {
+        document.getElementById(`librarySlide_${id}`).remove();
+    }
+
+    // Add question to library editor
+    let libraryQuestionCount = 0;
+    function addQuestionToLibrary() {
+        const container = document.getElementById('libraryQuizList');
+        const questionHtml = `
+            <div class="card mb-2" id="libraryQuestion_${libraryQuestionCount}">
+                <div class="card-body">
+                    <div class="mb-2">
+                        <input type="text" class="form-control" placeholder="Question" data-quiz-question>
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" class="form-control mb-1" placeholder="Option 1" data-quiz-option-0>
+                        <input type="text" class="form-control mb-1" placeholder="Option 2" data-quiz-option-1>
+                        <input type="text" class="form-control mb-1" placeholder="Option 3" data-quiz-option-2>
+                        <input type="text" class="form-control" placeholder="Option 4" data-quiz-option-3>
+                    </div>
+                    <div class="mb-2">
+                        <select class="form-select" data-quiz-correct>
+                            <option value="">Select correct answer</option>
+                            <option value="0">Option 1</option>
+                            <option value="1">Option 2</option>
+                            <option value="2">Option 3</option>
+                            <option value="3">Option 4</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeQuestionFromLibrary(${libraryQuestionCount})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', questionHtml);
+        libraryQuestionCount++;
+    }
+
+    function removeQuestionFromLibrary(id) {
+        document.getElementById(`libraryQuestion_${id}`).remove();
+    }
+
+    // Save library item
+    async function saveLibraryItem() {
+        const title = document.getElementById('libraryTitle').value.trim();
+        if (!title) {
+            alert('Please enter a title');
+            return;
+        }
+
+        let data = {};
+
+        if (currentLibraryType === 'lesson') {
+            data.videoUrl = document.getElementById('libraryVideoUrl').value.trim();
+        } else if (currentLibraryType === 'slide') {
+            const slides = [];
+            document.querySelectorAll('#librarySlidesList .card').forEach(card => {
+                const slideTitle = card.querySelector('[data-slide-title]').value.trim();
+                const slideContent = card.querySelector('[data-slide-content]').value.trim();
+                if (slideTitle && slideContent) {
+                    slides.push({ title: slideTitle, content: slideContent });
+                }
+            });
+            data.slides = slides;
+        } else if (currentLibraryType === 'quiz') {
+            const questions = [];
+            document.querySelectorAll('#libraryQuizList .card').forEach(card => {
+                const question = card.querySelector('[data-quiz-question]').value.trim();
+                const options = [
+                    card.querySelector('[data-quiz-option-0]').value.trim(),
+                    card.querySelector('[data-quiz-option-1]').value.trim(),
+                    card.querySelector('[data-quiz-option-2]').value.trim(),
+                    card.querySelector('[data-quiz-option-3]').value.trim()
+                ];
+                const correctAnswer = card.querySelector('[data-quiz-correct]').value;
+                if (question && options.some(o => o) && correctAnswer !== '') {
+                    questions.push({
+                        question,
+                        options,
+                        correctAnswer: options[parseInt(correctAnswer)]
+                    });
+                }
+            });
+            data.quiz = questions;
+        }
+
+        try {
+            const response = await fetch('/api/admin/library', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: currentLibraryType,
+                    title,
+                    data
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                bootstrap.Modal.getInstance(document.getElementById('libraryItemModal')).hide();
+                loadLibraryItems();
+                showToast('Item added to library', 'success');
+            } else {
+                alert(result.error || 'Failed to save');
+            }
+        } catch (error) {
+            console.error('Error saving to library:', error);
+            alert('Failed to save to library');
+        }
+    }
+
+    // Delete library item
+    async function deleteLibraryItem(id) {
+        if (!confirm('Are you sure you want to delete this item?')) return;
+
+        try {
+            const response = await fetch(`/api/admin/library/${id}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                loadLibraryItems();
+                showToast('Item deleted', 'success');
+            }
+        } catch (error) {
+            console.error('Error deleting item:', error);
+        }
+    }
+
+    // Use library item - add to selected section
+    async function useLibraryItem(itemId, type) {
+        // Check if a section is selected
+        if (!window.selectedSectionId) {
+            alert('Please select a section first by clicking on it');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/admin/lesson/from-library', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    courseId: '<%= course._id %>',
+                    sectionId: window.selectedSectionId,
+                    libraryItemId: itemId
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Reload the course editor
+                window.location.reload();
+            } else {
+                alert(result.error || 'Failed to add item');
+            }
+        } catch (error) {
+            console.error('Error using library item:', error);
+            alert('Failed to add item to section');
+        }
+    }
+
+    // Toast notification
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        setTimeout(() => toast.remove(), 3000);
+    }
+</script>

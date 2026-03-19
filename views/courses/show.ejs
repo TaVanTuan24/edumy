@@ -45,10 +45,18 @@
       <div class="card-body" id="courseInfo">
         <h5 class="card-title"><%= course.title %></h5>
         <p class="card-text"><%= course.description %></p>
+        <% if (course.driveStructure && course.driveStructure.length > 0) { %>
+          <a href="/courses/<%= course._id %>/learn" class="btn btn-primary">
+            <i class="fas fa-play me-2"></i>Start Learning
+          </a>
+        <% } %>
       </div>
 
       <% if ((currentUser && course.author.equals(currentUser._id)) || currentUser._id == '675da20f3dfdaa4f789ffa00') { %>
         <div class="card-body">
+          <!-- <a href="/admin/courses/<%= course._id %>/editor-new" class="btn btn-warning">
+            <i class="fas fa-edit me-2"></i>Course Editor (New)
+          </a> -->
           <!-- <a class="card-link btn btn-info" href="/courses/<%=course._id%>/edit">Edit</a> -->
           <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
             <button class="btn btn-danger">Delete</button>
@@ -59,7 +67,7 @@
   </div>
 
   <div class="col-6">
-    <% const totalVideos = course.driveStructure.reduce((acc, sec) => acc + sec.videos.length, 0); %>
+    <% const totalVideos = course.driveStructure.reduce((acc, sec) => acc + (sec.videos || sec.items || []).length, 0); %>
     <% const completedCount = completedVideos.length; %>
     <div class="mb-2">
       <h6 class="text-success">Tiến độ học: <%= completedCount %> / <%= totalVideos %> video (<%= Math.round(completedCount / totalVideos * 100) %>%)</h6>

@@ -19,7 +19,9 @@ const reviewRoutes = require('./routes/reviews');
 const exploreRoutes = require('./routes/explore');
 const dashboardRoutes = require("./routes/dashboard");
 const adminRoutes = require('./routes/admin');
+const apiAdminRoutes = require('./routes/api/admin');
 const aiRoutes = require('./routes/ai');
+const videoModelsRoutes = require('./routes/videoModels');
 const { content } = require('googleapis/build/src/apis/content');
 const mongoStore = require('connect-mongo');
 
@@ -127,7 +129,9 @@ app.use('/explore', exploreRoutes)
 app.use('/courses/:id/reviews', reviewRoutes)
 app.use("/dashboard", dashboardRoutes);
 app.use('/admin', adminRoutes);
+app.use('/api/admin', apiAdminRoutes);
 app.use('/ai', aiRoutes);
+app.use('/video-models', videoModelsRoutes);
 
 app.get('/', (req, res) => {
     res.render('home')

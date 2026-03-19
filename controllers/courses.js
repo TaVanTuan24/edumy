@@ -45,6 +45,19 @@ module.exports.showCourses = async (req, res) => {
     .populate({ path: 'reviews', populate: { path: 'author' } })
     .populate('author');
 
+  // Normalize driveStructure - ensure all items have type field
+  if (course.driveStructure) {
+    course.driveStructure.forEach(section => {
+      if (section.videos && Array.isArray(section.videos)) {
+        section.videos.forEach(item => {
+          if (!item.type) {
+            item.type = "video"; // Default to video for backward compatibility
+          }
+        });
+      }
+    });
+  }
+
   let completedVideos = [];
   if (req.user) {
     const progress = await Progress.findOne({ user: req.user._id, course: course._id });
@@ -135,4 +148,47 @@ module.exports.saveNote = async (req, res) => {
     console.error('[Lỗi ghi chú]', err);
     res.status(500).json({ success: false, error: err.message });
   }
+};
+
+// Render the new Udemy-style learning page
+module.exports.renderLearnPage = async (req, res) => {
+  const course = await Course.findById(req.params.id)
+    .populate('author');
+
+  if (!course) {
+    req.flash('error', 'Cannot find that course!');
+    return res.redirect('/courses');
+  }
+
+  // Normalize driveStructure - ensure all items have type field
+  if (course.driveStructure) {
+    course.driveStructure.forEach(section => {
+      if (section.videos && Array.isArray(section.videos)) {
+        section.videos.forEach(item => {
+          if (!item.type) {
+            item.type = "video"; // Default to video for backward compatibility
+          }
+        });
+      }
+    });
+  }
+
+  // Get completed videos
+  let completedVideos = [];
+  if (req.user) {
+    const progress = await Progress.findOne({ user: req.user._id, course: course._id });
+    if (progress?.completedVideos) completedVideos = progress.completedVideos;
+  }
+
+  // Calculate total lessons
+  const totalLessons = course.driveStructure.reduce((acc, sec) => acc + (sec.videos || []).length, 0);
+
+  const completedCount = completedVideos.length;
+
+  res.render('courses/learn', { 
+    course, 
+    completedVideos, 
+    totalLessons,
+    completedCount 
+  });
 };

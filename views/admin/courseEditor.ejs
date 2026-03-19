@@ -1,728 +1,1190 @@
-<!DOCTYPE html>
-<html>
+<% layout('/layouts/boilerplate')%>
 
 <head>
-
     <meta charset="UTF-8">
-    <title>Course Editor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Editor - <%= course.title %></title>
+    
+    <!-- Bootstrap 5.3.3 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- Font Awesome 6.4.0 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" integrity="sha384-7+1LstXK3qJ5Y5m5PdmQ0KjXa0d1dVqujRRubGzmI1T2wFxy1L3Pl2jL5J5F2F" crossorigin="anonymous"></script>
 
     <style>
+        :root {
+            --primary: #a435f0;
+            --primary-hover: #8710d8;
+            --bg-light: #f7f9fa;
+            --border: #d1d7dc;
+        }
+        
         body {
-            font-family: Arial;
-            margin: 40px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #f4f4f4;
+            margin: 0;
         }
 
-        h1 {
-            margin-bottom: 30px;
-        }
-
-        .section {
+        /* Top Bar */
+        .top-bar {
             background: white;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        .sectionTitle {
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .lessonList {
-            margin-top: 10px;
-            display: none;
-        }
-
-        .lesson {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .lesson button {
-            padding: 4px 10px;
-            cursor: pointer;
-        }
-
-        .popup {
-            display: none;
-            position: fixed;
+            padding: 12px 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
             top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            align-items: center;
-            justify-content: center;
-        }
-
-        .popupContent {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 400px;
-        }
-
-        .popupContent input {
-            width: 100%;
-            padding: 6px;
-            margin-bottom: 10px;
-        }
-
-        .popupButtons {
+            z-index: 100;
             display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .lesson {
-            display: flex;
-            align-items: center;
             justify-content: space-between;
-            padding: 8px;
-            border-bottom: 1px solid #eee;
+            align-items: center;
         }
 
-        .dragHandle {
+        .top-bar h1 {
+            font-size: 20px;
+            margin: 0;
+        }
+
+        .top-bar .btn-primary {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .top-bar .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        /* Main Layout */
+        .editor-layout {
+            display: flex;
+            min-height: calc(100vh - 60px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 360px;
+            background: white;
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-content {
+            padding: 16px;
+        }
+
+        /* Section */
+        .section-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-light);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-header:hover {
+            background: #edeff2;
+        }
+
+        .section-header .section-icon {
+            color: #6a6f7c;
+            margin-right: 10px;
+            transition: transform 0.2s;
+        }
+
+        .section-header.collapsed .section-icon {
+            transform: rotate(-90deg);
+        }
+
+        .section-header .section-title {
+            flex: 1;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .section-header .actions button {
+            padding: 4px 8px;
+            font-size: 12px;
+            background: transparent;
+            border: none;
+            color: #6a6f7c;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .section-header .actions button:hover {
+            background: #d1d7dc;
+        }
+
+        /* Lesson Items */
+        .lesson-list {
+            padding: 8px;
+            min-height: 40px;
+        }
+
+        .lesson-list.drag-over {
+            background: #f0f0f0;
+            border: 2px dashed var(--primary);
+        }
+
+        .lesson-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .lesson-item:hover {
+            background: #f7f9fa;
+            border-color: var(--primary);
+        }
+
+        .lesson-item.dragging {
+            opacity: 0.5;
+        }
+
+        .lesson-item .drag-handle {
+            color: #9a9db1;
             cursor: grab;
             margin-right: 10px;
-            font-size: 18px;
         }
 
-        .dragHandle:active {
+        .lesson-item .drag-handle:active {
             cursor: grabbing;
         }
 
-        .dragging {
-            opacity: 0.5;
+        .lesson-item .item-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            margin-right: 10px;
+            font-size: 12px;
+        }
+
+        .lesson-item .item-icon.lesson { background: #ffe6e6; color: #dc3545; }
+        .lesson-item .item-icon.slide { background: #e6f0ff; color: #0d6efd; }
+        .lesson-item .item-icon.quiz { background: #e6fff0; color: #198754; }
+
+        .lesson-item .item-info {
+            flex: 1;
+        }
+
+        .lesson-item .item-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #1f1f1f;
+        }
+
+        .lesson-item .item-meta {
+            font-size: 11px;
+            color: #6a6f7c;
+        }
+
+        .lesson-item .item-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .lesson-item:hover .item-actions {
+            opacity: 1;
+        }
+
+        .lesson-item .item-actions button {
+            padding: 4px 8px;
+            font-size: 11px;
+            background: transparent;
+            border: none;
+            color: #6a6f7c;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .lesson-item .item-actions button:hover {
+            background: #d1d7dc;
+        }
+
+        /* Add Buttons */
+        .add-buttons {
+            display: flex;
+            gap: 6px;
+            padding: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .add-buttons button {
+            flex: 1;
+            padding: 6px 8px;
+            font-size: 11px;
+            border: 1px dashed var(--border);
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .add-buttons button:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Editor Panel */
+        .editor-panel {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .editor-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 400px;
+            color: #6a6f7c;
+        }
+
+        .editor-placeholder i {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .editor-placeholder h4 {
+            margin-bottom: 8px;
+            color: #1f1f1f;
+        }
+
+        /* Content Library Popup - Small Floating Panel */
+        .library-popup {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 320px;
+            max-height: 450px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .library-popup.show {
+            display: flex;
+        }
+
+        .library-popup-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border);
+            cursor: move;
+        }
+
+        .library-popup-header h6 {
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .library-popup-header .close-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #6a6f7c;
+        }
+
+        .library-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .library-tabs button {
+            flex: 1;
+            padding: 10px;
+            background: none;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            color: #6a6f7c;
+            border-bottom: 2px solid transparent;
+        }
+
+        .library-tabs button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .library-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            max-height: 280px;
+        }
+
+        .library-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: #f7f9fa;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: grab;
+        }
+
+        .library-item:hover {
+            background: #edeff2;
+            border-color: var(--primary);
+        }
+
+        .library-item:active {
+            cursor: grabbing;
+        }
+
+        .library-item .lib-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-size: 12px;
+        }
+
+        .library-item .lib-title {
+            flex: 1;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .library-empty {
+            text-align: center;
+            padding: 30px;
+            color: #6a6f7c;
+            font-size: 12px;
+        }
+
+        .library-add-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(164, 53, 240, 0.4);
+            z-index: 999;
+        }
+
+        .library-add-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease;
         }
     </style>
-
 </head>
-
-
 <body>
-
-    <h1>
-        <%= course.title %>
-    </h1>
-
-
-    <div id="sections">
-        <button id="addSectionBtn">
-            + Add Section
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="/admin">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="/admin">Courses</a></li>
+                <li class="breadcrumb-item active"><%= course.title %></li>
+            </ol>
+        </nav>
+        <button class="btn btn-primary" onclick="saveCourse()">
+            <i class="fas fa-save me-2"></i>Save
         </button>
-        <% course.driveStructure.forEach((section,sIndex)=>{ %>
+    </div>
 
-            <div class="section">
-
-                <div class="sectionTitle" data-index="<%=sIndex%>">
-
-                    <span class="sectionName">
-                        <%= section.section %>
-                    </span>
-
-                    <button class="editSectionBtn" data-section="<%=sIndex%>">
-
-                        Edit
-
+    <!-- Main Layout -->
+    <div class="editor-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5><i class="fas fa-book me-2"></i>Course Content</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="addSection()">
+                        <i class="fas fa-plus"></i>
                     </button>
-
                 </div>
+            </div>
 
-
-                <button class="addLessonBtn" data-section="<%=sIndex%>">
-
-                    + Add Lesson
-
-                </button>
-                <button class="addQuestionBtn" data-section="<%=sIndex%>">
-
-                    + Add Question
-
-                </button>
-
-                <div class="lessonList sortableLessons" id="section-<%=sIndex%>" data-section="<%=sIndex%>"
-                    style="display:none">
-
-                    <% section.videos.forEach((video,lIndex)=>{ %>
-
-                        <div class="lesson">
-
-                            <span class="dragHandle">☰</span>
-
-                            <span class="lessonName">
-                                <%= video.name %>
-                            </span>
-
-                            <div>
-
-                                <% if(video.type==="quiz" ){ %>
-                                
-                                    <a href="/admin/course/<%=course._id%>/quiz/<%=sIndex%>/<%=lIndex%>">
-                                        Edit
-                                    </a>
-                                
-                                    <% } else { %>
-                                
-                                        <button class="editBtn" data-section="<%=sIndex%>" data-lesson="<%=lIndex%>">
-                                
-                                            Edit
-                                
-                                        </button>
-                                
-                                        <% } %>
-
-                                <button class="deleteBtn" data-section="<%=sIndex%>" data-lesson="<%=lIndex%>">
-
-                                    Delete
-
-                                </button>
-
+            <div class="sidebar-content" id="sectionsContainer">
+                <% if (course.driveStructure && course.driveStructure.length > 0) { %>
+                    <% course.driveStructure.forEach((section, sIndex) => { %>
+                        <div class="section-card" data-section-id="<%= section._id %>">
+                            <div class="section-header" onclick="toggleSection('<%= section._id %>')">
+                                <i class="fas fa-chevron-down section-icon" id="icon-<%= section._id %>"></i>
+                                <span class="section-title" id="title-<%= section._id %>">
+                                    <%= section.section || 'Untitled Section' %>
+                                </span>
+                                <div class="actions">
+                                    <button onclick="event.stopPropagation(); editSection('<%= section._id %>')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="event.stopPropagation(); deleteSection('<%= section._id %>')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
-
+                            <div class="lesson-list" id="items-<%= section._id %>" 
+                                 data-section-id="<%= section._id %>"
+                                 ondragover="handleDragOver(event)" 
+                                 ondragleave="handleDragLeave(event)"
+                                 ondrop="handleDrop(event)">
+                                <% if (section.videos && section.videos.length > 0) { %>
+                                    <% section.videos.forEach((video, vIndex) => { %>
+                                        <div class="lesson-item" 
+                                             data-item-id="<%= video._id %>" 
+                                             data-section-id="<%= section._id %>"
+                                             data-section-index="<%= sIndex %>"
+                                             data-lesson-index="<%= vIndex %>"
+                                             data-type="<%= video.type %>"
+                                             data-name="<%= video.name || '' %>"
+                                             data-url="<%= video.preview || video.refId || '' %>"
+                                             data-ref-id="<%= video.refId || '' %>">
+                                            <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                                            <div class="item-icon <%= video.type %>">
+                                                <i class="fas <%= video.type === 'video' ? 'fa-play' : video.type === 'slide' ? 'fa-file-alt' : 'fa-question' %>"></i>
+                                            </div>
+                                            <div class="item-info">
+                                                <div class="item-title">
+                                                    <%= video.name || 'Untitled' %>
+                                                </div>
+                                                <div class="item-meta">
+                                                    <%= video.type === 'video' ? 'Video' : video.type === 'slide' ? 'Slide' : 'Quiz' %>
+                                                </div>
+                                            </div>
+                                            <div class="item-actions">
+                                                    <button class="edit-btn" 
+                                                        data-id="<%= video.refId || '' %>" 
+                                                        data-type="<%= video.type %>"
+                                                        onclick="event.stopPropagation(); editItem(this.dataset.type, this.dataset.id)">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button onclick="event.stopPropagation(); deleteItem('<%= section._id %>', '<%= video._id %>')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    <% }); %>
+                                <% } %>
+                            </div>
+                            <div class="add-buttons">
+                                <button class="add-item-btn" data-section-index="<%= sIndex %>" data-item-type="video">
+                                    <i class="fas fa-play"></i> Video
+                                </button>
+                                <button class="add-item-btn" data-section-index="<%= sIndex %>" data-item-type="slide">
+                                    <i class="fas fa-file-alt"></i> Slide
+                                </button>
+                                <button class="add-item-btn" data-section-index="<%= sIndex %>" data-item-type="quiz">
+                                    <i class="fas fa-question"></i> Quiz
+                                </button>
+                            </div>
                         </div>
-
-                        <% }) %>
-
-                </div>
-
+                    <% }); %>
+                <% } else { %>
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-folder-open fa-2x mb-3 d-block"></i>
+                        <p>No sections yet</p>
+                        <button class="btn btn-primary" onclick="addSection()">
+                            <i class="fas fa-plus me-1"></i> Add Section
+                        </button>
+                    </div>
+                <% } %>
             </div>
+        </aside>
 
-            <% }) %>
-
+        <!-- Editor Panel -->
+        <main class="editor-panel">
+            <div class="editor-placeholder" id="editorPlaceholder">
+                <i class="fas fa-mouse-pointer"></i>
+                <h4>Select content to edit</h4>
+                <p>Choose an item from the sidebar</p>
+            </div>
+            <div id="editorContent" style="display: none;">
+                <!-- Dynamic content will be loaded here -->
+            </div>
+        </main>
     </div>
 
+    <!-- Library Toggle Button -->
+    <button class="library-add-btn" onclick="toggleLibrary()" title="Content Library">
+        <i class="fas fa-plus"></i>
+    </button>
 
-
-    <!-- EDIT POPUP -->
-
-    <div id="popup" class="popup">
-
-        <div class="popupContent">
-
-            <h3>Edit Lesson</h3>
-
-            <label>Lesson Name</label>
-            <input id="lessonName">
-
-            <label>Video URL</label>
-            <input id="lessonUrl">
-
-            <div class="popupButtons">
-
-                <button id="saveBtn">Save</button>
-                <button id="cancelBtn">Cancel</button>
-
-            </div>
-
+    <!-- Content Library Popup -->
+    <div class="library-popup" id="libraryPopup">
+        <div class="library-popup-header">
+            <h6><i class="fas fa-library me-2"></i>Content Library</h6>
+            <button class="close-btn" onclick="toggleLibrary()">&times;</button>
         </div>
-
-    </div>
-
-    <div id="addPopup" class="popup">
-
-        <div class="popupContent">
-
-            <h3>Add Lesson</h3>
-
-            <label>Lesson Name</label>
-            <input id="newLessonName">
-
-            <label>Video URL</label>
-            <input id="newLessonUrl">
-
-            <div class="popupButtons">
-
-                <button id="addSaveBtn">Add</button>
-                <button id="addCancelBtn">Cancel</button>
-
-            </div>
-
+        <div class="library-tabs">
+            <button class="active" onclick="switchLibraryTab('video')">Videos</button>
+            <button onclick="switchLibraryTab('slide')">Slides</button>
+            <button onclick="switchLibraryTab('quiz')">Quizzes</button>
         </div>
-
-
-    </div>
-    <div id="editSectionPopup" class="popup" style="display:none">
-
-        <div class="popupContent">
-
-            <h3>Edit Section</h3>
-
-            <label>Section Name</label>
-
-            <input id="sectionNameInput">
-
-            <div class="popupButtons">
-
-                <button id="saveaddSectionBtn">Save</button>
-
-                <button id="cancelSectionBtn">Cancel</button>
-
+        <div class="library-content" id="libraryContent">
+            <div class="library-empty">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading...</p>
             </div>
-
         </div>
-
     </div>
-    <div id="addSectionPopup" class="popup" style="display:none">
 
-        <div class="popupContent">
-
-            <h3>Add Section</h3>
-
-            <label>Section name</label>
-            <input id="newSectionName">
-
-            <div class="popupButtons">
-
-                <button id="saveSectionBtn">Save</button>
-                <button id="cancelAddSectionBtn">Cancel</button>
-
-            </div>
-
-        </div>
-
-    </div>
     <script>
+        // ==================== CONFIG ====================
+        const courseId = '<%= course._id %>';
+        let currentLibraryTab = 'lesson';
 
-        const courseId = "<%=course._id%>"
+        // Course data from server - parsed from data attribute
+        let courseData = [];
+        try {
+            const dataEl = document.getElementById('course-data');
+            if (dataEl) {
+                courseData = JSON.parse(dataEl.textContent);
+            }
+        } catch(e) {
+            console.error('Error parsing course data:', e);
+        }
 
-        const courseData = <%- JSON.stringify(course.driveStructure) %>
+        // ==================== INIT ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("JS LOADED - Course Editor");
+            initSortable();
+            loadLibraryItems();
+            
+            // Event delegation for lesson items and add buttons
+            document.addEventListener('click', async (e) => {
+                console.log("Click detected");
+                
+                // CLICK LESSON ITEM - Load into editor panel
+                const lessonItem = e.target.closest('.lesson-item');
+                if (lessonItem) {
+                    const sectionIndex = lessonItem.dataset.sectionIndex;
+                    const lessonIndex = lessonItem.dataset.lessonIndex;
+                    const type = lessonItem.dataset.type;
+                    const itemId = lessonItem.dataset.itemId;
+                    const itemName = lessonItem.querySelector('.item-title')?.textContent;
+                    
+                    console.log("Lesson clicked:", sectionIndex, lessonIndex, type, itemId);
+                    
+                    // Load lesson content into editor panel
+                    loadLessonIntoEditor(sectionIndex, lessonIndex, type, itemId, itemName);
+                    return;
+                }
+                
+                // ADD VIDEO BUTTON
+                const addVideoBtn = e.target.closest('.add-item-btn[data-item-type="video"]');
+                if (addVideoBtn) {
+                    const sectionIndex = addVideoBtn.dataset.sectionIndex;
+                    console.log("Add video button clicked, section index:", sectionIndex);
+                    
+                    const name = prompt("Video name?");
+                    if (!name) return;
+                    
+                    const url = prompt("Video URL?");
+                    if (!url) return;
+                    
+                    try {
+                        console.log("Making API call to add video...");
+                        const res = await fetch(`/admin/course/${courseId}/lesson/add`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ 
+                                sectionIndex: parseInt(sectionIndex), 
+                                name: name, 
+                                url: url 
+                            })
+                        });
+                        
+                        const data = await res.json();
+                        console.log("API response:", data);
+                        
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert("Failed to add video");
+                        }
+                    } catch (err) {
+                        console.error("Fetch error:", err);
+                        alert("Error occurred");
+                    }
+                    return;
+                }
+                
+                // ADD SLIDE BUTTON
+                const addSlideBtn = e.target.closest('.add-item-btn[data-item-type="slide"]');
+                if (addSlideBtn) {
+                    const sectionIndex = addSlideBtn.dataset.sectionIndex;
+                    console.log("Add slide button clicked, section index:", sectionIndex);
+                    
+                    const name = prompt("Slide name?");
+                    if (!name) return;
+                    
+                    try {
+                        console.log("Making API call to add slide...");
+                        const res = await fetch(`/admin/course/${courseId}/slide/add`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ 
+                                sectionIndex: parseInt(sectionIndex), 
+                                name: name
+                            })
+                        });
+                        
+                        const data = await res.json();
+                        console.log("API response:", data);
+                        
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert("Failed to add slide");
+                        }
+                    } catch (err) {
+                        console.error("Fetch error:", err);
+                        alert("Error occurred");
+                    }
+                    return;
+                }
+                
+                // ADD QUIZ BUTTON
+                const addQuizBtn = e.target.closest('.add-item-btn[data-item-type="quiz"]');
+                if (addQuizBtn) {
+                    const sectionIndex = addQuizBtn.dataset.sectionIndex;
+                    console.log("Add quiz button clicked, section index:", sectionIndex);
+                    
+                    const name = prompt("Quiz name?");
+                    if (!name) return;
+                    
+                    try {
+                        console.log("Making API call to add quiz...");
+                        const res = await fetch(`/admin/course/${courseId}/quiz/add`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ 
+                                sectionIndex: parseInt(sectionIndex), 
+                                name: name
+                            })
+                        });
+                        
+                        const data = await res.json();
+                        console.log("API response:", data);
+                        
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert("Failed to add quiz");
+                        }
+                    } catch (err) {
+                        console.error("Fetch error:", err);
+                        alert("Error occurred");
+                    }
+                    return;
+                }
+            });
+        });
 
-            let editLessonIndex = null
-        let editSectionIndex = null
+        // ==================== SORTABLE ====================
+        function initSortable() {
+            document.querySelectorAll('.lesson-list').forEach(list => {
+                new Sortable(list, {
+                    animation: 150,
+                    handle: '.drag-handle',
+                    ghostClass: 'dragging',
+                    onEnd: async function(evt) {
+                        await saveOrder();
+                    }
+                });
+            });
+        }
 
+        // ==================== SECTION FUNCTIONS ====================
+        function toggleSection(sectionId) {
+            const list = document.getElementById('items-' + sectionId);
+            const icon = document.getElementById('icon-' + sectionId);
+            const header = icon.parentElement;
+            
+            if (list.style.display === 'none') {
+                list.style.display = 'block';
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-down');
+                header.classList.remove('collapsed');
+            } else {
+                list.style.display = 'none';
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-right');
+                header.classList.add('collapsed');
+            }
+        }
 
-        // TOGGLE SECTION
+        async function addSection() {
+            const title = prompt('Section title:');
+            if (!title) return;
 
-        document.querySelectorAll(".sectionTitle")
-            .forEach(el => {
+            const newSection = {
+                _id: 'section-' + Date.now(),
+                section: title,
+                videos: []
+            };
 
-                el.addEventListener("click", () => {
-
-                    const index = el.dataset.index
-
-                    const lessonList = document.getElementById("section-" + index)
-
-                    lessonList.style.display =
-                        lessonList.style.display === "block" ? "none" : "block"
-
-                })
-
-            })
-
-
-
-
-        // OPEN EDIT POPUP
-
-        document.querySelectorAll(".editBtn")
-            .forEach(btn => {
-
-                btn.addEventListener("click", () => {
-
-                    editSectionIndex = Number(btn.dataset.section)
-                    editLessonIndex = Number(btn.dataset.lesson)
-
-                    const lesson = courseData[editSectionIndex].videos[editLessonIndex]
-
-                    document.getElementById("lessonName").value = lesson.name
-                    document.getElementById("lessonUrl").value = lesson.preview
-
-                    document.getElementById("popup").style.display = "flex"
-
-                })
-
-            })
-
-
-
-
-        // CLOSE POPUP
-
-        document.getElementById("cancelBtn")
-            .addEventListener("click", () => {
-
-                document.getElementById("popup").style.display = "none"
-
-            })
-
-
-
-
-        // SAVE EDIT
-
-
-        document.getElementById("saveBtn")
-            .addEventListener("click", async () => {
-
-                const name = document.getElementById("lessonName").value
-                const url = document.getElementById("lessonUrl").value
-
-                console.log(editSectionIndex, editLessonIndex)
-
-                const res = await fetch(`/admin/course/${courseId}/lesson/edit`, {
-
-                    method: "PUT",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
+            try {
+                const res = await fetch('/api/admin/course/reorder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        courseId,
+                        driveStructure: [...courseData, newSection]
+                    })
+                });
+                const data = await res.json();
+                if (data.success) location.reload();
+            } catch(e) {
+                console.error(e);
+                alert('Failed to add section');
+            }
+        }
 
-                        sectionIndex: editSectionIndex,
-                        lessonIndex: editLessonIndex,
+        async function editSection(sectionId) {
+            const currentTitle = document.getElementById('title-' + sectionId).textContent;
+            const newTitle = prompt('Section title:', currentTitle);
+            if (!newTitle) return;
+
+            const updated = courseData.map(s => 
+                s._id === sectionId ? { ...s, section: newTitle } : s
+            );
+
+            await saveCourseOrder(updated);
+        }
+
+        async function deleteSection(sectionId) {
+            if (!confirm('Delete this section?')) return;
+
+            const updated = courseData.filter(s => s._id !== sectionId);
+            await saveCourseOrder(updated);
+        }
+
+        // ==================== ITEM FUNCTIONS ====================
+        
+        // Load lesson into editor panel when clicked
+        function loadLessonIntoEditor(sectionIndex, lessonIndex, type, itemId, itemName) {
+            console.log("Loading lesson into editor:", sectionIndex, lessonIndex, type, itemId);
+            
+            const placeholder = document.getElementById('editorPlaceholder');
+            const editorContent = document.getElementById('editorContent');
+            
+            // Hide placeholder, show editor
+            placeholder.style.display = 'none';
+            editorContent.style.display = 'block';
+            
+            // Build editor content based on type
+            if (type === 'video') {
+                editorContent.innerHTML = `
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Edit Video</h5>
+                            <span class="badge bg-secondary">Section: ${sectionIndex}, Lesson: ${lessonIndex}</span>
+                        </div>
+                        <div class="card-body">
+                            <input type="hidden" id="lesson-section-index" value="${sectionIndex}">
+                            <input type="hidden" id="lesson-index" value="${lessonIndex}">
+                            <input type="hidden" id="lesson-id" value="${itemId}">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Video Name</label>
+                                <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Video URL</label>
+                                <input type="text" class="form-control" id="lesson-url" placeholder="Enter video URL">
+                            </div>
+                            <div class="mb-3">
+                                <button class="btn btn-primary" onclick="saveLesson()">
+                                    <i class="fas fa-save"></i> Save Changes
+                                </button>
+                                <a href="/admin/lesson/${itemId}/edit" class="btn btn-secondary">
+                                    <i class="fas fa-edit"></i> Advanced Edit
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Fetch and set video URL from server
+                fetchVideoData(sectionIndex, lessonIndex);
+            } else if (type === 'slide') {
+                editorContent.innerHTML = `
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Edit Slide</h5>
+                            <span class="badge bg-secondary">Section: ${sectionIndex}, Lesson: ${lessonIndex}</span>
+                        </div>
+                        <div class="card-body">
+                            <input type="hidden" id="lesson-section-index" value="${sectionIndex}">
+                            <input type="hidden" id="lesson-index" value="${lessonIndex}">
+                            <input type="hidden" id="lesson-id" value="${itemId}">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Slide Name</label>
+                                <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
+                            </div>
+                            <div class="mb-3">
+                                <button class="btn btn-primary" onclick="saveLesson()">
+                                    <i class="fas fa-save"></i> Save Changes
+                                </button>
+                                <a href="/admin/slide/${itemId}/edit" class="btn btn-secondary">
+                                    <i class="fas fa-edit"></i> Advanced Edit
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'quiz') {
+                editorContent.innerHTML = `
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Edit Quiz</h5>
+                            <span class="badge bg-secondary">Section: ${sectionIndex}, Lesson: ${lessonIndex}</span>
+                        </div>
+                        <div class="card-body">
+                            <input type="hidden" id="lesson-section-index" value="${sectionIndex}">
+                            <input type="hidden" id="lesson-index" value="${lessonIndex}">
+                            <input type="hidden" id="lesson-id" value="${itemId}">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Quiz Name</label>
+                                <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
+                            </div>
+                            <div class="mb-3">
+                                <button class="btn btn-primary" onclick="saveLesson()">
+                                    <i class="fas fa-save"></i> Save Changes
+                                </button>
+                                <a href="/admin/quiz/${itemId}/edit" class="btn btn-secondary">
+                                    <i class="fas fa-edit"></i> Advanced Edit
+                                </a>
+                                <a href="/admin/course/${courseId}/quiz/${sectionIndex}/${lessonIndex}" class="btn btn-info">
+                                    <i class="fas fa-question"></i> Quiz Editor
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Fetch video data from server and populate URL field
+        async function fetchVideoData(sectionIndex, lessonIndex) {
+            try {
+                const res = await fetch(`/admin/course/${courseId}/lesson/${sectionIndex}/${lessonIndex}`);
+                const data = await res.json();
+                
+                console.log("Video data fetched:", data);
+                
+                if (data.video && data.video.preview) {
+                    document.getElementById('lesson-url').value = data.video.preview;
+                    console.log("Video URL set:", data.video.preview);
+                } else {
+                    console.log("No video preview URL found");
+                }
+            } catch (err) {
+                console.error("Error fetching video data:", err);
+            }
+        }
+        
+        // Save lesson changes
+        async function saveLesson() {
+            const sectionIndex = document.getElementById('lesson-section-index').value;
+            const lessonIndex = document.getElementById('lesson-index').value;
+            const itemId = document.getElementById('lesson-id').value;
+            const name = document.getElementById('lesson-name').value;
+            const url = document.getElementById('lesson-url').value;
+            
+            console.log("Saving lesson:", { sectionIndex, lessonIndex, itemId, name, url });
+            
+            try {
+                const res = await fetch(`/admin/course/${courseId}/lesson/edit`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        sectionIndex: parseInt(sectionIndex),
+                        lessonIndex: parseInt(lessonIndex),
                         name: name,
                         url: url
-
                     })
-
-                })
-
-                const data = await res.text()
-
-                console.log(data)
-
-                location.reload()
-
-            })
-        document.querySelectorAll(".deleteBtn")
-            .forEach(btn => {
-
-                btn.addEventListener("click", async () => {
-
-                    const sectionIndex = Number(btn.dataset.section)
-                    const lessonIndex = Number(btn.dataset.lesson)
-
-                    if (!confirm("Delete this lesson?")) return
-
-                    const res = await fetch(`/admin/course/${courseId}/lesson/delete`, {
-
-                        method: "DELETE",
-
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-
-                        body: JSON.stringify({
-                            sectionIndex,
-                            lessonIndex
-                        })
-
-                    })
-
-                    const data = await res.json()
-
-                    if (data.success) {
-                        location.reload()
-                    } else {
-                        alert("Delete failed")
-                    }
-
-                })
-
-            })
-        let addSectionIndex = null
-
-
-
-        // OPEN ADD POPUP
-
-        document.querySelectorAll(".addLessonBtn")
-            .forEach(btn => {
-
-                btn.addEventListener("click", () => {
-
-                    addSectionIndex = Number(btn.dataset.section)
-
-                    document.getElementById("newLessonName").value = ""
-                    document.getElementById("newLessonUrl").value = ""
-
-                    document.getElementById("addPopup").style.display = "flex"
-
-                })
-
-            })
-
-
-
-        // CLOSE ADD POPUP
-
-        document.getElementById("addCancelBtn")
-            .addEventListener("click", () => {
-
-                document.getElementById("addPopup").style.display = "none"
-
-            })
-
-
-
-
-        // SAVE ADD LESSON
-
-        document.getElementById("addSaveBtn")
-            .addEventListener("click", async () => {
-
-                const name = document.getElementById("newLessonName").value
-                const url = document.getElementById("newLessonUrl").value
-
-                await fetch(`/admin/course/${courseId}/lesson/add`, {
-
-                    method: "PUT",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-
-                        sectionIndex: addSectionIndex,
-                        name,
-                        url
-
-                    })
-
-                })
-
-                location.reload()
-
-            })
-        document.addEventListener("DOMContentLoaded", function () {
-
-            document.querySelectorAll(".sortableLessons")
-                .forEach(section => {
-
-                    new Sortable(section, {
-
-                        animation: 150,
-
-                        handle: ".dragHandle",
-
-                        onEnd: async function (evt) {
-
-                            const sectionIndex = Number(section.dataset.section)
-
-                            const lessons = []
-
-                            section.querySelectorAll(".lesson")
-                                .forEach(lesson => {
-
-                                    const title = lesson.querySelector("span:nth-child(2)").innerText
-
-                                    const found = courseData[sectionIndex].videos.find(v => v.name === title)
-
-                                    if (found) lessons.push(found)
-
-                                })
-
-                            await fetch(`/admin/course/${courseId}/lesson/reorder`, {
-
-                                method: "PUT",
-
-                                headers: {
-                                    "Content-Type": "application/json"
-                                },
-
-                                body: JSON.stringify({
-
-                                    sectionIndex,
-                                    lessons
-
-                                })
-
-                            })
-
-                        }
-
-                    })
-
-                })
-        })
-        editSectionIndex = null
-
-
-        // OPEN POPUP
-
-        document.querySelectorAll(".editSectionBtn")
-            .forEach(btn => {
-
-                btn.addEventListener("click", () => {
-
-                    editSectionIndex = Number(btn.dataset.section)
-
-                    const sectionName =
-                        courseData[editSectionIndex].section
-
-                    document.getElementById("sectionNameInput").value =
-                        sectionName
-
-                    document.getElementById("editSectionPopup").style.display =
-                        "flex"
-
-                })
-
-            })
-
-
-
-
-        // CLOSE POPUP
-
-        document.getElementById("cancelSectionBtn")
-            .addEventListener("click", () => {
-
-                document.getElementById("editSectionPopup").style.display =
-                    "none"
-
-            })
-
-
-
-
-        // SAVE SECTION NAME
-
-        document.getElementById("saveaddSectionBtn")
-            .addEventListener("click", async () => {
-
-                const newName =
-                    document.getElementById("sectionNameInput").value
-
-                await fetch(`/admin/course/${courseId}/section/edit`, {
-
-                    method: "PUT",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-
-                        sectionIndex: editSectionIndex,
-                        name: newName
-
-                    })
-
-                })
-
-                location.reload()
-
-            })
-        // document.querySelectorAll("button")
-        //         .forEach(btn => {
-
-        //             btn.addEventListener("click", (e) => {
-        //                 e.stopPropagation()
-        //             })
-
-        //         })  
-        // OPEN POPUP
-
-        document
-            .getElementById("addSectionBtn")
-            .addEventListener("click", () => {
-
-                document
-                    .getElementById("addSectionPopup")
-                    .style.display = "flex"
-
-            })
-
-
-        // CLOSE POPUP
-
-        document
-            .getElementById("cancelAddSectionBtn")
-            .addEventListener("click", () => {
-
-                document
-                    .getElementById("addSectionPopup")
-                    .style.display = "none"
-
-            })
-
-
-
-
-        // SAVE SECTION
-
-        document.addEventListener("DOMContentLoaded", () => {
-
-            const saveBtn = document.getElementById("saveSectionBtn")
-
-            if (saveBtn) {
-
-                saveBtn.addEventListener("click", async () => {
-
-                    const name =
-                        document.getElementById("newSectionName").value
-
-                    if (!name) {
-                        alert("Section name required")
-                        return
-                    }
-
-                    console.log("Save clicked")
-
-                    await fetch(`/admin/course/${courseId}/section/add`, {
-
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-
-                        body: JSON.stringify({ name })
-
-                    })
-
-                    location.reload()
-
-                })
-
+                });
+                
+                const text = await res.text();
+                console.log("Save response:", text);
+                
+                if (text === "updated" || res.ok) {
+                    alert("Saved successfully!");
+                    location.reload();
+                } else {
+                    alert("Failed to save: " + text);
+                }
+            } catch (err) {
+                console.error("Save error:", err);
+                alert("Error occurred: " + err.message);
+            }
+        }
+        
+        function editItem(type, id) {
+            if (!id) {
+                alert('Item not found. Please reload.');
+                return;
+            }
+            
+            // Redirect to edit page based on type
+            if (type === 'video') {
+                window.location.href = '/admin/lesson/' + id + '/edit';
+            } else if (type === 'slide') {
+                window.location.href = '/admin/slide/' + id + '/edit';
+            } else if (type === 'quiz') {
+                window.location.href = '/admin/quiz/' + id + '/edit';
+            }
+        }
+
+        // Event delegation for button clicks (fixes click issues)
+        document.addEventListener('click', function(e) {
+            // Handle edit button clicks
+            const editBtn = e.target.closest('.edit-btn');
+            if (editBtn) {
+                e.stopPropagation();
+                const id = editBtn.dataset.id;
+                const type = editBtn.dataset.type;
+                if (id && type) {
+                    editItem(type, id);
+                }
+                return;
+            }
+            
+            // Handle delete button clicks (within lesson-item)
+            const deleteBtn = e.target.closest('.lesson-item .fa-trash');
+            if (deleteBtn) {
+                const itemEl = deleteBtn.closest('.lesson-item');
+                const sectionId = itemEl.dataset.sectionId;
+                const itemId = itemEl.dataset.itemId;
+                if (sectionId && itemId) {
+                    e.stopPropagation();
+                    deleteItem(sectionId, itemId);
+                }
+                return;
+            }
+        });
+
+        async function deleteItem(sectionId, itemId) {
+            if (!confirm('Delete this item?')) return;
+
+            const updated = courseData.map(s => {
+                if (s._id === sectionId) {
+                    return { ...s, videos: s.videos.filter(i => i._id !== itemId) };
+                }
+                return s;
+            });
+
+            await saveCourseOrder(updated);
+        }
+
+        function addItem(sectionId, type) {
+            // Open library and set target section
+            window.targetSectionId = sectionId;
+            window.targetItemType = type;
+            toggleLibrary();
+        }
+
+        // ==================== DRAG & DROP ====================
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        async function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+
+            // Check if dropped from library
+            const data = e.dataTransfer.getData('application/json');
+            if (data) {
+                const item = JSON.parse(data);
+                if (item.fromLibrary) {
+                    const sectionId = e.currentTarget.dataset.sectionId;
+                    await addItemToSection(sectionId, item.type, item.id);
+                }
             }
 
-        })
-        document
-                .querySelectorAll(".addQuestionBtn")
-                .forEach(btn => {
+            await saveOrder();
+        }
 
-                    btn.addEventListener("click", async () => {
-
-                        const sectionIndex = btn.dataset.section
-
-                        const name = prompt("Question title")
-
-                        if (!name) return
-
-                        await fetch(`/admin/course/${courseId}/quiz/add`, {
-
-                            method: "POST",
-
-                            headers: {
-                                "Content-Type": "application/json"
-                            },
-
-                            body: JSON.stringify({
-
-                                sectionIndex,
-                                name
-
-                            })
-
-                        })
-
-                        location.reload()
-
+        async function addItemToSection(sectionId, type, refId) {
+            try {
+                const res = await fetch('/api/admin/course/add-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        courseId,
+                        sectionId,
+                        type,
+                        refId
                     })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                }
+            } catch(e) {
+                console.error(e);
+                alert('Failed to add item');
+            }
+        }
 
-                })            
+        async function saveOrder() {
+            const sections = [];
+            
+            document.querySelectorAll('.section-card').forEach(card => {
+                const sectionId = card.dataset.sectionId;
+                const section = document.getElementById('title-' + sectionId).textContent;
+                const videos = [];
+
+                card.querySelectorAll('.lesson-item').forEach(video => {
+                    videos.push({
+                        _id: video.dataset.itemId,
+                        type: video.dataset.type,
+                        refId: video.dataset.refId
+                    });
+                });
+
+                sections.push({ _id: sectionId, section, videos });
+            });
+
+            await saveCourseOrder(sections);
+        }
+
+        async function saveCourseOrder(sections) {
+            try {
+                const res = await fetch('/api/admin/course/reorder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courseId, driveStructure: sections })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    // Order saved successfully
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        // ==================== LIBRARY FUNCTIONS ====================
+        function toggleLibrary() {
+            const popup = document.getElementById('libraryPopup');
+            popup.classList.toggle('show');
+        }
+
+        function switchLibraryTab(type) {
+            currentLibraryTab = type;
+            
+            // Update tab UI
+            document.querySelectorAll('.library-tabs button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            loadLibraryItems();
+        }
+
+        async function loadLibraryItems() {
+            const content = document.getElementById('libraryContent');
+            content.innerHTML = '<div class="library-empty"><i class="fas fa-spinner fa-spin"></i></div>';
+
+            try {
+                const res = await fetch('/api/admin/library?type=' + currentLibraryTab);
+                const data = await res.json();
+
+                if (!data.success || !data.items.length) {
+                    content.innerHTML = '<div class="library-empty"><p>No ' + currentLibraryTab + 's in library</p></div>';
+                    return;
+                }
+
+                const icons = { video: 'fa-play-circle', slide: 'fa-file-alt', quiz: 'fa-question-circle' };
+                const colors = { video: '#dc3545', slide: '#0d6efd', quiz: '#198754' };
+
+                content.innerHTML = data.items.map(item => `
+                    <div class="library-item" 
+                         draggable="true" 
+                         data-id="${item._id}"
+                         data-type="${item.type}"
+                         ondragstart="handleLibraryDrag(event)">
+                        <div class="lib-icon" style="color: ${colors[item.type]}">
+                            <i class="fas ${icons[item.type]}"></i>
+                        </div>
+                        <span class="lib-title">${item.title}</span>
+                    </div>
+                `).join('');
+
+            } catch(e) {
+                console.error(e);
+                content.innerHTML = '<div class="library-empty"><p>Error loading</p></div>';
+            }
+        }
+
+        function handleLibraryDrag(e) {
+            const item = {
+                fromLibrary: true,
+                id: e.target.dataset.id,
+                type: e.target.dataset.type
+            };
+            e.dataTransfer.setData('application/json', JSON.stringify(item));
+        }
+
+        // ==================== SAVE ====================
+        function saveCourse() {
+            alert('Course saved!');
+        }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </body>
-
-</html>
