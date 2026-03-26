@@ -1,0 +1,414 @@
+/* ==================== CSS VARIABLES ==================== */
+:root {
+    --primary: #a435f0;
+    --primary-hover: #8710d8;
+    --bg-light: #f7f9fa;
+    --border: #d1d7dc;
+}
+
+/* ==================== BASE STYLES ==================== */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f4f4f4;
+    margin: 0;
+}
+
+/* ==================== TOP BAR ==================== */
+.top-bar {
+    background: white;
+    padding: 12px 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.top-bar h1 {
+    font-size: 20px;
+    margin: 0;
+}
+
+.top-bar .btn-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.top-bar .btn-primary:hover {
+    background: var(--primary-hover);
+}
+
+/* ==================== MAIN LAYOUT ==================== */
+.editor-layout {
+    display: flex;
+    min-height: calc(100vh - 60px);
+}
+
+/* ==================== SIDEBAR ==================== */
+.sidebar {
+    width: 360px;
+    background: white;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.sidebar-header {
+    padding: 16px 20px;
+    background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+}
+
+.sidebar-content {
+    padding: 16px;
+}
+
+/* ==================== SECTION CARD ==================== */
+.section-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-light);
+    cursor: pointer;
+    user-select: none;
+}
+
+.section-header:hover {
+    background: #edeff2;
+}
+
+.section-header .section-icon {
+    color: #6a6f7c;
+    margin-right: 10px;
+    transition: transform 0.2s;
+}
+
+.section-header.collapsed .section-icon {
+    transform: rotate(-90deg);
+}
+
+.section-header .section-title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.section-header .actions button {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+    color: #6a6f7c;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.section-header .actions button:hover {
+    background: #d1d7dc;
+}
+
+/* ==================== LESSON LIST ==================== */
+.lesson-list {
+    padding: 8px;
+    min-height: 40px;
+}
+
+.lesson-list.drag-over {
+    background: #f0f0f0;
+    border: 2px dashed var(--primary);
+}
+
+.lesson-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.lesson-item:hover {
+    background: #f7f9fa;
+    border-color: var(--primary);
+}
+
+.lesson-item.dragging {
+    opacity: 0.5;
+}
+
+.lesson-item .drag-handle {
+    color: #9a9db1;
+    cursor: grab;
+    margin-right: 10px;
+}
+
+.lesson-item .drag-handle:active {
+    cursor: grabbing;
+}
+
+.lesson-item .item-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    margin-right: 10px;
+    font-size: 12px;
+}
+
+.lesson-item .item-icon.lesson { background: #ffe6e6; color: #dc3545; }
+.lesson-item .item-icon.slide { background: #e6f0ff; color: #0d6efd; }
+.lesson-item .item-icon.quiz { background: #e6fff0; color: #198754; }
+
+.lesson-item .item-info {
+    flex: 1;
+}
+
+.lesson-item .item-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1f1f1f;
+}
+
+.lesson-item .item-meta {
+    font-size: 11px;
+    color: #6a6f7c;
+}
+
+.lesson-item .item-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.lesson-item:hover .item-actions {
+    opacity: 1;
+}
+
+.lesson-item .item-actions button {
+    padding: 4px 8px;
+    font-size: 11px;
+    background: transparent;
+    border: none;
+    color: #6a6f7c;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.lesson-item .item-actions button:hover {
+    background: #d1d7dc;
+}
+
+/* ==================== ADD BUTTONS ==================== */
+.add-buttons {
+    display: flex;
+    gap: 6px;
+    padding: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.add-buttons button {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 11px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.add-buttons button:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* ==================== EDITOR PANEL ==================== */
+.editor-panel {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.editor-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 400px;
+    color: #6a6f7c;
+}
+
+.editor-placeholder i {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+}
+
+.editor-placeholder h4 {
+    margin-bottom: 8px;
+    color: #1f1f1f;
+}
+
+/* ==================== CONTENT LIBRARY POPUP ==================== */
+.library-popup {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 320px;
+    max-height: 450px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.library-popup.show {
+    display: flex;
+}
+
+.library-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+    cursor: move;
+}
+
+.library-popup-header h6 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.library-popup-header .close-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #6a6f7c;
+}
+
+.library-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+}
+
+.library-tabs button {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    color: #6a6f7c;
+    border-bottom: 2px solid transparent;
+}
+
+.library-tabs button.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.library-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    max-height: 280px;
+}
+
+.library-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background: #f7f9fa;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    cursor: grab;
+}
+
+.library-item:hover {
+    background: #edeff2;
+    border-color: var(--primary);
+}
+
+.library-item:active {
+    cursor: grabbing;
+}
+
+.library-item .lib-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    font-size: 12px;
+}
+
+.library-item .lib-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.library-empty {
+    text-align: center;
+    padding: 30px;
+    color: #6a6f7c;
+    font-size: 12px;
+}
+
+.library-add-btn {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(164, 53, 240, 0.4);
+    z-index: 999;
+}
+
+.library-add-btn:hover {
+    transform: scale(1.1);
+}
+
+/* ==================== ANIMATIONS ==================== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+/* ==================== SECTION COLLAPSE STATE ==================== */
+.section-content {
+    display: none;
+}
