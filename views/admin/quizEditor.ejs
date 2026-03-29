@@ -1,157 +1,77 @@
-<h2>
-    <%= quiz.name %>
-</h2>
+<% layout('/layouts/boilerplate') %>
 
-<button id="addQuestionBtn">+ Add Question</button>
+<link rel="stylesheet" href="/stylesheets/quizEditor.css">
 
-<div id="questions">
-
-    <% quiz.questions.forEach((q,qIndex)=>{ %>
-
-        <div class="question" data-index="<%=qIndex%>">
-
-            <span class="dragHandle">☰</span>
-
-            <h3>Question <%=qIndex+1%>
-            </h3>
-
-            <p>
-                <%=q.question%>
-            </p>
-
-            <ul>
-
-                <% q.options.forEach(opt=>{ %>
-
-                    <li>
-                        <%=opt.text%>
-
-                            <% if(opt.correct){ %>
-                                ✔
-                                <% } %>
-
-                    </li>
-
-                    <% }) %>
-
-            </ul>
-
+<div
+    id="quizEditorPage"
+    class="quiz-editor-page"
+    data-course-id="<%= course._id %>"
+    data-section-index="<%= sectionIndex %>"
+    data-quiz-index="<%= quizIndex %>"
+    data-quiz='<%- JSON.stringify(quiz || {}).replace(/'/g, "&#39;") %>'
+>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h3 class="mb-1">Quiz Editor</h3>
+            <p class="text-muted mb-0">Create, edit, reorder, and manage quiz questions.</p>
         </div>
+        <a href="/admin/courses/<%= course._id %>/editor-new" class="btn btn-outline-secondary">Back to Course Editor</a>
+    </div>
 
-        <% }) %>
+    <div id="quizAlertContainer"></div>
 
+    <div class="quiz-shell">
+        <div class="quiz-grid">
+            <aside class="quiz-sidebar">
+                <div class="sidebar-card">
+                    <label class="form-label fw-semibold">Quiz title</label>
+                    <input id="quizTitleInput" type="text" class="form-control quiz-title-input" />
+                    <div class="small text-muted mt-2" id="questionCount">0 questions</div>
+                </div>
+
+                <div class="sidebar-card">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="mb-0">Questions</h6>
+                    </div>
+                    <ul id="questionList" class="question-list"></ul>
+                </div>
+
+                <button id="addQuestionBtn" type="button" class="btn btn-primary w-100">+ Add Question</button>
+            </aside>
+
+            <section class="editor-panel">
+                <div id="emptyState" class="empty-state d-flex align-items-center justify-content-center text-center">
+                    <div>
+                        <h5 class="mb-2">Select a question</h5>
+                        <p class="text-muted mb-0">Choose one from the left or add a new question.</p>
+                    </div>
+                </div>
+
+                <div id="editorCard" class="editor-card d-none">
+                    <form id="editorForm" class="d-none" novalidate>
+                        <div class="mb-3">
+                            <label for="questionText" class="form-label fw-semibold">Question text</label>
+                            <textarea id="questionText" class="form-control" rows="3" placeholder="Enter question text"></textarea>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <label class="form-label fw-semibold mb-0">Options</label>
+                            <span id="optionCounter" class="small text-muted">0 options</span>
+                        </div>
+
+                        <div id="optionList"></div>
+
+                        <button id="addOptionBtn" type="button" class="btn btn-outline-primary mb-3">+ Add Option</button>
+
+                        <div class="d-flex gap-2 justify-content-end">
+                            <button id="deleteQuestionBtn" type="button" class="btn btn-danger">Delete Question</button>
+                            <button id="saveQuestionBtn" type="button" class="btn btn-primary">Save Question</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </div>
 </div>
-<div id="questionPopup" style="display:none">
 
-    <input id="questionText" placeholder="Question">
-
-    <input class="optionInput" placeholder="Option A">
-    <input class="optionInput" placeholder="Option B">
-    <input class="optionInput" placeholder="Option C">
-    <input class="optionInput" placeholder="Option D">
-
-    <label>Correct answer index</label>
-
-    <input id="correctIndex" type="number">
-
-    <button id="saveQuestionBtn">Save</button>
-
-</div>
-<script>
-    const courseId = "<%=course._id%>"
-        const sectionIndex = "<%=sectionIndex%>"
-        const quizIndex = "<%=quizIndex%>"
-
-        document
-            .getElementById("addQuestionBtn")
-            .onclick = () => {
-
-                document
-                    .getElementById("questionPopup")
-                    .style.display = "block"
-
-            }
-
-
-        document
-            .getElementById("saveQuestionBtn")
-            .onclick = async () => {
-
-                const question =
-                    document.getElementById("questionText").value
-
-                const options =
-                    Array.from(document.querySelectorAll(".optionInput"))
-                        .map(o => o.value)
-
-                const correct =
-                    parseInt(
-                        document.getElementById("correctIndex").value
-                    )
-
-                await fetch(
-                    `/admin/course/${courseId}/quiz/question/add`,
-                    {
-
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-
-                        body: JSON.stringify({
-
-                            sectionIndex,
-                            quizIndex,
-                            question,
-                            options,
-                            correct
-
-                        })
-
-                    })
-
-                location.reload()
-
-            }
-            new Sortable(
-                    document.getElementById("questions"),
-                    {
-
-                        handle: ".dragHandle",
-
-                        animation: 150,
-
-                        onEnd: async function () {
-
-                            const order =
-                                Array.from(
-                                    document.querySelectorAll(".question")
-                                ).map(q => q.dataset.index)
-
-
-                            await fetch(
-                                `/admin/course/${courseId}/quiz/question/reorder`,
-                                {
-
-                                    method: "PUT",
-
-                                    headers: {
-                                        "Content-Type": "application/json"
-                                    },
-
-                                    body: JSON.stringify({
-
-                                        sectionIndex,
-                                        quizIndex,
-                                        order
-
-                                    })
-
-                                })
-
-                        }
-
-                    })
-</script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="/javascripts/quizEditor.js"></script>

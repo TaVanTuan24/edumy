@@ -1,0 +1,184 @@
+.quiz-editor-page {
+    --qe-bg: #f5f7fb;
+    --qe-card: #ffffff;
+    --qe-border: #dee3eb;
+    --qe-text: #1b2430;
+    --qe-muted: #6c788a;
+    --qe-accent: #2d6cdf;
+    --qe-accent-soft: #e7f0ff;
+    --qe-danger-soft: #fdeaec;
+    margin-top: 1.5rem;
+    color: var(--qe-text);
+}
+
+.quiz-editor-page .quiz-shell {
+    background: radial-gradient(circle at right top, #eef5ff 0%, #f7f9fc 40%, #f5f7fb 100%);
+    border: 1px solid var(--qe-border);
+    border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(28, 43, 64, 0.08);
+    overflow: hidden;
+}
+
+.quiz-editor-page .quiz-grid {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    min-height: 70vh;
+}
+
+.quiz-editor-page .quiz-sidebar {
+    background: linear-gradient(180deg, #fcfdff 0%, #f7f9fd 100%);
+    border-right: 1px solid var(--qe-border);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.quiz-editor-page .sidebar-card,
+.quiz-editor-page .editor-card,
+.quiz-editor-page .empty-state {
+    background: var(--qe-card);
+    border: 1px solid var(--qe-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(25, 42, 66, 0.06);
+}
+
+.quiz-editor-page .sidebar-card {
+    padding: 0.9rem;
+}
+
+.quiz-editor-page .quiz-title-input {
+    font-weight: 600;
+    background: #f9fbff;
+    border-color: var(--qe-border);
+}
+
+.quiz-editor-page .question-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: calc(70vh - 210px);
+    overflow-y: auto;
+}
+
+.quiz-editor-page .question-list-item .question-row-btn {
+    width: 100%;
+    border: 1px solid var(--qe-border);
+    border-radius: 8px;
+    padding: 0.65rem 0.75rem;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-align: left;
+    transition: all 0.18s ease;
+}
+
+.quiz-editor-page .question-list-item .question-row-btn:hover {
+    border-color: #b5c7e9;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(31, 56, 90, 0.1);
+}
+
+.quiz-editor-page .question-list-item.active .question-row-btn {
+    background: var(--qe-accent-soft);
+    border-color: #99b9f0;
+}
+
+.quiz-editor-page .drag-handle {
+    color: #8394ab;
+    cursor: grab;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.quiz-editor-page .question-number {
+    min-width: 2rem;
+    font-weight: 700;
+    color: #2f4f83;
+}
+
+.quiz-editor-page .question-label {
+    color: #293548;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quiz-editor-page .editor-panel {
+    padding: 1.2rem;
+    background: #fbfcff;
+}
+
+.quiz-editor-page .empty-state {
+    padding: 2rem;
+    min-height: 340px;
+}
+
+.quiz-editor-page .editor-card {
+    padding: 1rem;
+}
+
+.quiz-editor-page .option-row {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    background: #fff;
+    border: 1px solid var(--qe-border);
+    border-radius: 8px;
+    padding: 0.65rem;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.quiz-editor-page .option-row:focus-within {
+    border-color: #8eb2f1;
+    box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.12);
+}
+
+.quiz-editor-page .option-correct-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 0;
+}
+
+.quiz-editor-page .option-delete-btn:hover {
+    background: var(--qe-danger-soft);
+}
+
+.quiz-editor-page .question-item-ghost {
+    opacity: 0.45;
+}
+
+.quiz-editor-page .question-item-drag {
+    transform: rotate(1.5deg);
+}
+
+.quiz-editor-page .btn {
+    border-radius: 8px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quiz-editor-page .btn:hover {
+    transform: translateY(-1px);
+}
+
+@media (max-width: 991.98px) {
+    .quiz-editor-page .quiz-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .quiz-editor-page .quiz-sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--qe-border);
+    }
+
+    .quiz-editor-page .question-list {
+        max-height: 260px;
+    }
+}
