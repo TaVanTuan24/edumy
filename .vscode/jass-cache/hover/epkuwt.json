@@ -1,0 +1,16 @@
+{
+  "filePath": "d:\\Apps\\LadikMPQ\\x64\\Work\\war3map.j",
+  "items": [
+    {
+      "symbolName": "V",
+      "filePath": "d:\\Apps\\LadikMPQ\\x64\\Work\\war3map.j",
+      "content": "\n```jass\ninteger array V\n```\n\n\n**文件:** `d:\\Apps\\LadikMPQ\\x64\\Work\\war3map.j`"
+    },
+    {
+      "symbolName": "gg_trg_FullVisibility",
+      "filePath": "d:\\Apps\\LadikMPQ\\x64\\Work\\war3map.j",
+      "content": "\n```jass\ntrigger gg_trg_FullVisibility\n```\n\n\n**文件:** `d:\\Apps\\LadikMPQ\\x64\\Work\\war3map.j`"
+    }
+  ],
+  "timestamp": 1774845144288
+}

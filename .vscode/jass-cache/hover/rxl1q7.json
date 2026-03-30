@@ -1,0 +1,16 @@
+{
+  "filePath": "c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j",
+  "items": [
+    {
+      "symbolName": "gg_trg_FullVisibility",
+      "filePath": "c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j",
+      "content": "\n```jass\ntrigger gg_trg_FullVisibility\n```\n\n\n**文件:** `c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j`"
+    },
+    {
+      "symbolName": "InitTrig_FullVisibility",
+      "filePath": "c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j",
+      "content": "\n```jass\nfunction InitTrig_FullVisibility takes nothing returns nothing\n```\n\n\n---\n\n===========================================================================\n\n**文件:** `c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j`"
+    }
+  ],
+  "timestamp": 1774845144289
+}

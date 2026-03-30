@@ -1,0 +1,23 @@
+{
+  "filePath": "c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j",
+  "items": [
+    {
+      "symbolName": "InitTrig_ConvertUnit",
+      "location": {
+        "uri": "c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j",
+        "range": {
+          "start": {
+            "line": 81,
+            "character": 9
+          },
+          "end": {
+            "line": 81,
+            "character": 29
+          }
+        }
+      },
+      "filePath": "c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\war3trig.j"
+    }
+  ],
+  "timestamp": 1774845144299
+}

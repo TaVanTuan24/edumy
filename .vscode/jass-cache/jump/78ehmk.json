@@ -1,0 +1,23 @@
+{
+  "filePath": "c:\\Users\\tavan\\OneDrive\\Documents\\Warcraft III\\layvp.j",
+  "items": [
+    {
+      "symbolName": "DisplayTextToPlayer",
+      "location": {
+        "uri": "c:\\Users\\tavan\\.vscode\\extensions\\jass.jass-1.9.7\\static\\common.j",
+        "range": {
+          "start": {
+            "line": 7145,
+            "character": 7
+          },
+          "end": {
+            "line": 7145,
+            "character": 26
+          }
+        }
+      },
+      "filePath": "c:\\Users\\tavan\\.vscode\\extensions\\jass.jass-1.9.7\\static\\common.j"
+    }
+  ],
+  "timestamp": 1774845144299
+}
