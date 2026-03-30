@@ -17,6 +17,7 @@
     let addItemModal = null;
     let addItemState = {
         type: 'video',
+        sectionId: null,
         sectionIndex: null,
         submitting: false
     };
@@ -56,6 +57,9 @@
 
         // Open first section by default
         openFirstSection();
+
+        // Keep expanded section heights in sync with dynamic content.
+        window.addEventListener('resize', refreshExpandedSectionHeights);
 
         // Retry Sortable init once visible DOM settles.
         window.setTimeout(initSortable, 150);
@@ -106,9 +110,12 @@
         const dataEl = document.getElementById('course-data');
         if (dataEl) {
             try {
-                courseData = JSON.parse(dataEl.textContent);
+                const raw = (dataEl.textContent || '').trim();
+                courseData = raw ? JSON.parse(raw) : [];
+                console.log('[CourseEditor] Parsed course data sections:', Array.isArray(courseData) ? courseData.length : 0);
             } catch(e) {
                 courseData = [];
+                console.error('[CourseEditor] Failed to parse course data:', e);
             }
         }
     }
@@ -272,6 +279,8 @@
     }
 
     function handleMainClick(e) {
+        console.log('[CourseEditor] Clicked:', e.target);
+
         // Ignore delegated click handlers while dragging is active.
         if (document.body.classList.contains('is-sorting')) {
             e.preventDefault();
@@ -299,9 +308,11 @@
         const editSectionBtn = e.target.closest('.edit-section-btn');
         if (editSectionBtn) {
             e.stopPropagation();
-            const sectionId = editSectionBtn.dataset.sectionId;
-            const sectionIndex = editSectionBtn.closest('.section-header')?.dataset.sectionIndex;
-            startInlineSectionRename(sectionId, sectionIndex);
+            const sectionCtx = resolveSectionContext(editSectionBtn);
+            console.log('[CourseEditor] Editing section:', sectionCtx?.sectionCard);
+            if (sectionCtx) {
+                startInlineSectionRename(sectionCtx);
+            }
             return;
         }
 
@@ -327,7 +338,7 @@
         }
 
         // Handle delete item (trash icon)
-        const deleteItemBtn = e.target.closest('.lesson-item .fa-trash');
+        const deleteItemBtn = e.target.closest('.delete-item-btn, .lesson-item .fa-trash');
         if (deleteItemBtn) {
             const itemEl = deleteItemBtn.closest('.lesson-item');
             const sectionId = itemEl.dataset.sectionId;
@@ -354,33 +365,36 @@
 
         const sectionTitle = e.target.closest('.section-title');
         if (sectionTitle) {
-            const sectionId = sectionTitle.id.replace('title-', '');
-            const sectionIndex = sectionTitle.dataset.sectionIndex;
-            startInlineSectionRename(sectionId, sectionIndex);
+            const sectionCtx = resolveSectionContext(sectionTitle);
+            console.log('[CourseEditor] Editing section:', sectionCtx?.sectionCard);
+            if (sectionCtx) {
+                startInlineSectionRename(sectionCtx);
+            }
             return;
         }
 
-        // Handle add video button
-        const addVideoBtn = e.target.closest('.add-item-btn[data-item-type="video"]');
+        // Handle add buttons for redesigned and legacy markup.
+        const addVideoBtn = e.target.closest('.add-video-btn, .add-item-btn[data-item-type="video"]');
         if (addVideoBtn) {
-            const sectionIndex = addVideoBtn.dataset.sectionIndex;
-            addVideo(sectionIndex);
+            const sectionCtx = resolveSectionContext(addVideoBtn);
+            console.log('[CourseEditor] Add video clicked:', { sectionIndex: sectionCtx?.sectionIndex, sectionId: sectionCtx?.sectionId, button: addVideoBtn });
+            if (sectionCtx) addVideo(sectionCtx);
             return;
         }
 
-        // Handle add slide button
-        const addSlideBtn = e.target.closest('.add-item-btn[data-item-type="slide"]');
+        const addSlideBtn = e.target.closest('.add-slide-btn, .add-item-btn[data-item-type="slide"]');
         if (addSlideBtn) {
-            const sectionIndex = addSlideBtn.dataset.sectionIndex;
-            addSlide(sectionIndex);
+            const sectionCtx = resolveSectionContext(addSlideBtn);
+            console.log('[CourseEditor] Add slide clicked:', { sectionIndex: sectionCtx?.sectionIndex, sectionId: sectionCtx?.sectionId, button: addSlideBtn });
+            if (sectionCtx) addSlide(sectionCtx);
             return;
         }
 
-        // Handle add quiz button
-        const addQuizBtn = e.target.closest('.add-item-btn[data-item-type="quiz"]');
+        const addQuizBtn = e.target.closest('.add-quiz-btn, .add-item-btn[data-item-type="quiz"]');
         if (addQuizBtn) {
-            const sectionIndex = addQuizBtn.dataset.sectionIndex;
-            addQuiz(sectionIndex);
+            const sectionCtx = resolveSectionContext(addQuizBtn);
+            console.log('[CourseEditor] Add quiz clicked:', { sectionIndex: sectionCtx?.sectionIndex, sectionId: sectionCtx?.sectionId, button: addQuizBtn });
+            if (sectionCtx) addQuiz(sectionCtx);
             return;
         }
 
@@ -410,31 +424,76 @@
 
     function handleSectionToggle(e) {
         const header = e.target.closest('.section-header');
-        if (!header || header.querySelector('.edit-section-btn')?.contains(e.target) || 
-            header.querySelector('.delete-section-btn')?.contains(e.target) ||
+        if (!header ||
+            e.target.closest('.edit-section-btn') ||
+            e.target.closest('.delete-section-btn') ||
             e.target.closest('.section-title') ||
             e.target.closest('.section-title-input')) {
             return;
         }
 
-        const index = header.dataset.sectionIndex;
-        const content = document.getElementById(`section-content-${index}`);
-        const icon = document.getElementById(`icon-${index}`);
         const sectionCard = header.closest('.section-card');
+        if (!sectionCard) return;
+
+        const content = sectionCard.querySelector('.section-content');
+        const icon = sectionCard.querySelector('.section-icon');
+
+        console.log('[CourseEditor] Section toggle clicked:', { target: e.target, section: sectionCard });
 
         if (!content) return;
 
-        const isOpen = !sectionCard?.classList.contains('is-collapsed');
-        if (sectionCard) {
-            sectionCard.classList.toggle('is-collapsed', isOpen);
-        }
+        const isOpen = !sectionCard.classList.contains('is-collapsed');
+        sectionCard.classList.toggle('is-collapsed', isOpen);
 
-        content.style.maxHeight = isOpen ? '0px' : `${content.scrollHeight + 16}px`;
+        updateSectionContentHeight(sectionCard, !isOpen);
 
         if (icon) {
             icon.classList.toggle('fa-chevron-down', !isOpen);
             icon.classList.toggle('fa-chevron-right', isOpen);
         }
+    }
+
+    function resolveSectionContext(triggerEl) {
+        const sectionCard = triggerEl?.closest('.section-card');
+        if (!sectionCard) return null;
+
+        const sectionId = (sectionCard.dataset.sectionId || '').trim() || null;
+        const cards = Array.from(document.querySelectorAll('.section-card'));
+        const domIndex = cards.indexOf(sectionCard);
+
+        let sectionIndex = domIndex;
+
+        if (sectionId) {
+            const stateIndex = courseData.findIndex((section) => String(section._id) === String(sectionId));
+            if (stateIndex !== -1) {
+                sectionIndex = stateIndex;
+            }
+        }
+
+        if (sectionIndex < 0 || sectionIndex >= courseData.length) {
+            const dataIndex = parseInt(sectionCard.dataset.sectionIndex || '', 10);
+            if (!Number.isNaN(dataIndex)) {
+                sectionIndex = dataIndex;
+            }
+        }
+
+        if (sectionIndex < 0) {
+            console.warn('[CourseEditor] Could not resolve section context:', { triggerEl, sectionCard, sectionId, sectionIndex });
+            return null;
+        }
+
+        const fallbackStateId = courseData[sectionIndex]?._id ? String(courseData[sectionIndex]._id) : null;
+        const resolvedSectionId = sectionId || fallbackStateId;
+
+        if (!resolvedSectionId) {
+            console.warn('[CourseEditor] Could not resolve section context:', { triggerEl, sectionCard, sectionId, sectionIndex });
+        }
+
+        return {
+            sectionCard,
+            sectionId: resolvedSectionId,
+            sectionIndex
+        };
     }
 
     // ==================== SECTION FUNCTIONS ====================
@@ -464,9 +523,11 @@
         }
     }
 
-    async function editSection(sectionId, sectionIndex, newTitle) {
+    async function editSection(sectionCtx, newTitle) {
         const trimmedTitle = String(newTitle || '').trim();
         if (!trimmedTitle) return;
+
+        const { sectionIndex, sectionId, sectionCard } = sectionCtx;
 
         try {
             const res = await fetch(`/admin/course/${courseId}/section/edit`, {
@@ -483,15 +544,19 @@
                 throw new Error(data.error || 'Failed to update section title');
             }
 
-            const titleEl = document.getElementById('title-' + sectionId);
+            if (courseData[sectionIndex]) {
+                courseData[sectionIndex].section = trimmedTitle;
+            }
+
+            const titleEl = sectionCard?.querySelector('.section-title') || document.getElementById('title-' + sectionId);
             if (titleEl) titleEl.textContent = trimmedTitle;
         } catch (err) {
             alert('Failed to update section title');
         }
     }
 
-    function startInlineSectionRename(sectionId, sectionIndex) {
-        const titleEl = document.getElementById('title-' + sectionId);
+    function startInlineSectionRename(sectionCtx) {
+        const titleEl = sectionCtx.sectionCard?.querySelector('.section-title');
         if (!titleEl || titleEl.querySelector('input')) return;
 
         const currentTitle = titleEl.textContent.trim();
@@ -509,7 +574,7 @@
             const nextTitle = input.value.trim() || currentTitle;
             titleEl.textContent = nextTitle;
             if (nextTitle !== currentTitle) {
-                await editSection(sectionId, sectionIndex, nextTitle);
+                await editSection(sectionCtx, nextTitle);
             }
         };
 
@@ -550,16 +615,16 @@
     }
 
     // ==================== ITEM FUNCTIONS ====================
-    async function addVideo(sectionIndex) {
-        openAddItemModal('video', sectionIndex);
+    async function addVideo(sectionCtx) {
+        openAddItemModal('video', sectionCtx);
     }
 
-    async function addSlide(sectionIndex) {
-        openAddItemModal('slide', sectionIndex);
+    async function addSlide(sectionCtx) {
+        openAddItemModal('slide', sectionCtx);
     }
 
-    async function addQuiz(sectionIndex) {
-        openAddItemModal('quiz', sectionIndex);
+    async function addQuiz(sectionCtx) {
+        openAddItemModal('quiz', sectionCtx);
     }
 
     function initAddItemModal() {
@@ -604,11 +669,14 @@
         modalEl.addEventListener('hidden.bs.modal', resetAddItemForm);
     }
 
-    function openAddItemModal(type, sectionIndex) {
+    function openAddItemModal(type, sectionCtx) {
         if (!addItemModal) return;
 
         addItemState.type = type;
-        addItemState.sectionIndex = parseInt(sectionIndex, 10);
+        addItemState.sectionId = sectionCtx?.sectionId || null;
+        addItemState.sectionIndex = parseInt(sectionCtx?.sectionIndex, 10);
+
+        console.log('[CourseEditor] Section ID:', addItemState.sectionId);
 
         const modalTitle = document.getElementById('addItemModalLabel');
         const modalSubtitle = document.getElementById('addItemModalSubtitle');
@@ -775,7 +843,8 @@
                 payload: {
                     sectionIndex: addItemState.sectionIndex,
                     name,
-                    url
+                    url,
+                    type: 'video'
                 }
             },
             slide: {
@@ -783,7 +852,8 @@
                 method: 'POST',
                 payload: {
                     sectionIndex: addItemState.sectionIndex,
-                    name
+                    name,
+                    type: 'slide'
                 }
             },
             quiz: {
@@ -791,7 +861,8 @@
                 method: 'POST',
                 payload: {
                     sectionIndex: addItemState.sectionIndex,
-                    name
+                    name,
+                    type: 'quiz'
                 }
             }
         };
@@ -812,13 +883,138 @@
                 return;
             }
 
+            const section = getSectionState(addItemState.sectionId, addItemState.sectionIndex);
+            if (section && Array.isArray(section.videos)) {
+                const savedItem = data.item || {};
+                const savedType = typeof savedItem.type === 'string' ? savedItem.type : addItemState.type;
+                const localItem = {
+                    _id: savedItem._id || data.itemId || data.id || `tmp-${Date.now()}`,
+                    type: savedType,
+                    name,
+                    preview: addItemState.type === 'video' ? url : '',
+                    refId: '',
+                    order: section.videos.length
+                };
+
+                section.videos.push(localItem);
+                addItemState.sectionIndex = courseData.findIndex((s) => s === section);
+                console.log('[CourseEditor] Items:', section.videos);
+                renderSections();
+                refreshExpandedSectionHeights();
+            } else {
+                showAddItemError('Unable to resolve section state for this item. Please refresh and try again.');
+                return;
+            }
+
             addItemModal.hide();
-            location.reload();
         } catch (err) {
             showAddItemError('Network error while creating item. Please try again.');
         } finally {
             setAddItemLoading(false);
         }
+    }
+
+    function renderSections() {
+        const sectionCards = Array.from(document.querySelectorAll('.section-card'));
+
+        sectionCards.forEach((card) => {
+            const sectionCtx = resolveSectionContext(card);
+            if (!sectionCtx) return;
+
+            const section = courseData[sectionCtx.sectionIndex];
+            if (!section) return;
+
+            card.dataset.sectionIndex = String(sectionCtx.sectionIndex);
+
+            const titleEl = card.querySelector('.section-title');
+            if (titleEl) {
+                titleEl.textContent = section.section || 'Untitled Section';
+                titleEl.dataset.sectionIndex = String(sectionCtx.sectionIndex);
+            }
+
+            renderSectionItems(sectionCtx.sectionIndex, section, card);
+
+            if (!card.classList.contains('is-collapsed')) {
+                updateSectionContentHeight(card, true);
+            }
+        });
+
+        initSortable();
+    }
+
+    function getSectionState(sectionId, sectionIndex) {
+        if (sectionId) {
+            const byId = courseData.find((section) => String(section._id) === String(sectionId));
+            if (byId) return byId;
+        }
+
+        if (Number.isInteger(sectionIndex) && sectionIndex >= 0 && sectionIndex < courseData.length) {
+            return courseData[sectionIndex];
+        }
+
+        return null;
+    }
+
+    function renderSectionItems(sectionIndex, section, sectionCard) {
+        const list = sectionCard.querySelector('.lesson-list');
+        if (!list) return;
+
+        list.dataset.sectionIndex = String(sectionIndex);
+        list.innerHTML = (section.videos || []).map((video, vIndex) => buildLessonItemMarkup(video, section, sectionIndex, vIndex)).join('');
+    }
+
+    function buildLessonItemMarkup(video, section, sectionIndex, lessonIndex) {
+        const rawType = String(video.type || 'video').toLowerCase();
+        const type = rawType === 'lecture' ? 'video' : rawType;
+        const icon = type === 'video' ? 'fa-play' : type === 'slide' ? 'fa-file-alt' : type === 'quiz' ? 'fa-question' : 'fa-play';
+        const itemLabel = type === 'video' ? 'Lecture' : type === 'quiz' ? 'Quiz' : type === 'slide' ? 'Slide' : 'Lecture';
+
+        return `
+            <div class="lesson-item"
+                 data-item-id="${video._id || ''}"
+                 data-section-id="${section._id || ''}"
+                 data-section-index="${sectionIndex}"
+                 data-lesson-index="${lessonIndex}"
+                 data-order="${lessonIndex}"
+                 data-type="${type}"
+                 data-name="${escapeAttribute(video.name || '')}"
+                 data-url="${escapeAttribute(video.preview || video.refId || '')}"
+                 data-ref-id="${escapeAttribute(video.refId || '')}">
+                <span class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></span>
+                <div class="item-icon ${type}">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="item-info">
+                    <div class="item-title">${escapeHtml(video.name || 'Untitled')}</div>
+                    <div class="item-meta">${itemLabel}</div>
+                </div>
+                <div class="item-actions">
+                    <button class="edit-btn" data-id="${escapeAttribute(video.refId || '')}" data-type="${type}" title="Edit">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="delete-item-btn" title="Delete">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttribute(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
     function editItem(type, id) {
@@ -830,7 +1026,7 @@
         if (type === 'video') {
             window.location.href = '/admin/lesson/' + id + '/edit';
         } else if (type === 'slide') {
-            window.location.href = '/admin/slide/' + id + '/edit';
+            window.location.href = `/admin/courses/${courseId}/slide-editor`;
         } else if (type === 'quiz') {
             window.location.href = '/admin/quiz/' + id + '/edit';
         }
@@ -929,7 +1125,7 @@
                         <button class="btn btn-primary save-lesson-btn">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
-                        <a href="/admin/slide/${itemId}/edit" class="btn btn-secondary">
+                        <a href="/admin/courses/${courseId}/slide-editor?section=${sectionIndex}&lesson=${lessonIndex}" class="btn btn-secondary">
                             <i class="fas fa-edit"></i> Advanced Edit
                         </a>
                     </div>
@@ -959,9 +1155,7 @@
                         <button class="btn btn-primary save-lesson-btn">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
-                        <a href="/admin/quiz/${itemId}/edit" class="btn btn-secondary">
-                            <i class="fas fa-edit"></i> Advanced Edit
-                        </a>
+                        
                         <a href="/admin/course/${courseId}/quiz/${sectionIndex}/${lessonIndex}" class="btn btn-info">
                             <i class="fas fa-question"></i> Quiz Editor
                         </a>
@@ -1280,22 +1474,39 @@
     function openFirstSection() {
         document.querySelectorAll('.section-card').forEach((card, idx) => {
             card.classList.toggle('is-collapsed', idx !== 0);
+
+            const icon = card.querySelector('.section-icon');
+
+            updateSectionContentHeight(card, idx === 0);
+
+            if (icon) {
+                icon.classList.toggle('fa-chevron-down', idx === 0);
+                icon.classList.toggle('fa-chevron-right', idx !== 0);
+            }
         });
 
-        const first = document.getElementById('section-content-0');
-        if (first) {
-            first.style.maxHeight = `${first.scrollHeight + 16}px`;
-            const firstIcon = document.getElementById('icon-0');
-            if (firstIcon) {
-                firstIcon.classList.remove('fa-chevron-right');
-                firstIcon.classList.add('fa-chevron-down');
-            }
+        refreshExpandedSectionHeights();
+    }
+
+    function updateSectionContentHeight(sectionCard, isExpanded) {
+        const content = sectionCard?.querySelector('.section-content');
+        if (!content) return;
+
+        if (!isExpanded) {
+            content.style.maxHeight = '0px';
+            return;
         }
 
-        document.querySelectorAll('.lesson-list[id^="section-content-"]').forEach((list) => {
-            if (list.id !== 'section-content-0') {
-                list.style.maxHeight = '0px';
-            }
+        // scrollHeight must be read after layout updates to avoid clipped lesson rows.
+        window.requestAnimationFrame(() => {
+            content.style.maxHeight = `${content.scrollHeight + 24}px`;
+        });
+    }
+
+    function refreshExpandedSectionHeights() {
+        document.querySelectorAll('.section-card').forEach((card) => {
+            const isExpanded = !card.classList.contains('is-collapsed');
+            updateSectionContentHeight(card, isExpanded);
         });
     }
 

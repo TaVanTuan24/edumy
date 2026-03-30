@@ -15,7 +15,7 @@
 <body data-course-id="<%= course._id %>">
     <!-- Course Data (hidden, parsed by JavaScript) -->
     <script id="course-data" type="application/json">
-        <%= JSON.stringify(course.driveStructure || []) %>
+        <%- JSON.stringify(course.driveStructure || []) %>
     </script>
 
     <!-- Top Bar -->
@@ -83,27 +83,21 @@
                                              data-name="<%= video.name || '' %>"
                                              data-url="<%= video.preview || video.refId || '' %>"
                                              data-ref-id="<%= video.refId || '' %>">
-                                            <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                                            <span class="drag-handle"><i class="fa-solid fa-grip-vertical">≡</i></span>
                                             <div class="item-icon <%= video.type %>">
-                                                <i class="fas <%= video.type === 'video' ? 'fa-play' : video.type === 'slide' ? 'fa-file-alt' : 'fa-question' %>"></i>
+                                                <i class="fas <%= (video.type === 'video' || video.type === 'lecture') ? 'fa-play' : video.type === 'slide' ? 'fa-file-alt' : video.type === 'quiz' ? 'fa-question' : 'fa-play' %>"></i>
                                             </div>
                                             <div class="item-info">
                                                 <div class="item-title">
                                                     <%= video.name || 'Untitled' %>
                                                 </div>
                                                 <div class="item-meta">
-                                                    <%= video.type === 'video' ? 'Lecture' : video.type === 'slide' ? 'Slide' : 'Quiz' %>
+                                                        <%= (video.type === 'video' || video.type === 'lecture') ? 'Lecture' : video.type === 'quiz' ? 'Quiz' : video.type === 'slide' ? 'Slide' : 'Lecture' %>
                                                 </div>
                                             </div>
                                             <div class="item-actions">
-                                                <button class="edit-btn" 
-                                                    data-id="<%= video.refId || '' %>" 
-                                                    data-type="<%= video.type %>"
-                                                    title="Edit">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button title="Delete">
-                                                    <i class="fas fa-trash"></i>
+                                                <button class="delete-item-btn" title="Delete">
+                                                    <i class="fa-solid fa-trash"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -111,13 +105,13 @@
                                 <% } %>
                             </div>
                             <div class="add-buttons">
-                                <button class="add-item-btn" data-section-index="<%= sIndex %>" data-item-type="video">
+                                <button class="add-item-btn add-video-btn" data-section-index="<%= sIndex %>" data-item-type="video">
                                     <i class="fas fa-play"></i> Lecture
                                 </button>
-                                <button class="add-item-btn" data-section-index="<%= sIndex %>" data-item-type="slide">
+                                <button class="add-item-btn add-slide-btn" data-section-index="<%= sIndex %>" data-item-type="slide">
                                     <i class="fas fa-file-alt"></i> Slide
                                 </button>
-                                <button class="add-item-btn" data-section-index="<%= sIndex %>" data-item-type="quiz">
+                                <button class="add-item-btn add-quiz-btn" data-section-index="<%= sIndex %>" data-item-type="quiz">
                                     <i class="fas fa-question"></i> Quiz
                                 </button>
                             </div>

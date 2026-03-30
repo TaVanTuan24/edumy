@@ -3,6 +3,49 @@ const router = express.Router();
 const Course = require('../../models/course');
 const ContentLibrary = require('../../models/contentLibrary');
 
+const VALID_LESSON_TYPES = new Set(['video', 'slide', 'quiz']);
+
+function normalizeLegacyType(rawType, fallbackItem = {}) {
+    const type = String(rawType || '').trim().toLowerCase();
+    if (type === 'lecture') return 'video';
+    if (VALID_LESSON_TYPES.has(type)) return type;
+
+    if (Array.isArray(fallbackItem.questions) && fallbackItem.questions.length > 0) return 'quiz';
+    if (Array.isArray(fallbackItem.slides) && fallbackItem.slides.length > 0) return 'slide';
+    if (typeof fallbackItem.content === 'string' && fallbackItem.content.trim().length > 0) return 'slide';
+
+    return 'video';
+}
+
+function normalizeDriveStructure(input) {
+    if (!Array.isArray(input)) return [];
+
+    return input.map((section, sectionIndex) => {
+        const normalizedSection = {
+            _id: section?._id,
+            section: String(section?.section || '').trim(),
+            videos: []
+        };
+
+        const videos = Array.isArray(section?.videos) ? section.videos : [];
+        normalizedSection.videos = videos.map((item, itemIndex) => ({
+            _id: item?._id,
+            type: normalizeLegacyType(item?.type, item),
+            name: String(item?.name || '').trim(),
+            preview: String(item?.preview || '').trim(),
+            refId: String(item?.refId || '').trim(),
+            content: typeof item?.content === 'string' ? item.content : '',
+            slides: Array.isArray(item?.slides) ? item.slides : [],
+            questions: Array.isArray(item?.questions) ? item.questions : [],
+            order: Number.isFinite(item?.order) ? item.order : itemIndex
+        }));
+
+        // Keep incoming section order when present, otherwise preserve list order.
+        normalizedSection.order = Number.isFinite(section?.order) ? section.order : sectionIndex;
+        return normalizedSection;
+    });
+}
+
 // Middleware to check if user is authenticated
 const isAuthenticated = (req, res, next) => {
     if (!req.user) {
@@ -12,6 +55,29 @@ const isAuthenticated = (req, res, next) => {
 };
 
 router.use(isAuthenticated);
+
+// Legacy course editor uses driveStructure and saves the whole array.
+router.post('/course/reorder', async (req, res) => {
+    try {
+        const { courseId, driveStructure } = req.body;
+        if (!courseId) {
+            return res.status(400).json({ success: false, error: 'Missing courseId' });
+        }
+
+        const course = await Course.findById(courseId);
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' });
+        }
+
+        course.driveStructure = normalizeDriveStructure(driveStructure);
+        await course.save();
+
+        res.json({ success: true, driveStructure: course.driveStructure });
+    } catch (err) {
+        console.error('Legacy course reorder save error:', err);
+        res.status(500).json({ success: false, error: 'Failed to save course structure' });
+    }
+});
 
 // ==================== SECTION ROUTES ====================
 
@@ -124,6 +190,11 @@ router.delete('/section/:courseId/:sectionId', async (req, res) => {
 router.post('/lesson', async (req, res) => {
     try {
         const { courseId, sectionId, title, type } = req.body;
+        const normalizedType = String(type || '').trim().toLowerCase();
+
+        if (!VALID_LESSON_TYPES.has(normalizedType)) {
+            return res.status(400).json({ error: 'Invalid lesson type. Use video, slide, or quiz.' });
+        }
         
         const course = await Course.findById(courseId);
         if (!course) {
@@ -137,7 +208,7 @@ router.post('/lesson', async (req, res) => {
 
         const newLesson = {
             title: title || 'New Lesson',
-            type: type || 'video',
+            type: normalizedType,
             videoUrl: '',
             slides: [],
             quiz: [],
@@ -146,6 +217,8 @@ router.post('/lesson', async (req, res) => {
 
         section.lessons.push(newLesson);
         await course.save();
+
+        console.log('Saved item:', newLesson);
 
         const addedLesson = section.lessons[section.lessons.length - 1];
         res.json({ success: true, lesson: addedLesson, sectionId });

@@ -35,6 +35,55 @@ const quizQuestionSchema = new Schema({
     }
 }, { _id: true })
 
+// Legacy driveStructure item schema used by current course editor.
+const driveItemSchema = new Schema({
+    type: {
+        type: String,
+        enum: ['video', 'quiz', 'slide'],
+        required: true
+    },
+    name: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    preview: {
+        type: String,
+        default: ''
+    },
+    refId: {
+        type: String,
+        default: ''
+    },
+    content: {
+        type: String,
+        default: ''
+    },
+    questions: {
+        type: [Schema.Types.Mixed],
+        default: []
+    },
+    slides: {
+        type: [slideSchema],
+        default: []
+    },
+    order: {
+        type: Number,
+        default: 0
+    }
+}, { _id: true })
+
+const driveSectionSchema = new Schema({
+    section: {
+        type: String,
+        default: ''
+    },
+    videos: {
+        type: [driveItemSchema],
+        default: []
+    }
+}, { _id: true })
+
 // Lesson schema - supports video, slide, or quiz
 const lessonSchema = new Schema({
     title: {
@@ -45,7 +94,7 @@ const lessonSchema = new Schema({
     type: {
         type: String,
         enum: ['video', 'slide', 'quiz'],
-        default: 'video'
+        required: true
     },
     videoUrl: {
         type: String,
@@ -88,7 +137,7 @@ const CourseSchema = new Schema({
     driveLink: String,
     // Legacy structure - kept for backward compatibility
     driveStructure: {
-        type: Array,
+        type: [driveSectionSchema],
         default: []
     },
     // New structured content
@@ -107,6 +156,57 @@ const CourseSchema = new Schema({
         ref: 'Review'
     }]
 }, opts)
+
+function inferLegacyItemType(item) {
+    if (!item || typeof item !== 'object') return 'video'
+
+    const currentType = typeof item.type === 'string' ? item.type.trim().toLowerCase() : ''
+    if (currentType === 'lecture') return 'video'
+    if (['video', 'slide', 'quiz'].includes(currentType)) return currentType
+
+    if (Array.isArray(item.questions) && item.questions.length > 0) return 'quiz'
+    if (Array.isArray(item.slides) && item.slides.length > 0) return 'slide'
+    if (typeof item.content === 'string' && item.content.trim().length > 0) return 'slide'
+
+    return 'video'
+}
+
+function inferLessonType(lesson) {
+    if (!lesson || typeof lesson !== 'object') return 'video'
+
+    const currentType = typeof lesson.type === 'string' ? lesson.type.trim().toLowerCase() : ''
+    if (currentType === 'lecture') return 'video'
+    if (['video', 'slide', 'quiz'].includes(currentType)) return currentType
+
+    if (Array.isArray(lesson.quiz) && lesson.quiz.length > 0) return 'quiz'
+    if (Array.isArray(lesson.slides) && lesson.slides.length > 0) return 'slide'
+
+    return 'video'
+}
+
+CourseSchema.pre('validate', function(next) {
+    if (Array.isArray(this.driveStructure)) {
+        this.driveStructure.forEach((section) => {
+            if (!section || !Array.isArray(section.videos)) return
+
+            section.videos.forEach((item) => {
+                item.type = inferLegacyItemType(item)
+            })
+        })
+    }
+
+    if (Array.isArray(this.sections)) {
+        this.sections.forEach((section) => {
+            if (!section || !Array.isArray(section.lessons)) return
+
+            section.lessons.forEach((lesson) => {
+                lesson.type = inferLessonType(lesson)
+            })
+        })
+    }
+
+    next()
+})
 
 CourseSchema.virtual('properties.popUpMarkup').get(function () {
     return `<strong><a href="/courses/${this._id}">${this.title}</a><strong>`;

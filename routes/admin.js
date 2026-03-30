@@ -2,6 +2,15 @@ const express = require('express');
 const router = express.Router();
 const Course = require('../models/course');
 
+function normalizeItemType(rawType, fallbackType) {
+    if (typeof rawType === 'string') {
+        const value = rawType.trim().toLowerCase();
+        if (value === 'lecture') return 'video';
+        if (['video', 'slide', 'quiz'].includes(value)) return value;
+    }
+    return fallbackType;
+}
+
 router.get('/', async (req, res) => {
 
     const courses = await Course.find({});
@@ -20,6 +29,8 @@ router.get('/courses/:id/editor', async (req, res) => {
                 section.videos.forEach(item => {
                     if (!item.type) {
                         item.type = "video"; // Default to video for backward compatibility
+                    } else if (item.type === 'lecture') {
+                        item.type = 'video';
                     }
                 });
             }
@@ -28,6 +39,58 @@ router.get('/courses/:id/editor', async (req, res) => {
 
     res.render('admin/courseEditor', { course })
 
+})
+
+router.get('/courses/:id/slide-editor', async (req, res) => {
+    const course = await Course.findById(req.params.id)
+
+    if (!course) {
+        return res.status(404).send('Course not found')
+    }
+
+    const exampleSlides = [
+        {
+            id: 'slide-1',
+            title: 'Introduction',
+            elements: [
+                {
+                    id: 'el-1',
+                    type: 'text',
+                    x: 80,
+                    y: 72,
+                    width: 520,
+                    height: 72,
+                    content: 'Welcome to your course',
+                    styles: {
+                        fontSize: 44,
+                        color: '#1c1d1f',
+                        fontWeight: 700,
+                        textAlign: 'left'
+                    }
+                },
+                {
+                    id: 'el-2',
+                    type: 'text',
+                    x: 84,
+                    y: 170,
+                    width: 640,
+                    height: 50,
+                    content: 'Use this slide editor to build beautiful lesson decks.',
+                    styles: {
+                        fontSize: 24,
+                        color: '#4d5562',
+                        fontWeight: 400,
+                        textAlign: 'left'
+                    }
+                }
+            ]
+        }
+    ]
+
+    res.render('admin/slideEditor', {
+        course,
+        exampleSlides
+    })
 })
 
 // New Udemy-style course editor (3-column layout)
@@ -42,6 +105,8 @@ router.get('/courses/:id/editor-new', async (req, res) => {
                 section.videos.forEach(item => {
                     if (!item.type) {
                         item.type = "video"; // Default to video for backward compatibility
+                    } else if (item.type === 'lecture') {
+                        item.type = 'video';
                     }
                 });
             }
@@ -89,8 +154,9 @@ router.delete('/course/:id/lesson/delete', async (req, res) => {
 })
 router.put('/course/:id/lesson/add', async (req, res) => {
     try {
-        const { sectionIndex, name, url } = req.body
+        const { sectionIndex, name, url, type } = req.body
         const parsedSectionIndex = parseInt(sectionIndex, 10)
+        const itemType = normalizeItemType(type, 'video')
 
         const course = await Course.findById(req.params.id)
         if (!course) {
@@ -102,16 +168,20 @@ router.put('/course/:id/lesson/add', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid section index' })
         }
 
-        videos.push({
-            type: "video",
+        const newItem = {
+            type: itemType,
             name: name,
             preview: url,
             order: videos.length
-        })
+        }
+
+        videos.push(newItem)
 
         await course.save()
 
-        res.json({ success: true })
+        console.log('Saved item:', newItem)
+
+        res.json({ success: true, item: newItem })
     } catch (err) {
         res.status(500).json({ success: false, error: err.message })
     }
@@ -238,8 +308,9 @@ router.post("/course/:id/section/add", async (req, res) => {
 })
 router.post("/course/:id/quiz/add", async (req, res) => {
     try {
-        const { sectionIndex, name } = req.body
+        const { sectionIndex, name, type } = req.body
         const parsedSectionIndex = parseInt(sectionIndex, 10)
+        const itemType = normalizeItemType(type, 'quiz')
 
         const course = await Course.findById(req.params.id)
         if (!course) {
@@ -251,16 +322,20 @@ router.post("/course/:id/quiz/add", async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid section index' })
         }
 
-        videos.push({
-            type: "quiz",
+        const newItem = {
+            type: itemType,
             name: name,
             questions: [],
             order: videos.length
-        })
+        }
+
+        videos.push(newItem)
 
         await course.save()
 
-        res.json({ success: true })
+        console.log('Saved item:', newItem)
+
+        res.json({ success: true, item: newItem })
     } catch (err) {
         res.status(500).json({ success: false, error: err.message })
     }
@@ -270,8 +345,9 @@ router.post("/course/:id/quiz/add", async (req, res) => {
 // Add slide to section
 router.post("/course/:id/slide/add", async (req, res) => {
     try {
-        const { sectionIndex, name } = req.body
+        const { sectionIndex, name, type } = req.body
         const parsedSectionIndex = parseInt(sectionIndex, 10)
+        const itemType = normalizeItemType(type, 'slide')
 
         const course = await Course.findById(req.params.id)
         if (!course) {
@@ -283,16 +359,20 @@ router.post("/course/:id/slide/add", async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid section index' })
         }
 
-        videos.push({
-            type: "slide",
+        const newItem = {
+            type: itemType,
             name: name,
             content: "",
             order: videos.length
-        })
+        }
+
+        videos.push(newItem)
 
         await course.save()
 
-        res.json({ success: true })
+        console.log('Saved item:', newItem)
+
+        res.json({ success: true, item: newItem })
     } catch (err) {
         res.status(500).json({ success: false, error: err.message })
     }
