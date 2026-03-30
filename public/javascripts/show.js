@@ -1,310 +1,332 @@
-let currentSectionIndex = null;
-let currentLessonId = null;
+const store = {
+  course: null,
+  sections: [],
+  lessons: [],
+  lessonsById: new Map(),
+  lessonsBySection: new Map(),
+  currentLesson: null,
+  currentSectionIndex: 0,
+  progress: {}
+};
 
 const STORAGE_SUFFIX = {
-  completed: 'completedLessons',
+  progress: 'progress',
   lastLesson: 'lastLesson',
-  lastSection: 'lastSection',
-  videoTimes: 'videoTimes'
+  lastSection: 'lastSection'
 };
 
-const state = {
-  completedLessonIds: new Set(),
-  completedMediaKeys: new Set(),
-  lessonById: new Map(),
-  allLessons: [],
-  lastVideoSaveAt: 0
-};
+document.addEventListener('DOMContentLoaded', initLearningSystem);
 
-document.addEventListener('DOMContentLoaded', initLearningUX);
+function initLearningSystem() {
+  store.course = window.__COURSE__ || window.course || {};
+  store.sections = normalizeSections(store.course);
+  store.lessons = flattenLessons({ sections: store.sections });
+  store.lessons.forEach((lesson) => store.lessonsById.set(String(lesson._id), lesson));
 
-function initLearningUX() {
-  buildAllLessonsIndex();
-  hydrateProgressState();
-  ensureLoadingSpinner();
-  bindKeyboardShortcuts();
-  bindMediaProgressListeners();
-  resumeLastLesson();
+  store.sections.forEach((section, idx) => {
+    const ids = section.items.map((item) => String(item._id));
+    store.lessonsBySection.set(idx, ids);
+  });
+
+  hydrateProgress();
+  bindGlobalEvents();
+  resumeLastContext();
+  updateProgressUI();
 }
 
 function storageKey(suffix) {
-  return 'course:' + course._id + ':' + suffix;
+  return 'course:' + String(store.course && store.course._id || '') + ':' + suffix;
 }
 
-function getJsonStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch (error) {
-    return fallback;
-  }
-}
-
-function setJsonStorage(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    // Ignore storage write errors.
-  }
-}
-
-function normalizeLessonType(rawType) {
-  const type = String(rawType || 'video').toLowerCase();
-  if (type === 'video') return 'lecture';
-  if (type === 'slide') return 'slide';
-  if (type === 'quiz') return 'quiz';
-  return 'lecture';
-}
-
-function toSafeAttr(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function normalizeMediaKey(url) {
-  return String(url || '').split('?')[0];
-}
-
-function createLessonId(seed) {
-  let hash = 0;
-  const str = String(seed || 'lesson');
-
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
+function normalizeSections(course) {
+  if (Array.isArray(course.sections) && course.sections.length) {
+    return course.sections.map((section, sIndex) => ({
+      _id: String(section._id || ('section-' + sIndex)),
+      title: section.title || ('Section ' + (sIndex + 1)),
+      items: normalizeSectionItems(Array.isArray(section.items) ? section.items : section.lessons, sIndex)
+    }));
   }
 
-  return 'lesson-' + Math.abs(hash);
+  const drive = Array.isArray(course.driveStructure) ? course.driveStructure : [];
+  return drive.map((section, sIndex) => ({
+    _id: String(section._id || ('section-' + sIndex)),
+    title: section.section || ('Section ' + (sIndex + 1)),
+    items: normalizeSectionItems(section.videos || [], sIndex)
+  }));
 }
 
-function getTypeLabel(type) {
-  if (type === 'lecture') return 'Lecture';
-  if (type === 'slide') return 'Slide';
-  if (type === 'quiz') return 'Quiz';
-  return 'Lecture';
+function normalizeSectionItems(items, sectionIndex) {
+  const source = Array.isArray(items) ? items : [];
+  return source.map((item, index) => normalizeLesson(item, sectionIndex, index));
 }
 
-function getSortedVideos(section) {
-  const videos = Array.isArray(section && section.videos) ? section.videos : [];
-  return videos.slice().sort((a, b) => {
-    const getNum = function(str) {
-      const match = String(str || '').match(/^\d{1,3}/);
-      return match ? parseInt(match[0], 10) : 0;
-    };
+function normalizeLesson(item, sectionIndex, index) {
+  const rawType = String(item && item.type || 'video').toLowerCase();
+  const type = rawType === 'video' ? 'lecture' : rawType;
+  const lessonId = String(item && item._id || ('lesson-' + sectionIndex + '-' + index));
 
-    const numA = getNum(a && a.name);
-    const numB = getNum(b && b.name);
-    if (numA !== numB) return numA - numB;
-    return String((a && a.name) || '').localeCompare(String((b && b.name) || ''));
+  const contentObject = (item && typeof item.content === 'object' && item.content) ? item.content : {};
+  const questions = Array.isArray(contentObject.questions)
+    ? contentObject.questions
+    : Array.isArray(item && item.questions)
+      ? item.questions
+      : Array.isArray(item && item.quiz)
+        ? item.quiz
+        : [];
+
+  const slides = Array.isArray(contentObject.slides)
+    ? contentObject.slides
+    : Array.isArray(item && item.slides)
+      ? item.slides
+      : [];
+
+  const videoUrl = contentObject.videoUrl || item.preview || item.videoUrl || '';
+
+  return {
+    _id: lessonId,
+    sectionIndex,
+    type,
+    title: item.name || item.title || 'Untitled Lesson',
+    preview: item.preview || '',
+    content: {
+      videoUrl,
+      questions,
+      slides
+    }
+  };
+}
+
+function flattenLessons(course) {
+  const result = [];
+  const sections = Array.isArray(course.sections) ? course.sections : [];
+
+  sections.forEach((section) => {
+    const items = Array.isArray(section.items) ? section.items : [];
+    items.forEach((item) => result.push(item));
   });
+
+  return result;
 }
 
-function buildAllLessonsIndex() {
-  state.allLessons = [];
+function bindGlobalEvents() {
+  document.addEventListener('click', (e) => {
+    const progressCheckbox = e.target.closest('.lesson-progress-checkbox');
+    if (progressCheckbox) return;
 
-  (course.driveStructure || []).forEach(function(section, sectionIndex) {
-    const sorted = getSortedVideos(section);
+    const lessonEl = e.target.closest('.lesson-item');
+    if (!lessonEl) return;
 
-    sorted.forEach(function(video, index) {
-      const videoPreview = String(video.preview || '');
-      const lessonId = createLessonId((video._id || '') + '|' + sectionIndex + '|' + index + '|' + videoPreview + '|' + (video.name || ''));
+    const lessonId = lessonEl.dataset.id;
+    selectLesson(lessonId);
+  });
 
-      state.allLessons.push({
-        id: lessonId,
-        preview: videoPreview,
-        sectionIndex: sectionIndex
-      });
+  const listContainer = document.getElementById('videoListContainer');
+  if (listContainer) {
+    listContainer.addEventListener('change', (e) => {
+      const checkbox = e.target.closest('.lesson-progress-checkbox');
+      if (!checkbox) return;
+
+      const lessonEl = checkbox.closest('.lesson-item');
+      if (!lessonEl) return;
+
+      const lessonId = lessonEl.dataset.id;
+      setLessonProgress(lessonId, checkbox.checked, true);
+      renderLessonList(store.currentSectionIndex);
+      updateSidebarUI();
+      updateProgressUI();
     });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const tag = String((e.target && e.target.tagName) || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+
+    if (e.key === 'ArrowRight') goNextLesson();
+    if (e.key === 'ArrowLeft') goPrevLesson();
   });
-}
-
-function hydrateProgressState() {
-  state.completedMediaKeys = new Set((completedVideos || []).map(normalizeMediaKey));
-
-  const storedCompletedLessons = getJsonStorage(storageKey(STORAGE_SUFFIX.completed), []);
-  state.completedLessonIds = new Set(Array.isArray(storedCompletedLessons) ? storedCompletedLessons : []);
-}
-
-function saveCompletedLessonsToStorage() {
-  setJsonStorage(storageKey(STORAGE_SUFFIX.completed), Array.from(state.completedLessonIds));
-}
-
-function saveLastLessonToStorage(lessonId, sectionIndex) {
-  try {
-    localStorage.setItem(storageKey(STORAGE_SUFFIX.lastLesson), String(lessonId || ''));
-    localStorage.setItem(storageKey(STORAGE_SUFFIX.lastSection), String(sectionIndex || 0));
-  } catch (error) {
-    // Ignore storage write errors.
-  }
-}
-
-function isLessonCompleted(lessonId, previewUrl) {
-  if (lessonId && state.completedLessonIds.has(lessonId)) return true;
-  if (previewUrl && state.completedMediaKeys.has(normalizeMediaKey(previewUrl))) return true;
-  return false;
-}
-
-function markLessonCompleted(lessonId, previewUrl, isCompleted, shouldPersistBackend) {
-  const mediaKey = normalizeMediaKey(previewUrl || '');
-
-  if (isCompleted) {
-    if (lessonId) state.completedLessonIds.add(lessonId);
-    if (mediaKey) state.completedMediaKeys.add(mediaKey);
-  } else {
-    if (lessonId) state.completedLessonIds.delete(lessonId);
-    if (mediaKey) state.completedMediaKeys.delete(mediaKey);
-  }
-
-  saveCompletedLessonsToStorage();
-  renderCurrentSectionRows();
-
-  if (shouldPersistBackend && previewUrl) {
-    toggleProgress(previewUrl, isCompleted);
-  } else {
-    updateProgressUI();
-  }
-}
-
-function renderCurrentSectionRows() {
-  if (currentSectionIndex === null || currentSectionIndex === undefined) return;
-
-  const activeLesson = currentLessonId;
-  const currentContainer = document.getElementById('videoListContainer');
-  if (!currentContainer) return;
-
-  showVideos(currentSectionIndex);
-
-  if (activeLesson) {
-    const activeEl = currentContainer.querySelector('.lesson-item[data-id="' + activeLesson + '"]');
-    if (activeEl) activeEl.classList.add('active');
-  }
-}
-
-function getLessonIcon(type, completed) {
-  if (completed) return 'Completed';
-  if (type === 'lecture') return 'Video';
-  if (type === 'slide') return 'Slide';
-  if (type === 'quiz') return 'Quiz';
-  return 'Lesson';
 }
 
 function showVideos(sectionIndex) {
-  currentSectionIndex = sectionIndex;
-  state.lessonById.clear();
+  store.currentSectionIndex = Number(sectionIndex) || 0;
+  localStorage.setItem(storageKey(STORAGE_SUFFIX.lastSection), String(store.currentSectionIndex));
 
-  const section = course.driveStructure[sectionIndex];
-  const container = document.getElementById('videoListContainer');
+  renderLessonList(store.currentSectionIndex);
+  updateSidebarUI();
 
-  if (!section || !section.videos || section.videos.length === 0) {
-    container.innerHTML = `<p class="text-warning">No videos found in this section.</p>`;
-    return;
-  }
+  const courseInfo = document.getElementById('courseInfo');
+  const notes = document.getElementById('videoNoteSection');
+  if (courseInfo) courseInfo.style.display = 'none';
+  if (notes) notes.style.display = 'block';
 
-  const sortedVideos = getSortedVideos(section);
-
-  let html = `<h6>Videos in ${section.section || 'Section ' + (sectionIndex + 1)}:</h6><ul class="list-group">`;
-  sortedVideos.forEach((video, index) => {
-  const videoPreview = String(video.preview || '');
-  const lessonId = createLessonId((video._id || '') + '|' + sectionIndex + '|' + index + '|' + videoPreview + '|' + (video.name || ''));
-  const lessonType = normalizeLessonType(video.type);
-  const lessonSrc = encodeURIComponent(videoPreview);
-  const lessonTitle = encodeURIComponent(video.name || 'Untitled Lesson');
-  const lessonName = toSafeAttr(video.name || 'Untitled Lesson');
-  const isCompleted = isLessonCompleted(lessonId, videoPreview);
-  const isChecked = isCompleted ? 'checked' : '';
-  const completedBadge = isCompleted ? '<span class="lesson-completed-badge">Completed</span>' : '';
-  const newBadge = (!isCompleted && typeof hasCourseUpdate !== 'undefined' && hasCourseUpdate)
-    ? '<span class="lesson-new-badge">NEW</span>'
-    : '';
-
-  state.lessonById.set(lessonId, {
-    id: lessonId,
-    type: lessonType,
-    src: videoPreview,
-    title: video.name || 'Untitled Lesson',
-    sectionIndex: sectionIndex
-  });
-
-  html += `
-    <li class="list-group-item lesson-item d-flex justify-content-between align-items-center"
-        data-id="${lessonId}"
-        data-type="${lessonType}"
-        data-src="${lessonSrc}"
-        data-title="${lessonTitle}"
-        data-section-index="${sectionIndex}"
-        onclick="handleLessonClick(this)">
-      <div>
-        <span class="lesson-title">${lessonName}</span>
-        <small class="text-muted ms-2">${getTypeLabel(lessonType)}</small>
-        ${completedBadge}
-        ${newBadge}
-      </div>
-      <div>
-        <input type="checkbox"
-               class="form-check-input"
-               style="transform: scale(1.5);"
-               onclick="event.stopPropagation()"
-               onchange="handleProgressToggle(this, '${lessonId}', decodeURIComponent('${lessonSrc}'))"
-               ${isChecked}>
-      </div>
-    </li>`;
-    });
-  html += `</ul>`;
-  container.innerHTML = html;
-
-  if (currentLessonId) {
-    const activeEl = container.querySelector('.lesson-item[data-id="' + currentLessonId + '"]');
-    if (activeEl) activeEl.classList.add('active');
-  }
-
-  // Hiện phần ghi chú tương ứng section
-  document.getElementById('courseInfo').style.display = 'none';
-  document.getElementById('videoNoteSection').style.display = 'block';
-  document.querySelectorAll('.section-note').forEach((note, i) => {
-    note.style.display = i === currentSectionIndex ? 'block' : 'none';
+  document.querySelectorAll('.section-note').forEach((note, idx) => {
+    note.style.display = idx === store.currentSectionIndex ? 'block' : 'none';
   });
 }
 
-function handleLessonClick(el) {
-  if (el.classList.contains('active')) return;
+function renderLessonList(sectionIndex) {
+  const section = store.sections[sectionIndex];
+  const container = document.getElementById('videoListContainer');
+  if (!container) return;
 
-  const type = el.dataset.type;
-  const src = decodeURIComponent(el.dataset.src || '');
-  const title = decodeURIComponent(el.dataset.title || 'Lesson');
-  const lessonId = el.dataset.id || '';
-  const sectionIndex = Number(el.dataset.sectionIndex || 0);
+  if (!section || !Array.isArray(section.items) || !section.items.length) {
+    container.innerHTML = '<p class="text-warning">No lessons found in this section.</p>';
+    return;
+  }
 
-  console.log('Clicked:', type, src);
-  console.log(type);
+  let html = '<h6>Lessons in ' + escapeHtml(section.title) + ':</h6><ul class="list-group">';
 
-  document.querySelectorAll('.lesson-item').forEach(i => i.classList.remove('active'));
-  el.classList.add('active');
+  section.items.forEach((item) => {
+    const lessonId = String(item._id);
+    const checked = store.progress[lessonId] ? 'checked' : '';
+    const completedBadge = store.progress[lessonId] ? '<span class="lesson-completed-badge">Completed</span>' : '';
 
-  currentLessonId = lessonId;
-  saveLastLessonToStorage(lessonId, sectionIndex);
-  showLoading(true);
-
-  withContentFade(function() {
-    if (type === 'lecture') {
-      playVideo(src);
-    }
-
-    if (type === 'slide') {
-      renderSlide(src, title);
-    }
-
-    if (type === 'quiz') {
-      renderQuiz(src, title);
-    }
-
-    showLoading(false);
+    html += '' +
+      '<li class="list-group-item lesson-item d-flex justify-content-between align-items-center" data-id="' + escapeHtml(lessonId) + '">' +
+        '<div>' +
+          '<span class="lesson-title">' + escapeHtml(item.title) + '</span>' +
+          '<small class="text-muted ms-2">' + capitalize(item.type) + '</small>' +
+          completedBadge +
+        '</div>' +
+        '<div>' +
+          '<input type="checkbox" class="form-check-input lesson-progress-checkbox" style="transform: scale(1.5);" ' + checked + '>' +
+        '</div>' +
+      '</li>';
   });
 
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  html += '</ul>';
+  container.innerHTML = html;
+}
+
+function selectLesson(id) {
+  const lesson = store.lessonsById.get(String(id));
+  if (!lesson) return;
+  if (store.currentLesson && String(store.currentLesson._id) === String(id)) return;
+
+  store.currentLesson = lesson;
+  localStorage.setItem(storageKey(STORAGE_SUFFIX.lastLesson), String(lesson._id));
+  localStorage.setItem(storageKey(STORAGE_SUFFIX.lastSection), String(lesson.sectionIndex));
+
+  renderContent();
+  updateSidebarUI();
+}
+
+function renderContent() {
+  if (!store.currentLesson) return;
+
+  withContentFade(() => {
+    if (store.currentLesson.type === 'lecture') renderVideo(store.currentLesson);
+    if (store.currentLesson.type === 'slide') renderSlide(store.currentLesson);
+    if (store.currentLesson.type === 'quiz') renderQuiz(store.currentLesson);
+  });
+}
+
+function renderVideo(lesson) {
+  const imageContainer = document.getElementById('imageContainer');
+  const player = document.getElementById('videoPlayerContainer');
+  const iframe = document.getElementById('videoIframe');
+  const panel = document.getElementById('lessonFallbackPanel');
+
+  if (imageContainer) imageContainer.style.display = 'none';
+  if (panel) panel.style.display = 'none';
+
+  const url = lesson.content.videoUrl || lesson.preview || '';
+  if (!url) {
+    renderPanel('Lecture', lesson.title, '<p class="text-muted mb-0">No video source found.</p>', false);
+    return;
+  }
+
+  if (iframe) iframe.src = url;
+  if (player) player.style.display = 'block';
+}
+
+function renderSlide(lesson) {
+  const slides = Array.isArray(lesson.content.slides) ? lesson.content.slides : [];
+  if (!slides.length) {
+    renderPanel('Slide', lesson.title, '<p class="text-muted mb-0">No slide data.</p>', false);
+    return;
+  }
+
+  const slidesHtml = slides.map((slide, index) => {
+    return '' +
+      '<div class="border rounded p-2 mb-2">' +
+        '<div class="fw-semibold">' + escapeHtml(slide.title || ('Slide ' + (index + 1))) + '</div>' +
+        '<div class="text-muted">' + escapeHtml(slide.content || '') + '</div>' +
+      '</div>';
+  }).join('');
+
+  renderPanel('Slide', lesson.title, slidesHtml, false);
+}
+
+function renderQuiz(lesson) {
+  const questions = Array.isArray(lesson.content.questions) ? lesson.content.questions : [];
+  if (!questions.length) {
+    renderPanel('Quiz', lesson.title, '<p class="text-muted mb-0">No quiz data.</p>', true);
+    return;
+  }
+
+  const questionsHtml = questions.map((q, qIndex) => {
+    const options = Array.isArray(q.options) ? q.options : [];
+    const optionsHtml = options.map((opt) => {
+      const isCorrect = String(opt) === String(q.correctAnswer);
+      return '<li class="' + (isCorrect ? 'text-success fw-semibold' : '') + '">' + escapeHtml(opt) + '</li>';
+    }).join('');
+
+    return '' +
+      '<div class="border rounded p-2 mb-2">' +
+        '<div class="fw-semibold mb-1">Q' + (qIndex + 1) + '. ' + escapeHtml(q.question || 'Question') + '</div>' +
+        '<ol class="mb-0">' + optionsHtml + '</ol>' +
+      '</div>';
+  }).join('');
+
+  renderPanel('Quiz', lesson.title, questionsHtml, true);
+}
+
+function renderPanel(typeLabel, title, htmlBody, showCompleteButton) {
+  const imageContainer = document.getElementById('imageContainer');
+  const player = document.getElementById('videoPlayerContainer');
+  const iframe = document.getElementById('videoIframe');
+
+  if (imageContainer) imageContainer.style.display = 'none';
+  if (iframe) iframe.src = '';
+  if (player) player.style.display = 'none';
+
+  let panel = document.getElementById('lessonFallbackPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'lessonFallbackPanel';
+    panel.className = 'card mb-3';
+    if (player && player.parentNode) player.parentNode.insertBefore(panel, player.nextSibling);
+  }
+
+  panel.innerHTML = '' +
+    '<div class="card-body">' +
+      '<h5 class="card-title mb-3">' + escapeHtml(typeLabel) + ': ' + escapeHtml(title || 'Lesson') + '</h5>' +
+      htmlBody +
+      (showCompleteButton ? '<button id="completeCurrentLessonBtn" class="btn btn-sm btn-primary mt-2">Mark as Completed</button>' : '') +
+    '</div>';
+  panel.style.display = 'block';
+
+  const completeBtn = document.getElementById('completeCurrentLessonBtn');
+  if (completeBtn) {
+    completeBtn.addEventListener('click', () => {
+      if (!store.currentLesson) return;
+      setLessonProgress(String(store.currentLesson._id), true, true);
+      renderLessonList(store.currentSectionIndex);
+      updateSidebarUI();
+      updateProgressUI();
+    });
+  }
+}
+
+function updateSidebarUI() {
+  const currentId = store.currentLesson ? String(store.currentLesson._id) : null;
+  document.querySelectorAll('.lesson-item').forEach((el) => {
+    el.classList.remove('active');
+    if (currentId && String(el.dataset.id) === currentId) {
+      el.classList.add('active');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
 }
 
 function withContentFade(renderFn) {
@@ -314,286 +336,157 @@ function withContentFade(renderFn) {
     return;
   }
 
-  container.style.transition = 'opacity 0.15s ease';
+  container.style.transition = 'opacity 0.2s ease';
   container.style.opacity = '0';
-
-  setTimeout(function() {
+  setTimeout(() => {
     renderFn();
     container.style.opacity = '1';
   }, 150);
 }
 
-
-function playVideo(link) {
-  if (!link) return;
-
-  // Ẩn phần hình ảnh
-  const imageContainer = document.getElementById('imageContainer');
-  if (imageContainer) imageContainer.style.display = 'none';
-
-  const fallbackPanel = document.getElementById('lessonFallbackPanel');
-  if (fallbackPanel) fallbackPanel.style.display = 'none';
-
-  // Hiện video player
-  const player = document.getElementById('videoPlayerContainer');
-  const iframe = document.getElementById('videoIframe');
-  iframe.src = link;
-  player.style.display = 'block';
-
-  restoreVideoTime();
-}
-
-function renderSlide(link, title) {
-  if (link) {
-    playVideo(link);
-    return;
-  }
-
-  renderLessonFallback('Slide', title || 'Slide', 'No slide source found for this lesson.');
-}
-
-function renderQuiz(link, title) {
-  if (link) {
-    playVideo(link);
-    return;
-  }
-
-  renderLessonFallback('Quiz', title || 'Quiz', 'No quiz source found for this lesson.', true);
-}
-
-function renderLessonFallback(typeLabel, title, message, allowComplete) {
-  const imageContainer = document.getElementById('imageContainer');
-  if (imageContainer) imageContainer.style.display = 'none';
-
-  const player = document.getElementById('videoPlayerContainer');
-  const iframe = document.getElementById('videoIframe');
-  if (iframe) iframe.src = '';
-  if (player) player.style.display = 'none';
-
-  let panel = document.getElementById('lessonFallbackPanel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'lessonFallbackPanel';
-    panel.className = 'card mb-3';
-
-    if (player && player.parentNode) {
-      player.parentNode.insertBefore(panel, player.nextSibling);
-    }
-  }
-
-  panel.innerHTML = `
-    <div class="card-body">
-      <h5 class="card-title mb-2">${toSafeAttr(typeLabel)}: ${toSafeAttr(title)}</h5>
-      <p class="card-text text-muted mb-0">${toSafeAttr(message)}</p>
-      ${allowComplete ? '<button class="btn btn-sm btn-primary mt-3" onclick="markCurrentLessonCompleted()">Mark as Completed</button>' : ''}
-    </div>`;
-  panel.style.display = 'block';
-}
-
 function goNextLesson() {
-  const current = document.querySelector('.lesson-item.active');
-  if (!current) return;
+  if (!store.currentLesson) return;
+  const index = store.lessons.findIndex((lesson) => String(lesson._id) === String(store.currentLesson._id));
+  if (index === -1 || index >= store.lessons.length - 1) return;
 
-  const next = current.nextElementSibling;
-  if (next && next.classList.contains('lesson-item')) {
-    handleLessonClick(next);
+  const next = store.lessons[index + 1];
+  if (!next) return;
+
+  if (next.sectionIndex !== store.currentSectionIndex) {
+    showVideos(next.sectionIndex);
   }
+  selectLesson(next._id);
 }
 
 function goPrevLesson() {
-  const current = document.querySelector('.lesson-item.active');
-  if (!current) return;
+  if (!store.currentLesson) return;
+  const index = store.lessons.findIndex((lesson) => String(lesson._id) === String(store.currentLesson._id));
+  if (index <= 0) return;
 
-  const prev = current.previousElementSibling;
-  if (prev && prev.classList.contains('lesson-item')) {
-    handleLessonClick(prev);
+  const prev = store.lessons[index - 1];
+  if (!prev) return;
+
+  if (prev.sectionIndex !== store.currentSectionIndex) {
+    showVideos(prev.sectionIndex);
   }
+  selectLesson(prev._id);
 }
 
-function markCurrentLessonCompleted() {
-  const current = document.querySelector('.lesson-item.active');
-  if (!current) return;
+function hydrateProgress() {
+  const completedByBackend = Array.isArray(window.completedVideos) ? window.completedVideos : [];
+  const localProgress = readJson(storageKey(STORAGE_SUFFIX.progress), {});
 
-  const lessonId = current.dataset.id || '';
-  const src = decodeURIComponent(current.dataset.src || '');
+  store.progress = {};
 
-  markLessonCompleted(lessonId, src, true, !!src);
-}
-
-function handleProgressToggle(checkbox, lessonId, videoUrl) {
-  const checked = !!checkbox.checked;
-  markLessonCompleted(lessonId, videoUrl, checked, true);
-}
-
-function resumeLastLesson() {
-  const storedSection = Number(localStorage.getItem(storageKey(STORAGE_SUFFIX.lastSection)) || 0);
-  const storedLesson = localStorage.getItem(storageKey(STORAGE_SUFFIX.lastLesson));
-
-  if (!Number.isNaN(storedSection) && course.driveStructure[storedSection]) {
-    showVideos(storedSection);
-  }
-
-  if (storedLesson) {
-    const el = document.querySelector('.lesson-item[data-id="' + storedLesson + '"]');
-    if (el) {
-      handleLessonClick(el);
-      return;
-    }
-  }
-
-  const firstSectionIndex = !Number.isNaN(storedSection) && course.driveStructure[storedSection] ? storedSection : 0;
-  if (course.driveStructure[firstSectionIndex]) {
-    showVideos(firstSectionIndex);
-  }
-}
-
-function bindKeyboardShortcuts() {
-  document.addEventListener('keydown', function(e) {
-    const tag = String((e.target && e.target.tagName) || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea') return;
-
-    if (e.key === 'ArrowRight') {
-      goNextLesson();
-    }
-
-    if (e.key === 'ArrowLeft') {
-      goPrevLesson();
-    }
+  store.lessons.forEach((lesson) => {
+    const lessonId = String(lesson._id);
+    const mediaKey = normalizeMediaKey(lesson.preview || lesson.content.videoUrl || '');
+    const completedFromBackend = mediaKey && completedByBackend.some((v) => normalizeMediaKey(v) === mediaKey);
+    store.progress[lessonId] = !!(completedFromBackend || localProgress[lessonId]);
   });
 }
 
-function ensureLoadingSpinner() {
-  if (document.getElementById('loadingSpinner')) return;
+function setLessonProgress(lessonId, completed, syncBackend) {
+  store.progress[String(lessonId)] = !!completed;
+  writeJson(storageKey(STORAGE_SUFFIX.progress), store.progress);
 
-  const player = document.getElementById('videoPlayerContainer');
-  if (!player || !player.parentNode) return;
-
-  const wrapper = document.createElement('div');
-  wrapper.id = 'loadingSpinner';
-  wrapper.className = 'loading-spinner d-none';
-  wrapper.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
-  player.parentNode.insertBefore(wrapper, player);
-}
-
-function showLoading(isVisible) {
-  const spinner = document.getElementById('loadingSpinner');
-  if (!spinner) return;
-
-  spinner.classList.toggle('d-none', !isVisible);
-}
-
-function bindMediaProgressListeners() {
-  const iframe = document.getElementById('videoIframe');
-  if (!iframe) return;
-
-  iframe.addEventListener('load', function() {
-    showLoading(false);
-  });
-
-  // For iframe providers we cannot access native time/ended events directly.
-  // This gracefully supports HTMLVideoElement if swapped in later.
-  if (iframe.tagName === 'VIDEO') {
-    iframe.addEventListener('timeupdate', function() {
-      const now = Date.now();
-      if (now - state.lastVideoSaveAt < 2000) return;
-      state.lastVideoSaveAt = now;
-      saveCurrentVideoTime(iframe.currentTime || 0);
-    });
-
-    iframe.addEventListener('ended', function() {
-      markCurrentLessonCompleted();
-      goNextLesson();
-    });
+  if (syncBackend) {
+    const lesson = store.lessonsById.get(String(lessonId));
+    const videoUrl = lesson && (lesson.preview || lesson.content.videoUrl);
+    if (videoUrl) {
+      syncProgressBackend(videoUrl, completed);
+    }
   }
 }
 
-function saveCurrentVideoTime(seconds) {
-  if (!currentLessonId) return;
-
-  const videoTimes = getJsonStorage(storageKey(STORAGE_SUFFIX.videoTimes), {});
-  videoTimes[currentLessonId] = Number(seconds || 0);
-  setJsonStorage(storageKey(STORAGE_SUFFIX.videoTimes), videoTimes);
-}
-
-function restoreVideoTime() {
-  const iframe = document.getElementById('videoIframe');
-  if (!iframe || iframe.tagName !== 'VIDEO' || !currentLessonId) return;
-
-  const videoTimes = getJsonStorage(storageKey(STORAGE_SUFFIX.videoTimes), {});
-  const savedTime = Number(videoTimes[currentLessonId] || 0);
-  if (savedTime > 0) {
-    iframe.currentTime = savedTime;
-  }
-}
-
-
-function toggleProgress(videoUrl, isCompleted) {
-  fetch(`/courses/${course._id}/progress`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ video: videoUrl, completed: isCompleted })
-  })
-    .then(async res => {
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Lỗi ${res.status}: ${errorText}`);
-      }
-      return res.json();
-    })
-    .then(data => {
-      if (!data.success) {
-        console.warn('[Lỗi lưu tiến độ]', data.error);
-        alert('Không thể lưu tiến độ học. Vui lòng thử lại.');
-      } else {
-        // ✅ Cập nhật danh sách completedVideos trên client
-        const normalized = videoUrl.split('?')[0];
-
-        if (isCompleted && !completedVideos.includes(normalized)) {
-          completedVideos.push(normalized);
-        } else if (!isCompleted) {
-          const idx = completedVideos.findIndex(v => v.split('?')[0] === normalized);
-          if (idx !== -1) completedVideos.splice(idx, 1);
-        }
-
-        updateProgressUI();
-      }
-    })
-    .catch(err => {
-      console.error('[Lỗi JS khi cập nhật tiến độ]', err);
-      alert('Có lỗi xảy ra khi lưu tiến độ.');
-    });
-}
-
-
-function saveNote(index) {
-  const content = document.getElementById(`note-section-${index}`).value;
-
-  fetch(`/courses/${course._id}/notes`, {
+function syncProgressBackend(videoUrl, completed) {
+  fetch('/courses/' + String(store.course._id) + '/progress', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sectionIndex: index, content })
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (!data.success) alert('Lưu ghi chú thất bại');
-    })
-    .catch(err => console.error('[Lỗi lưu ghi chú]', err));
+    body: JSON.stringify({ video: videoUrl, completed: !!completed })
+  }).catch((err) => console.error('[Progress Sync Error]', err));
 }
+
 function updateProgressUI() {
-  const total = state.allLessons.length || 1;
-  const checkedCount = state.allLessons.reduce((count, lesson) => {
-    return count + (isLessonCompleted(lesson.id, lesson.preview) ? 1 : 0);
+  const total = store.lessons.length || 1;
+  const completed = store.lessons.reduce((count, lesson) => {
+    return count + (store.progress[String(lesson._id)] ? 1 : 0);
   }, 0);
-  const percent = Math.round((checkedCount / total) * 100);
+  const percent = Math.round((completed / total) * 100);
 
   const bar = document.querySelector('.progress-bar');
   const label = document.querySelector('.text-success');
-
   if (!bar || !label) return;
 
-  bar.style.width = `${percent}%`;
-  bar.setAttribute('aria-valuenow', checkedCount);
-  label.innerText = `Tiến độ học: ${checkedCount} / ${total} video (${percent}%)`;
+  bar.style.width = percent + '%';
+  bar.setAttribute('aria-valuenow', completed);
+  label.innerText = 'Tiến độ học: ' + completed + ' / ' + total + ' video (' + percent + '%)';
+}
+
+function resumeLastContext() {
+  const savedSection = Number(localStorage.getItem(storageKey(STORAGE_SUFFIX.lastSection)) || 0);
+  const sectionIndex = Number.isFinite(savedSection) && store.sections[savedSection] ? savedSection : 0;
+  showVideos(sectionIndex);
+
+  const savedLesson = localStorage.getItem(storageKey(STORAGE_SUFFIX.lastLesson));
+  if (savedLesson && store.lessonsById.has(String(savedLesson))) {
+    selectLesson(savedLesson);
+    return;
+  }
+
+  const firstSectionLesson = store.sections[sectionIndex] && store.sections[sectionIndex].items[0];
+  if (firstSectionLesson) {
+    selectLesson(firstSectionLesson._id);
+  }
+}
+
+function saveNote(index) {
+  const courseObj = store.course || {};
+  const content = document.getElementById('note-section-' + index).value;
+
+  fetch('/courses/' + String(courseObj._id) + '/notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sectionIndex: index, content: content })
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (!data.success) alert('Lưu ghi chú thất bại');
+    })
+    .catch((err) => console.error('[Lỗi lưu ghi chú]', err));
+}
+
+function readJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function writeJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    // Ignore storage write errors.
+  }
+}
+
+function normalizeMediaKey(url) {
+  return String(url || '').split('?')[0];
+}
+
+function capitalize(value) {
+  const str = String(value || '');
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

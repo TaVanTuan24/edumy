@@ -10,13 +10,13 @@
     <link rel="stylesheet" href="/stylesheets/slide-editor.css">
 </head>
 
-<body class="slide-editor-page" data-course-id="<%= course._id %>">
-    <script id="slide-editor-data" type="application/json"><%- JSON.stringify(exampleSlides || []) %></script>
+<body class="slide-editor-page" data-course-id="<%= course._id %>" data-section-index="<%= sectionIndex %>" data-lesson-index="<%= lessonIndex %>">
+    <script id="slide-editor-data" type="application/json"><%- JSON.stringify(slideData || []) %></script>
 
     <header class="se-topbar">
         <div class="se-topbar-left">
             <div class="se-chip">Course Slide Studio</div>
-            <input id="slideDeckTitle" class="se-title-input" type="text" value="<%= course.title %> Deck" aria-label="Slide title" maxlength="120">
+            <input id="slideDeckTitle" class="se-title-input" type="text" value="<%= lessonTitle || (course.title + ' Deck') %>" aria-label="Slide title" maxlength="120">
         </div>
         <div class="se-topbar-actions">
             <button class="btn btn-outline-secondary" id="addSlideBtn" type="button">

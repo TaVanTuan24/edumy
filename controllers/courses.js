@@ -54,6 +54,94 @@ async function markCourseSeenForUser(userId, course) {
   return { hadUpdate: false, markedSeen: false };
 }
 
+function normalizeLessonContent(item) {
+  if (!item || typeof item !== 'object') return;
+
+  const rawType = String(item.type || 'video').toLowerCase();
+  const type = rawType === 'video' ? 'lecture' : rawType;
+
+  let normalizedContent = {};
+
+  if (type === 'quiz') {
+    const questionsFromContent = Array.isArray(item.content && item.content.questions) ? item.content.questions : [];
+    const questionsFromLegacy = Array.isArray(item.questions) ? item.questions : [];
+    const questions = questionsFromContent.length ? questionsFromContent : questionsFromLegacy;
+
+    normalizedContent = {
+      questions: questions.map((q) => ({
+        question: q && q.question ? q.question : '',
+        options: Array.isArray(q && q.options) ? q.options : [],
+        correctAnswer: q && q.correctAnswer ? q.correctAnswer : '',
+        explanation: q && q.explanation ? q.explanation : ''
+      }))
+    };
+  } else if (type === 'slide') {
+    const slidesFromContent = Array.isArray(item.content && item.content.slides) ? item.content.slides : [];
+    const slidesFromLegacy = Array.isArray(item.slides) ? item.slides : [];
+    const slides = slidesFromContent.length ? slidesFromContent : slidesFromLegacy;
+
+    normalizedContent = {
+      slides: slides.length
+        ? slides.map((slide, index) => ({
+            title: slide && slide.title ? slide.title : `Slide ${index + 1}`,
+            content: slide && slide.content ? slide.content : ''
+          }))
+        : (typeof item.content === 'string' && item.content.trim().length)
+          ? [{ title: item.name || 'Slide', content: item.content }]
+          : []
+    };
+  } else {
+    normalizedContent = {
+      videoUrl: item.preview || item.videoUrl || ''
+    };
+  }
+
+  item.type = type;
+  item.title = item.name || item.title || 'Untitled Lesson';
+  item.content = normalizedContent;
+}
+
+function normalizeCourseContent(course) {
+  if (!course) return;
+
+  const hasDriveStructure = Array.isArray(course.driveStructure) && course.driveStructure.length > 0;
+  const hasSections = Array.isArray(course.sections) && course.sections.length > 0;
+
+  if (!hasDriveStructure && hasSections) {
+    course.driveStructure = course.sections.map((section) => {
+      const lessons = Array.isArray(section.lessons) ? section.lessons : [];
+
+      return {
+        section: section.title || 'Section',
+        videos: lessons.map((lesson) => ({
+          _id: lesson._id,
+          type: lesson.type === 'video' ? 'lecture' : lesson.type,
+          name: lesson.title || 'Untitled Lesson',
+          title: lesson.title || 'Untitled Lesson',
+          preview: lesson.videoUrl || '',
+          content: {
+            videoUrl: lesson.videoUrl || '',
+            questions: Array.isArray(lesson.quiz) ? lesson.quiz : [],
+            slides: Array.isArray(lesson.slides) ? lesson.slides : []
+          },
+          questions: Array.isArray(lesson.quiz) ? lesson.quiz : [],
+          slides: Array.isArray(lesson.slides) ? lesson.slides : []
+        }))
+      };
+    });
+  }
+
+  if (!Array.isArray(course.driveStructure)) return;
+
+  course.driveStructure.forEach((section) => {
+    if (!section || !Array.isArray(section.videos)) return;
+
+    section.videos.forEach((item) => {
+      normalizeLessonContent(item);
+    });
+  });
+}
+
 module.exports.index = async (req, res) => {
   const user = await User.findById(req.user._id);
   const enrolledIds = getEnrolledCourseIds(user);
@@ -109,18 +197,8 @@ module.exports.showCourses = async (req, res) => {
 
   const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
 
-  // Normalize driveStructure - ensure all items have type field
-  if (course.driveStructure) {
-    course.driveStructure.forEach(section => {
-      if (section.videos && Array.isArray(section.videos)) {
-        section.videos.forEach(item => {
-          if (!item.type) {
-            item.type = "video"; // Default to video for backward compatibility
-          }
-        });
-      }
-    });
-  }
+  normalizeCourseContent(course);
+  console.log(JSON.stringify(course.sections, null, 2));
 
   let completedVideos = [];
   if (req.user) {
@@ -226,18 +304,8 @@ module.exports.renderLearnPage = async (req, res) => {
 
   const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
 
-  // Normalize driveStructure - ensure all items have type field
-  if (course.driveStructure) {
-    course.driveStructure.forEach(section => {
-      if (section.videos && Array.isArray(section.videos)) {
-        section.videos.forEach(item => {
-          if (!item.type) {
-            item.type = "video"; // Default to video for backward compatibility
-          }
-        });
-      }
-    });
-  }
+  normalizeCourseContent(course);
+  console.log(JSON.stringify(course.sections, null, 2));
 
   // Get completed videos
   let completedVideos = [];

@@ -6,18 +6,63 @@ const opts = { toJSON: { virtuals: true }, timestamps: true }
 
 // ==================== SUBSCHEMA DEFINITIONS ====================
 
-// Slide schema
-const slideSchema = new Schema({
-    title: {
+const slideElementSchema = new Schema({
+    id: {
         type: String,
         required: true,
         trim: true
     },
-    content: {
+    type: {
         type: String,
+        enum: ['text', 'image'],
         required: true
+    },
+    x: {
+        type: Number,
+        default: 0
+    },
+    y: {
+        type: Number,
+        default: 0
+    },
+    text: {
+        type: String,
+        default: ''
+    },
+    src: {
+        type: String,
+        default: ''
+    },
+    fontSize: {
+        type: Number,
+        default: 28
+    },
+    color: {
+        type: String,
+        default: '#1c1d1f'
+    },
+    align: {
+        type: String,
+        enum: ['left', 'center', 'right'],
+        default: 'left'
+    },
+    bold: {
+        type: Boolean,
+        default: false
     }
-}, { _id: true })
+}, { _id: false })
+
+const slideSchema = new Schema({
+    id: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    elements: {
+        type: [slideElementSchema],
+        default: []
+    }
+}, { _id: false })
 
 // Quiz question schema
 const quizQuestionSchema = new Schema({
@@ -56,15 +101,12 @@ const driveItemSchema = new Schema({
         default: ''
     },
     content: {
-        type: String,
-        default: ''
+        type: Object,
+        required: true,
+        default: {}
     },
     questions: {
         type: [Schema.Types.Mixed],
-        default: []
-    },
-    slides: {
-        type: [slideSchema],
         default: []
     },
     order: {
@@ -100,7 +142,11 @@ const lessonSchema = new Schema({
         type: String,
         default: ''
     },
-    slides: [slideSchema],
+    content: {
+        type: Object,
+        required: true,
+        default: {}
+    },
     quiz: [quizQuestionSchema],
     order: {
         type: Number,
@@ -165,8 +211,8 @@ function inferLegacyItemType(item) {
     if (['video', 'slide', 'quiz'].includes(currentType)) return currentType
 
     if (Array.isArray(item.questions) && item.questions.length > 0) return 'quiz'
-    if (Array.isArray(item.slides) && item.slides.length > 0) return 'slide'
     if (typeof item.content === 'string' && item.content.trim().length > 0) return 'slide'
+    if (item.content && typeof item.content === 'object' && Array.isArray(item.content.slides) && item.content.slides.length > 0) return 'slide'
 
     return 'video'
 }
@@ -179,7 +225,7 @@ function inferLessonType(lesson) {
     if (['video', 'slide', 'quiz'].includes(currentType)) return currentType
 
     if (Array.isArray(lesson.quiz) && lesson.quiz.length > 0) return 'quiz'
-    if (Array.isArray(lesson.slides) && lesson.slides.length > 0) return 'slide'
+    if (lesson.content && typeof lesson.content === 'object' && Array.isArray(lesson.content.slides) && lesson.content.slides.length > 0) return 'slide'
 
     return 'video'
 }
@@ -191,6 +237,36 @@ CourseSchema.pre('validate', function(next) {
 
             section.videos.forEach((item) => {
                 item.type = inferLegacyItemType(item)
+
+                if (item.type === 'slide') {
+                    const contentObj = (item.content && typeof item.content === 'object' && !Array.isArray(item.content))
+                        ? item.content
+                        : {}
+
+                    const slidesFromContent = Array.isArray(contentObj.slides) ? contentObj.slides : []
+                    const legacyTextSlide = (typeof item.content === 'string' && item.content.trim().length > 0)
+                        ? [{
+                            id: `slide-${item._id || Date.now()}`,
+                            elements: [{
+                                id: `el-${item._id || Date.now()}`,
+                                type: 'text',
+                                x: 80,
+                                y: 80,
+                                text: item.content.trim(),
+                                fontSize: 28,
+                                color: '#1c1d1f',
+                                align: 'left',
+                                bold: false
+                            }]
+                        }]
+                        : []
+                    const normalizedSlides = slidesFromContent.length > 0 ? slidesFromContent : legacyTextSlide
+
+                    item.content = {
+                        ...contentObj,
+                        slides: normalizedSlides
+                    }
+                }
             })
         })
     }
@@ -201,6 +277,14 @@ CourseSchema.pre('validate', function(next) {
 
             section.lessons.forEach((lesson) => {
                 lesson.type = inferLessonType(lesson)
+
+                if (!lesson.content || typeof lesson.content !== 'object' || Array.isArray(lesson.content)) {
+                    lesson.content = {}
+                }
+
+                if (lesson.type === 'slide' && !Array.isArray(lesson.content.slides)) {
+                    lesson.content.slides = []
+                }
             })
         })
     }

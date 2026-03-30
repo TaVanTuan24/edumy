@@ -11,6 +11,61 @@ function normalizeItemType(rawType, fallbackType) {
     return fallbackType;
 }
 
+function normalizeSlidesPayload(slides) {
+    const source = Array.isArray(slides) ? slides : []
+
+    return source.map((slide, index) => {
+        const hasElements = Array.isArray(slide?.elements) && slide.elements.length > 0
+        const fallbackText = String(slide?.text || slide?.content || '').trim()
+
+        const rawElements = hasElements
+            ? slide.elements
+            : (fallbackText
+                ? [{
+                    id: `el-${index + 1}-1`,
+                    type: 'text',
+                    x: 80,
+                    y: 80,
+                    text: fallbackText,
+                    fontSize: 28,
+                    color: '#1c1d1f',
+                    align: 'left',
+                    bold: false
+                }]
+                : [])
+
+        const normalizedElements = rawElements.map((element, elementIndex) => {
+            const normalizedType = element?.type === 'image' ? 'image' : 'text'
+
+            const normalized = {
+                id: String(element?.id || `el-${index + 1}-${elementIndex + 1}`),
+                type: normalizedType,
+                x: Number.isFinite(Number(element?.x)) ? Number(element.x) : 0,
+                y: Number.isFinite(Number(element?.y)) ? Number(element.y) : 0
+            }
+
+            if (normalizedType === 'text') {
+                normalized.text = String(element?.text || '').trim()
+                normalized.fontSize = Number.isFinite(Number(element?.fontSize)) ? Number(element.fontSize) : 28
+                normalized.color = String(element?.color || '#1c1d1f')
+
+                const align = String(element?.align || 'left').toLowerCase()
+                normalized.align = ['left', 'center', 'right'].includes(align) ? align : 'left'
+                normalized.bold = Boolean(element?.bold)
+            } else {
+                normalized.src = String(element?.src || '').trim()
+            }
+
+            return normalized
+        })
+
+        return {
+            id: String(slide?.id || `slide-${index + 1}`),
+            elements: normalizedElements
+        }
+    })
+}
+
 router.get('/', async (req, res) => {
 
     const courses = await Course.find({});
@@ -48,49 +103,61 @@ router.get('/courses/:id/slide-editor', async (req, res) => {
         return res.status(404).send('Course not found')
     }
 
-    const exampleSlides = [
-        {
-            id: 'slide-1',
-            title: 'Introduction',
-            elements: [
-                {
-                    id: 'el-1',
-                    type: 'text',
-                    x: 80,
-                    y: 72,
-                    width: 520,
-                    height: 72,
-                    content: 'Welcome to your course',
-                    styles: {
-                        fontSize: 44,
-                        color: '#1c1d1f',
-                        fontWeight: 700,
-                        textAlign: 'left'
-                    }
-                },
-                {
-                    id: 'el-2',
-                    type: 'text',
-                    x: 84,
-                    y: 170,
-                    width: 640,
-                    height: 50,
-                    content: 'Use this slide editor to build beautiful lesson decks.',
-                    styles: {
-                        fontSize: 24,
-                        color: '#4d5562',
-                        fontWeight: 400,
-                        textAlign: 'left'
-                    }
-                }
-            ]
-        }
-    ]
+    const sectionIndex = parseInt(req.query.section, 10)
+    const lessonIndex = parseInt(req.query.lesson, 10)
+
+    const lesson = Number.isNaN(sectionIndex) || Number.isNaN(lessonIndex)
+        ? null
+        : course.driveStructure?.[sectionIndex]?.videos?.[lessonIndex] || null
+
+    const slideData = Array.isArray(lesson?.content?.slides)
+        ? lesson.content.slides
+        : []
 
     res.render('admin/slideEditor', {
         course,
-        exampleSlides
+        slideData,
+        sectionIndex: Number.isNaN(sectionIndex) ? '' : sectionIndex,
+        lessonIndex: Number.isNaN(lessonIndex) ? '' : lessonIndex,
+        lessonTitle: lesson?.name || ''
     })
+})
+
+router.put('/course/:id/slide-editor/save', async (req, res) => {
+    try {
+        const { sectionIndex, lessonIndex, title, content } = req.body
+
+        const parsedSectionIndex = parseInt(sectionIndex, 10)
+        const parsedLessonIndex = parseInt(lessonIndex, 10)
+
+        if (Number.isNaN(parsedSectionIndex) || Number.isNaN(parsedLessonIndex)) {
+            return res.status(400).json({ success: false, error: 'Invalid sectionIndex or lessonIndex' })
+        }
+
+        const normalizedSlides = normalizeSlidesPayload(content && content.slides)
+
+        if (!normalizedSlides.length) {
+            return res.status(400).json({ success: false, error: 'Slide content missing' })
+        }
+
+        await Course.updateOne(
+            { _id: req.params.id },
+            {
+                $set: {
+                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.type`]: 'slide',
+                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.name`]: String(title || 'Slide Lesson').trim(),
+                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.content`]: {
+                        slides: normalizedSlides
+                    },
+                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.aiGenerated`]: false
+                }
+            }
+        )
+
+        return res.json({ success: true })
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message })
+    }
 })
 
 // New Udemy-style course editor (3-column layout)
@@ -362,7 +429,9 @@ router.post("/course/:id/slide/add", async (req, res) => {
         const newItem = {
             type: itemType,
             name: name,
-            content: "",
+            content: {
+                slides: []
+            },
             order: videos.length
         }
 
@@ -671,13 +740,23 @@ router.get(
 
 // Add slides to a lesson
 router.put('/course/:id/lesson/slides/add', async (req, res) => {
-    const { sectionIndex, lessonIndex, slides } = req.body
+    const { sectionIndex, lessonIndex, slides, content } = req.body
+
+    const normalizedSlides = normalizeSlidesPayload(
+        Array.isArray(slides) ? slides : (content && content.slides)
+    )
+
+    if (!normalizedSlides.length) {
+        return res.status(400).json({ success: false, error: 'Slide content missing' })
+    }
 
     await Course.updateOne(
         { _id: req.params.id },
         {
             $set: {
-                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.slides`]: slides,
+                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.content`]: {
+                    slides: normalizedSlides
+                },
                 [`driveStructure.${sectionIndex}.videos.${lessonIndex}.aiGenerated`]: true
             }
         }
@@ -690,12 +769,14 @@ router.put('/course/:id/lesson/slides/add', async (req, res) => {
 router.put('/course/:id/lesson/slides/update', async (req, res) => {
     const { sectionIndex, lessonIndex, slideIndex, title, content } = req.body
 
+    const slidePathBase = `driveStructure.${sectionIndex}.videos.${lessonIndex}`
+
     await Course.updateOne(
         { _id: req.params.id },
         {
             $set: {
-                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.slides.${slideIndex}.title`]: title,
-                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.slides.${slideIndex}.content`]: content
+                [`${slidePathBase}.content.slides.${slideIndex}.title`]: title,
+                [`${slidePathBase}.content.slides.${slideIndex}.content`]: content
             }
         }
     )
@@ -707,14 +788,14 @@ router.put('/course/:id/lesson/slides/update', async (req, res) => {
 router.put('/course/:id/lesson/slides/delete', async (req, res) => {
     const { sectionIndex, lessonIndex } = req.body
 
+    const slidePathBase = `driveStructure.${sectionIndex}.videos.${lessonIndex}`
+
     await Course.updateOne(
         { _id: req.params.id },
         {
-            $unset: {
-                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.slides`]: 1
-            },
             $set: {
-                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.aiGenerated`]: false
+                [`${slidePathBase}.content`]: { slides: [] },
+                [`${slidePathBase}.aiGenerated`]: false
             }
         }
     )
@@ -734,7 +815,7 @@ router.post('/course/:id/lesson/slides/generate', async (req, res) => {
     // Call Ollama to generate slides
     const prompt = `Create presentation slides for a lesson titled "${lessonTitle}". 
 
-Generate 5-7 slides. Each slide should have:
+Generate 2-3 slides. Each slide should have:
 - A short title (max 10 words)
 - Short content points (not paragraphs, use bullet points or short sentences)
 
@@ -773,19 +854,26 @@ Make the content educational and beginner-friendly.`
         }
 
         const slidesData = JSON.parse(jsonMatch[0])
+        const normalizedSlides = normalizeSlidesPayload(slidesData.slides)
+
+        if (!normalizedSlides.length) {
+            return res.status(500).json({ error: 'Slide content missing' })
+        }
 
         // Save slides to the lesson
         await Course.updateOne(
             { _id: req.params.id },
             {
                 $set: {
-                    [`driveStructure.${sectionIndex}.videos.${lessonIndex}.slides`]: slidesData.slides,
+                    [`driveStructure.${sectionIndex}.videos.${lessonIndex}.content`]: {
+                        slides: normalizedSlides
+                    },
                     [`driveStructure.${sectionIndex}.videos.${lessonIndex}.aiGenerated`]: true
                 }
             }
         )
 
-        res.json({ success: true, slides: slidesData.slides })
+        res.json({ success: true, slides: normalizedSlides })
     } catch (err) {
         console.error('AI Slides Generation Error:', err.message)
         res.status(500).json({ error: 'Failed to generate slides: ' + err.message })

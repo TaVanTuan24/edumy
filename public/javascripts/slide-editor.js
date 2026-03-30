@@ -3,6 +3,10 @@
 
     const BASE_WIDTH = 1280;
     const BASE_HEIGHT = 720;
+    const pageMeta = document.body && document.body.dataset ? document.body.dataset : {};
+    const courseId = pageMeta.courseId || '';
+    const sectionIndex = pageMeta.sectionIndex || '';
+    const lessonIndex = pageMeta.lessonIndex || '';
 
     const state = {
         slides: [],
@@ -79,7 +83,7 @@
         els.imageUploadInput.addEventListener('change', onLocalImagePicked);
         els.addSlideBtn.addEventListener('click', addSlide);
         els.addSlideMiniBtn.addEventListener('click', addSlide);
-        els.saveDeckBtn.addEventListener('click', fakeSave);
+        els.saveDeckBtn.addEventListener('click', saveDeck);
         els.previewBtn.addEventListener('click', openPreview);
         els.deleteElementBtn.addEventListener('click', deleteSelectedElement);
 
@@ -495,14 +499,40 @@
         renderProperties();
     }
 
-    function fakeSave() {
+    async function saveDeck() {
+        if (!courseId || sectionIndex === '' || lessonIndex === '') {
+            showToast('Missing lesson location. Open editor from a lesson first.');
+            return;
+        }
+
         const payload = {
             title: document.getElementById('slideDeckTitle').value,
-            slides: state.slides
+            sectionIndex: Number(sectionIndex),
+            lessonIndex: Number(lessonIndex),
+            content: {
+                slides: serializeSlides(state.slides)
+            }
         };
 
-        console.log('[SlideEditor] Save payload', payload);
-        showToast('Deck is ready. Backend save is intentionally skipped.');
+        try {
+            const response = await fetch('/admin/course/' + encodeURIComponent(courseId) + '/slide-editor/save', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Save failed');
+            }
+
+            showToast('Slides saved successfully.');
+        } catch (error) {
+            console.error('[SlideEditor] Save failed:', error);
+            showToast('Save failed. Please try again.');
+        }
     }
 
     function openPreview() {
@@ -713,18 +743,44 @@
                 y: clamp(toNumber(item.y, 40), 0, BASE_HEIGHT),
                 width: clamp(toNumber(item.width, item.type === 'image' ? 320 : 280), 40, BASE_WIDTH),
                 height: clamp(toNumber(item.height, item.type === 'image' ? 220 : 80), 30, BASE_HEIGHT),
-                content: item.content || 'Text',
+                content: item.content || item.text || 'Text',
                 src: item.src || '',
                 styles: {
-                    fontSize: clamp(toNumber(item.styles && item.styles.fontSize, 28), 10, 120),
-                    color: (item.styles && item.styles.color) || '#1c1d1f',
-                    fontWeight: toNumber(item.styles && item.styles.fontWeight, 400),
-                    textAlign: (item.styles && item.styles.textAlign) || 'left'
+                    fontSize: clamp(toNumber(item.styles && item.styles.fontSize, toNumber(item.fontSize, 28)), 10, 120),
+                    color: (item.styles && item.styles.color) || item.color || '#1c1d1f',
+                    fontWeight: toNumber(item.styles && item.styles.fontWeight, item.bold ? 700 : 400),
+                    textAlign: (item.styles && item.styles.textAlign) || item.align || 'left'
                 }
             };
         });
 
         return safeSlide;
+    }
+
+    function serializeSlides(slides) {
+        return (Array.isArray(slides) ? slides : []).map(function(slide, slideIndex) {
+            return {
+                id: slide.id || ('slide-' + (slideIndex + 1)),
+                elements: (Array.isArray(slide.elements) ? slide.elements : []).map(function(element, elementIndex) {
+                    const isImage = element.type === 'image';
+                    const textAlign = element.styles && element.styles.textAlign;
+                    const normalizedAlign = ['left', 'center', 'right'].includes(textAlign) ? textAlign : 'left';
+
+                    return {
+                        id: element.id || ('el-' + (slideIndex + 1) + '-' + (elementIndex + 1)),
+                        type: isImage ? 'image' : 'text',
+                        x: toNumber(element.x, 0),
+                        y: toNumber(element.y, 0),
+                        text: isImage ? undefined : String(element.content || ''),
+                        src: isImage ? String(element.src || '') : undefined,
+                        fontSize: isImage ? undefined : clamp(toNumber(element.styles && element.styles.fontSize, 28), 10, 120),
+                        color: isImage ? undefined : String((element.styles && element.styles.color) || '#1c1d1f'),
+                        align: isImage ? undefined : normalizedAlign,
+                        bold: isImage ? undefined : toNumber(element.styles && element.styles.fontWeight, 400) >= 600
+                    };
+                })
+            };
+        });
     }
 
     function getActiveSlide() {

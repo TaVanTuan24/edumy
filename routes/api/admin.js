@@ -13,6 +13,7 @@ function normalizeLegacyType(rawType, fallbackItem = {}) {
     if (Array.isArray(fallbackItem.questions) && fallbackItem.questions.length > 0) return 'quiz';
     if (Array.isArray(fallbackItem.slides) && fallbackItem.slides.length > 0) return 'slide';
     if (typeof fallbackItem.content === 'string' && fallbackItem.content.trim().length > 0) return 'slide';
+    if (fallbackItem.content && typeof fallbackItem.content === 'object' && Array.isArray(fallbackItem.content.slides) && fallbackItem.content.slides.length > 0) return 'slide';
 
     return 'video';
 }
@@ -28,17 +29,34 @@ function normalizeDriveStructure(input) {
         };
 
         const videos = Array.isArray(section?.videos) ? section.videos : [];
-        normalizedSection.videos = videos.map((item, itemIndex) => ({
-            _id: item?._id,
-            type: normalizeLegacyType(item?.type, item),
-            name: String(item?.name || '').trim(),
-            preview: String(item?.preview || '').trim(),
-            refId: String(item?.refId || '').trim(),
-            content: typeof item?.content === 'string' ? item.content : '',
-            slides: Array.isArray(item?.slides) ? item.slides : [],
-            questions: Array.isArray(item?.questions) ? item.questions : [],
-            order: Number.isFinite(item?.order) ? item.order : itemIndex
-        }));
+        normalizedSection.videos = videos.map((item, itemIndex) => {
+            const normalizedType = normalizeLegacyType(item?.type, item);
+            const rawContent = item?.content;
+            const contentObject = (rawContent && typeof rawContent === 'object' && !Array.isArray(rawContent)) ? rawContent : {};
+            const legacySlides = Array.isArray(item?.slides) ? item.slides : [];
+            const contentSlides = Array.isArray(contentObject.slides) ? contentObject.slides : [];
+
+            const normalizedSlides = normalizedType === 'slide'
+                ? (contentSlides.length > 0 ? contentSlides : legacySlides)
+                : legacySlides;
+
+            return {
+                _id: item?._id,
+                type: normalizedType,
+                name: String(item?.name || '').trim(),
+                preview: String(item?.preview || '').trim(),
+                refId: String(item?.refId || '').trim(),
+                content: normalizedType === 'slide'
+                    ? {
+                        ...contentObject,
+                        slides: normalizedSlides
+                    }
+                    : contentObject,
+                slides: normalizedSlides,
+                questions: Array.isArray(item?.questions) ? item.questions : [],
+                order: Number.isFinite(item?.order) ? item.order : itemIndex
+            };
+        });
 
         // Keep incoming section order when present, otherwise preserve list order.
         normalizedSection.order = Number.isFinite(section?.order) ? section.order : sectionIndex;

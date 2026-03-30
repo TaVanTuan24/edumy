@@ -97,9 +97,14 @@
 
 <!-- Khai báo biến và load JS -->
 <script>
-  const course = <%- JSON.stringify(course) %>;
-  const completedVideos = <%- JSON.stringify(completedVideos) %>;
-  const sectionNotes = <%- JSON.stringify(sectionNotes) %>;
+  window.__COURSE__ = <%- JSON.stringify(course) %>;
+  window.completedVideos = <%- JSON.stringify(completedVideos) %>;
+  window.sectionNotes = <%- JSON.stringify(sectionNotes) %>;
+  const course = window.__COURSE__;
+  const completedVideos = window.completedVideos;
+  const sectionNotes = window.sectionNotes;
   const hasCourseUpdate = <%- JSON.stringify(!!hasCourseUpdate) %>;
 </script>
-<script src="/javascripts/show.js" defer></script>
+<script src="/javascripts/show/store.js" defer></script>
+<script src="/javascripts/show/render.js" defer></script>
+<script src="/javascripts/show/app.js" defer></script>
