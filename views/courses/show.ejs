@@ -2,7 +2,7 @@
 <link rel="stylesheet" href="/stylesheets/stars.css">
 
 <div class="row">
-  <div class="col-6">
+  <div class="col-6" id="content">
     <div id="imageContainer">
       <div id="carouselExample" class="carousel slide">
         <div class="carousel-inner">
@@ -100,5 +100,6 @@
   const course = <%- JSON.stringify(course) %>;
   const completedVideos = <%- JSON.stringify(completedVideos) %>;
   const sectionNotes = <%- JSON.stringify(sectionNotes) %>;
+  const hasCourseUpdate = <%- JSON.stringify(!!hasCourseUpdate) %>;
 </script>
 <script src="/javascripts/show.js" defer></script>

@@ -22,6 +22,7 @@ const adminRoutes = require('./routes/admin');
 const apiAdminRoutes = require('./routes/api/admin');
 const aiRoutes = require('./routes/ai');
 const videoModelsRoutes = require('./routes/videoModels');
+const Course = require('./models/course');
 const { content } = require('googleapis/build/src/apis/content');
 const mongoStore = require('connect-mongo');
 
@@ -114,11 +115,76 @@ passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
-app.use((req, res, next) => {
-    // console.log('[GLOBAL DEBUG] req.user =', req.user);
+app.use(async (req, res, next) => {
     res.locals.currentUser = req.user;
     res.locals.success = req.flash('success');
     res.locals.error = req.flash('error');
+    res.locals.courseNotifications = [];
+    res.locals.courseNotificationCount = 0;
+
+    if (!req.user || !req.user._id) {
+        return next();
+    }
+
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (!user || !Array.isArray(user.enrolledCourses)) {
+            return next();
+        }
+
+        const enrolledEntries = user.enrolledCourses
+            .map((entry) => {
+                if (!entry) return null;
+
+                if (entry.courseId) {
+                    return {
+                        courseId: String(entry.courseId),
+                        lastSeenUpdatedAt: entry.lastSeenUpdatedAt || null
+                    };
+                }
+
+                return {
+                    courseId: String(entry),
+                    lastSeenUpdatedAt: null
+                };
+            })
+            .filter((entry) => entry && entry.courseId);
+
+        if (!enrolledEntries.length) {
+            return next();
+        }
+
+        const enrolledIds = enrolledEntries.map((entry) => entry.courseId);
+        const courses = await Course.find({ _id: { $in: enrolledIds } }).select('title updatedAt');
+        const courseMap = new Map(courses.map((course) => [String(course._id), course]));
+
+        const notifications = enrolledEntries
+            .map((entry) => {
+                const course = courseMap.get(entry.courseId);
+                if (!course) return null;
+
+                const courseUpdatedAt = course.updatedAt ? new Date(course.updatedAt) : null;
+                const lastSeen = entry.lastSeenUpdatedAt ? new Date(entry.lastSeenUpdatedAt) : null;
+
+                if (!courseUpdatedAt) return null;
+                if (lastSeen && courseUpdatedAt <= lastSeen) return null;
+
+                return {
+                    courseId: course._id,
+                    courseTitle: course.title,
+                    updatedAt: courseUpdatedAt
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.updatedAt - a.updatedAt);
+
+        res.locals.courseNotifications = notifications;
+        res.locals.courseNotificationCount = notifications.length;
+    } catch (error) {
+        console.error('[Notification Middleware Error]', error.message);
+    }
+
     next();
 });
 

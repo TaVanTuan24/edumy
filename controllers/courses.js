@@ -6,9 +6,66 @@ const Note = require('../models/note');
 const User = require('../models/user');
 const mongoose = require('mongoose');
 
+function getEnrolledCourseIds(user) {
+  if (!user || typeof user.getEnrolledCourseIdSet !== 'function') return [];
+
+  return Array.from(user.getEnrolledCourseIdSet())
+    .filter((id) => mongoose.isValidObjectId(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+}
+
+async function markCourseSeenForUser(userId, course) {
+  if (!userId || !course) return { hadUpdate: false, markedSeen: false };
+
+  const user = await User.findById(userId);
+  if (!user) return { hadUpdate: false, markedSeen: false };
+
+  let enrollment = user.findEnrollment(course._id);
+  if (!enrollment) return { hadUpdate: false, markedSeen: false };
+
+  if (!enrollment.courseId) {
+    const idx = (user.enrolledCourses || []).findIndex((entry) => String(entry) === String(course._id));
+    if (idx !== -1) {
+      user.enrolledCourses[idx] = {
+        courseId: course._id,
+        progress: {
+          completedCount: 0,
+          lastLessonId: ''
+        },
+        lastSeenUpdatedAt: null,
+        enrolledAt: new Date()
+      };
+      enrollment = user.enrolledCourses[idx];
+    }
+  }
+
+  if (!enrollment || !enrollment.courseId) return { hadUpdate: false, markedSeen: false };
+
+  const courseUpdatedAt = course.updatedAt ? new Date(course.updatedAt) : new Date();
+  const lastSeen = enrollment.lastSeenUpdatedAt ? new Date(enrollment.lastSeenUpdatedAt) : null;
+  const hadUpdate = !lastSeen || courseUpdatedAt > lastSeen;
+
+  if (hadUpdate) {
+    enrollment.lastSeenUpdatedAt = courseUpdatedAt;
+    await user.save();
+    return { hadUpdate: true, markedSeen: true };
+  }
+
+  return { hadUpdate: false, markedSeen: false };
+}
+
 module.exports.index = async (req, res) => {
-  const user = await User.findById(req.user._id).populate('enrolledCourses');
-  const courses = user.enrolledCourses || [];
+  const user = await User.findById(req.user._id);
+  const enrolledIds = getEnrolledCourseIds(user);
+  const idOrder = new Map(enrolledIds.map((id, idx) => [String(id), idx]));
+
+  const courses = await Course.find({ _id: { $in: enrolledIds } }).sort({ updatedAt: -1 });
+  courses.sort((a, b) => {
+    const orderA = idOrder.get(String(a._id));
+    const orderB = idOrder.get(String(b._id));
+    return (orderA ?? 0) - (orderB ?? 0);
+  });
+
   res.render('courses/index', { courses });
 };
 
@@ -45,6 +102,13 @@ module.exports.showCourses = async (req, res) => {
     .populate({ path: 'reviews', populate: { path: 'author' } })
     .populate('author');
 
+  if (!course) {
+    req.flash('error', 'Cannot find that course!');
+    return res.redirect('/courses');
+  }
+
+  const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
+
   // Normalize driveStructure - ensure all items have type field
   if (course.driveStructure) {
     course.driveStructure.forEach(section => {
@@ -70,7 +134,7 @@ module.exports.showCourses = async (req, res) => {
     sectionNotes[n.sectionIndex] = n.content;
   });
 
-  res.render('courses/show', { course, completedVideos, sectionNotes });
+  res.render('courses/show', { course, completedVideos, sectionNotes, hasCourseUpdate: updateStatus.hadUpdate });
 };
 
 module.exports.renderEditForm = async (req, res) => {
@@ -160,6 +224,8 @@ module.exports.renderLearnPage = async (req, res) => {
     return res.redirect('/courses');
   }
 
+  const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
+
   // Normalize driveStructure - ensure all items have type field
   if (course.driveStructure) {
     course.driveStructure.forEach(section => {
@@ -189,6 +255,7 @@ module.exports.renderLearnPage = async (req, res) => {
     course, 
     completedVideos, 
     totalLessons,
-    completedCount 
+    completedCount,
+    hasCourseUpdate: updateStatus.hadUpdate
   });
 };

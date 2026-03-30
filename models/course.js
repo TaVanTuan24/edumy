@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const review = require('./review');
 const Schema = mongoose.Schema;
 
-const opts = { toJSON: { virtuals: true } }
+const opts = { toJSON: { virtuals: true }, timestamps: true }
 
 // ==================== SUBSCHEMA DEFINITIONS ====================
 

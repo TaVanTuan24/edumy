@@ -24,6 +24,27 @@
           <a class="nav-link" href="/login">Login</a>
           <a class="nav-link" href="/register">Register</a>
           <% } else { %>
+            <div class="nav-item dropdown notification-dropdown">
+              <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
+                <span class="notification-bell" aria-hidden="true">🔔</span>
+                <% if (courseNotificationCount > 0) { %>
+                  <span class="notification-badge"><%= courseNotificationCount %></span>
+                <% } %>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end notification-menu">
+                <% if (courseNotifications && courseNotifications.length > 0) { %>
+                  <% courseNotifications.forEach((notice) => { %>
+                    <li>
+                      <a class="dropdown-item notification-item" href="/courses/<%= notice.courseId %>">
+                        Course '<%= notice.courseTitle %>' has new updates
+                      </a>
+                    </li>
+                  <% }) %>
+                <% } else { %>
+                  <li><span class="dropdown-item-text text-muted">No new updates</span></li>
+                <% } %>
+              </ul>
+            </div>
             <a class="nav-link" href="/logout">Logout</a>
             <% } %>
       </div>

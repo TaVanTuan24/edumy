@@ -4,10 +4,10 @@ const User = require('../models/user');
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
     const user = await User.findById(req.user._id);
-    const enrolled = user.enrolledCourses || [];
+    const enrolledIdSet = user.getEnrolledCourseIdSet();
 
     const unjoinedCourses = allCourses.filter(course =>
-        !enrolled.some(id => id.equals(course._id))
+        !enrolledIdSet.has(String(course._id))
     );
 
     unjoinedCourses.forEach(course => {
@@ -43,10 +43,21 @@ module.exports.previewCourse = async (req, res) => {
 module.exports.enrollCourse = async (req, res) => {
     const course = await Course.findById(req.params.id);
     const user = await User.findById(req.user._id);
-    if (!user.enrolledCourses.includes(course._id)) {
-        user.enrolledCourses.push(course._id);
+
+    const existingEnrollment = user.findEnrollment(course._id);
+    if (!existingEnrollment) {
+        user.enrolledCourses.push({
+            courseId: course._id,
+            progress: {
+                completedCount: 0,
+                lastLessonId: ''
+            },
+            lastSeenUpdatedAt: course.updatedAt || new Date(),
+            enrolledAt: new Date()
+        });
         await user.save();
     }
+
     req.flash('success', 'Successfully enrolled!');
     res.redirect('/courses');
 };
