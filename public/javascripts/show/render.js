@@ -19,36 +19,51 @@
   function renderLessonList(sectionIndex) {
     const deps = getDeps();
     const store = deps.store;
-    const section = store.sections[sectionIndex];
-    const container = document.getElementById('videoListContainer');
+    const container = document.getElementById('sectionsAccordion') || document.getElementById('videoListContainer');
     if (!container) return;
 
-    if (!section || !Array.isArray(section.items) || !section.items.length) {
-      container.innerHTML = '<p class="text-warning">No lessons found in this section.</p>';
+    if (!Array.isArray(store.sections) || !store.sections.length) {
+      container.innerHTML = '<p class="text-warning">No sections found.</p>';
       return;
     }
 
-    let html = '<h6>Lessons in ' + deps.escapeHtml(section.title) + ':</h6><ul class="list-group">';
+    const activeSectionIndex = Number.isFinite(Number(sectionIndex)) ? Number(sectionIndex) : store.currentSectionIndex;
+    store.currentSectionIndex = activeSectionIndex;
 
-    section.items.forEach(function(item) {
-      const id = String(item._id);
-      const checked = deps.isLessonCompleted(id) ? 'checked' : '';
-      const completedBadge = deps.isLessonCompleted(id) ? '<span class="lesson-completed-badge">Completed</span>' : '';
+    const html = store.sections.map(function(section, idx) {
+      const items = Array.isArray(section.items) ? section.items : [];
+      const isOpen = idx === store.currentSectionIndex;
 
-      html += '' +
-        '<li class="list-group-item lesson-item d-flex justify-content-between align-items-center" data-id="' + deps.escapeHtml(id) + '">' +
-          '<div>' +
-            '<span class="lesson-title">' + deps.escapeHtml(item.title) + '</span>' +
-            '<small class="text-muted ms-2">' + deps.capitalize(item.type) + '</small>' +
-            completedBadge +
+      const lessonsHtml = items.length
+        ? items.map(function(item) {
+            const id = String(item._id);
+            const checked = deps.isLessonCompleted(id) ? 'checked' : '';
+            const completedBadge = deps.isLessonCompleted(id) ? '<span class="lesson-completed-badge">Completed</span>' : '';
+
+            return '' +
+              '<li class="lesson-item d-flex justify-content-between align-items-center" data-id="' + deps.escapeHtml(id) + '">' +
+                '<div>' +
+                  '<span class="lesson-title">' + deps.escapeHtml(item.title) + '</span>' +
+                  '<small class="text-muted ms-2">' + deps.capitalize(item.type) + '</small>' +
+                  completedBadge +
+                '</div>' +
+                '<input type="checkbox" class="form-check-input lesson-progress-checkbox" ' + checked + '>' +
+              '</li>';
+          }).join('')
+        : '<div class="section-empty">No lessons in this section.</div>';
+
+      return '' +
+        '<section class="learning-section' + (isOpen ? ' open' : '') + '" data-section-index="' + idx + '">' +
+          '<button class="section-header" type="button" data-section-index="' + idx + '">' +
+            '<span>' + deps.escapeHtml(section.title || ('Section ' + (idx + 1))) + '</span>' +
+            '<span class="section-count">' + items.length + '</span>' +
+          '</button>' +
+          '<div class="section-body">' +
+            '<ul class="lesson-list">' + lessonsHtml + '</ul>' +
           '</div>' +
-          '<div>' +
-            '<input type="checkbox" class="form-check-input lesson-progress-checkbox" style="transform: scale(1.5);" ' + checked + '>' +
-          '</div>' +
-        '</li>';
-    });
+        '</section>';
+    }).join('');
 
-    html += '</ul>';
     container.innerHTML = html;
   }
 
@@ -57,11 +72,18 @@
     const store = deps.store;
     const currentId = store.currentLesson ? String(store.currentLesson._id) : null;
 
+    document.querySelectorAll('.learning-section').forEach(function(sectionEl) {
+      const index = Number(sectionEl.dataset.sectionIndex);
+      sectionEl.classList.toggle('open', index === store.currentSectionIndex);
+    });
+
     document.querySelectorAll('.lesson-item').forEach(function(el) {
       el.classList.remove('active');
       if (currentId && String(el.dataset.id) === currentId) {
         el.classList.add('active');
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const parentSection = el.closest('.learning-section');
+        if (parentSection) parentSection.classList.add('open');
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     });
   }
@@ -84,6 +106,33 @@
     document.querySelectorAll('.section-note').forEach(function(note, idx) {
       note.style.display = idx === store.currentSectionIndex ? 'block' : 'none';
     });
+  }
+
+  function toggleSection(sectionIndex) {
+    const deps = getDeps();
+    const store = deps.store;
+    const idx = Number(sectionIndex);
+    if (!Number.isFinite(idx) || !store.sections[idx]) return;
+
+    const sectionEl = document.querySelector('.learning-section[data-section-index="' + idx + '"]');
+    if (!sectionEl) {
+      showSection(idx);
+      return;
+    }
+
+    const willOpen = !sectionEl.classList.contains('open');
+    document.querySelectorAll('.learning-section').forEach(function(el) {
+      el.classList.remove('open');
+    });
+
+    if (willOpen) {
+      sectionEl.classList.add('open');
+      showSection(idx);
+      return;
+    }
+
+    store.currentSectionIndex = idx;
+    localStorage.setItem(deps.storageKey(deps.STORAGE_SUFFIX.lastSection), String(idx));
   }
 
   function renderContent() {
@@ -496,6 +545,7 @@
 
   window.LearningRender = {
     showSection: showSection,
+    toggleSection: toggleSection,
     renderLessonList: renderLessonList,
     renderContent: renderContent,
     updateSidebarUI: updateSidebarUI

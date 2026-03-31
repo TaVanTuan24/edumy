@@ -17,6 +17,15 @@
 
   function bindEvents() {
     document.addEventListener('click', function(e) {
+      const sectionHeader = e.target.closest('.section-header');
+      if (sectionHeader) {
+        const sectionIndex = Number(sectionHeader.dataset.sectionIndex);
+        if (Number.isFinite(sectionIndex) && window.LearningRender && typeof window.LearningRender.toggleSection === 'function') {
+          window.LearningRender.toggleSection(sectionIndex);
+        }
+        return;
+      }
+
       const checkbox = e.target.closest('.lesson-progress-checkbox');
       if (checkbox) return;
 
@@ -26,7 +35,7 @@
       selectLesson(itemEl.dataset.id);
     });
 
-    const listContainer = document.getElementById('videoListContainer');
+    const listContainer = document.getElementById('sectionsAccordion') || document.getElementById('videoListContainer');
     if (listContainer) {
       listContainer.addEventListener('change', function(e) {
         const checkbox = e.target.closest('.lesson-progress-checkbox');

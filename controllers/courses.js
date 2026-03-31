@@ -77,18 +77,9 @@ function normalizeLessonContent(item) {
     };
   } else if (type === 'slide') {
     const slidesFromContent = Array.isArray(item.content && item.content.slides) ? item.content.slides : [];
-    const slidesFromLegacy = Array.isArray(item.slides) ? item.slides : [];
-    const slides = slidesFromContent.length ? slidesFromContent : slidesFromLegacy;
 
     normalizedContent = {
-      slides: slides.length
-        ? slides.map((slide, index) => ({
-            title: slide && slide.title ? slide.title : `Slide ${index + 1}`,
-            content: slide && slide.content ? slide.content : ''
-          }))
-        : (typeof item.content === 'string' && item.content.trim().length)
-          ? [{ title: item.name || 'Slide', content: item.content }]
-          : []
+      slides: slidesFromContent
     };
   } else {
     normalizedContent = {
@@ -122,10 +113,10 @@ function normalizeCourseContent(course) {
           content: {
             videoUrl: lesson.videoUrl || '',
             questions: Array.isArray(lesson.quiz) ? lesson.quiz : [],
-            slides: Array.isArray(lesson.slides) ? lesson.slides : []
+            slides: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides : []
           },
           questions: Array.isArray(lesson.quiz) ? lesson.quiz : [],
-          slides: Array.isArray(lesson.slides) ? lesson.slides : []
+          slides: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides : []
         }))
       };
     });

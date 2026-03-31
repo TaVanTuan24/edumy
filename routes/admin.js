@@ -452,19 +452,20 @@ router.post("/course/:id/slide/add", async (req, res) => {
 router.get('/course/:id/lesson/:sectionIndex/:lessonIndex', async (req, res) => {
     try {
         const { sectionIndex, lessonIndex } = req.params
-        const course = await Course.findById(req.params.id)
+        const course = await Course.findById(req.params.id).lean()
         
         if (!course) {
             return res.json({ success: false, error: 'Course not found' })
         }
         
-        const video = course.driveStructure[sectionIndex]?.videos[lessonIndex]
+        const lesson = course.driveStructure[sectionIndex]?.videos[lessonIndex]
         
-        if (!video) {
+        if (!lesson) {
             return res.json({ success: false, error: 'Lesson not found' })
         }
-        
-        res.json({ success: true, video })
+
+        console.log('RAW LESSON FROM API:', lesson)
+        res.json({ success: true, lesson })
     } catch (err) {
         res.json({ success: false, error: err.message })
     }

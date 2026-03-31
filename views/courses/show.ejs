@@ -1,8 +1,9 @@
 <% layout('/layouts/boilerplate')%>
 <link rel="stylesheet" href="/stylesheets/stars.css">
 
-<div class="row">
-  <div class="col-6" id="content">
+<div class="learning-root">
+  <div class="learning-layout">
+  <main class="learning-content" id="content">
     <div id="imageContainer">
       <div id="carouselExample" class="carousel slide">
         <div class="carousel-inner">
@@ -64,12 +65,13 @@
         </div>
       <% } %>
     </div>
-  </div>
+  </main>
 
-  <div class="col-6">
+  <aside class="learning-sidebar">
+    <div class="learning-sidebar-inner">
     <% const totalVideos = course.driveStructure.reduce((acc, sec) => acc + (sec.videos || sec.items || []).length, 0); %>
     <% const completedCount = completedVideos.length; %>
-    <div class="mb-2">
+    <div class="mb-3">
       <h6 class="text-success">Tiến độ học: <%= completedCount %> / <%= totalVideos %> video (<%= Math.round(completedCount / totalVideos * 100) %>%)</h6>
       <div class="progress">
         <div class="progress-bar bg-success" role="progressbar" style="width: <%= Math.round(completedCount / totalVideos * 100) %>%"
@@ -78,20 +80,15 @@
     </div>
 
     <% if (course.driveStructure && course.driveStructure.length > 0) { %>
-      <div class="mb-4">
-        <h5>Sections</h5>
-        <div class="d-flex overflow-auto mb-2" style="gap: 10px;">
-          <% course.driveStructure.forEach((section, index) => { %>
-            <button class="btn btn-outline-primary btn-sm" onclick="showVideos(<%= index %>)">
-              <%= section.section || ('Section ' + (index + 1)) %>
-            </button>
-          <% }) %>
-        </div>
-        <div id="videoListContainer" class="border rounded p-3 bg-light">
-          <p class="text-muted">Select a section to view videos</p>
+      <div class="learning-sections-wrap">
+        <h5 class="mb-3">Course Content</h5>
+        <div id="sectionsAccordion" class="sections-accordion">
+          <p class="text-muted">Loading sections...</p>
         </div>
       </div>
     <% } %>
+    </div>
+  </aside>
   </div>
 </div>
 
