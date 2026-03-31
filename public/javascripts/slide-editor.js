@@ -29,6 +29,7 @@
         addSlideMiniBtn: document.getElementById('addSlideMiniBtn'),
         previewBtn: document.getElementById('previewBtn'),
         saveDeckBtn: document.getElementById('saveDeckBtn'),
+        saveToLibraryBtn: document.getElementById('saveToLibraryBtn'),
         emptyProperties: document.getElementById('emptyProperties'),
         propertiesPanel: document.getElementById('propertiesPanel'),
         textProps: document.getElementById('textProps'),
@@ -75,6 +76,7 @@
 
         state.slides = parsed.map(normalizeSlide);
         state.activeSlideId = state.slides[0].id;
+        applyAiSlidesFromStorage();
     }
 
     function bindEvents() {
@@ -84,6 +86,9 @@
         els.addSlideBtn.addEventListener('click', addSlide);
         els.addSlideMiniBtn.addEventListener('click', addSlide);
         els.saveDeckBtn.addEventListener('click', saveDeck);
+        if (els.saveToLibraryBtn) {
+            els.saveToLibraryBtn.addEventListener('click', saveToLibrary);
+        }
         els.previewBtn.addEventListener('click', openPreview);
         els.deleteElementBtn.addEventListener('click', deleteSelectedElement);
 
@@ -535,6 +540,41 @@
         }
     }
 
+    async function saveToLibrary() {
+        if (!state.slides.length) {
+            showToast('Add at least one slide before saving.');
+            return;
+        }
+
+        const titleInput = document.getElementById('slideDeckTitle');
+        const title = String(titleInput && titleInput.value || '').trim() || 'AI Generated Slide';
+        const payload = {
+            type: 'slide',
+            name: title,
+            content: {
+                slides: serializeSlides(state.slides)
+            }
+        };
+
+        try {
+            const response = await fetch('/library/save-slide', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data && data.error ? data.error : 'Save failed');
+            }
+
+            showToast('Saved to Content Library!');
+        } catch (error) {
+            console.error('[SlideEditor] Save to library failed:', error);
+            showToast('Save to library failed. Please try again.');
+        }
+    }
+
     function openPreview() {
         const slide = getActiveSlide();
         if (!slide) return;
@@ -755,6 +795,32 @@
         });
 
         return safeSlide;
+    }
+
+    function applyAiSlidesFromStorage() {
+        const stored = localStorage.getItem('AI_SLIDE_DATA');
+        if (!stored) return;
+
+        try {
+            const parsed = JSON.parse(stored);
+            const slides = Array.isArray(parsed && parsed.slides) ? parsed.slides : [];
+            if (!slides.length) return;
+
+            state.slides = slides.map(normalizeSlide);
+            state.activeSlideId = state.slides[0].id;
+            state.selectedElementId = null;
+
+            const title = localStorage.getItem('AI_SLIDE_TITLE');
+            const titleInput = document.getElementById('slideDeckTitle');
+            if (titleInput && title) {
+                titleInput.value = title;
+            }
+        } catch (error) {
+            console.warn('[SlideEditor] Failed to parse AI slide data', error);
+        } finally {
+            localStorage.removeItem('AI_SLIDE_DATA');
+            localStorage.removeItem('AI_SLIDE_TITLE');
+        }
     }
 
     function serializeSlides(slides) {

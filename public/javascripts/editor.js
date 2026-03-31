@@ -1455,12 +1455,23 @@
                         <i class="fas ${icons[item.type]}"></i>
                     </div>
                     <span class="lib-title">${item.title}</span>
+                    <button class="delete-btn" type="button" data-id="${item._id}" aria-label="Delete">
+                        Delete
+                    </button>
                 </div>
             `).join('');
 
             // Attach drag handlers to library items
             content.querySelectorAll('.library-item').forEach(item => {
                 item.addEventListener('dragstart', handleLibraryDrag);
+            });
+
+            content.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    deleteLibraryItem(btn.dataset.id, btn.closest('.library-item'));
+                });
             });
 
         } catch(e) {
@@ -1483,6 +1494,29 @@
         }
         if (item.type) {
             e.dataTransfer.setData('type', item.type);
+        }
+    }
+
+    async function deleteLibraryItem(id, itemEl) {
+        if (!id) return;
+        if (!confirm('Delete this item?')) return;
+
+        try {
+            const res = await fetch('/library/' + encodeURIComponent(id), {
+                method: 'DELETE'
+            });
+
+            const data = await res.json();
+            if (!data.success) {
+                alert(data.error || 'Delete failed');
+                return;
+            }
+
+            if (itemEl) {
+                itemEl.remove();
+            }
+        } catch (error) {
+            alert('Delete failed');
         }
     }
 

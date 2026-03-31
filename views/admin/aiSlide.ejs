@@ -1,0 +1,31 @@
+<% layout('/layouts/boilerplate')%>
+<link rel="stylesheet" href="/stylesheets/aiSlide.css">
+
+<div class="ai-slide-page">
+  <header class="ai-slide-header">
+    <div>
+      <h2 class="mb-1">AI Slide Generator</h2>
+      <p class="text-muted mb-0">Generate slide data, then edit in the canvas editor.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="/admin">Back to Course Manager</a>
+  </header>
+
+  <section class="ai-slide-controls">
+    <input type="hidden" id="aiCourseId" value="<%= courseId || '' %>">
+    <label for="aiSlidePrompt" class="form-label">Topic / Prompt</label>
+    <textarea id="aiSlidePrompt" class="form-control" rows="4" placeholder="Enter topic..." maxlength="1000"></textarea>
+
+    <div class="control-actions">
+      <button id="generateSlideBtn" class="btn btn-primary" type="button">
+        <span id="aiSlideSpinner" class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true"></span>
+        Generate
+      </button>
+      <button id="regenerateSlideBtn" class="btn btn-outline-primary" type="button">Regenerate</button>
+      <button id="addMoreSlidesBtn" class="btn btn-outline-secondary" type="button">Add more slides</button>
+    </div>
+
+    <div id="aiSlideStatus" class="ai-status">Ready.</div>
+  </section>
+</div>
+
+<script src="/javascripts/admin/aiSlide.js" defer></script>

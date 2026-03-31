@@ -15,6 +15,9 @@
 
     <header class="se-topbar">
         <div class="se-topbar-left">
+            <a href="/admin/courses/<%= course._id %>/editor" class="btn btn-outline-secondary">
+                <- Back to Course
+            </a>
             <div class="se-chip">Course Slide Studio</div>
             <input id="slideDeckTitle" class="se-title-input" type="text" value="<%= lessonTitle || (course.title + ' Deck') %>" aria-label="Slide title" maxlength="120">
         </div>
@@ -27,6 +30,9 @@
             </button>
             <button class="btn btn-primary" id="saveDeckBtn" type="button">
                 <i class="fa-regular fa-floppy-disk me-2"></i>Save
+            </button>
+            <button class="btn btn-success" id="saveToLibraryBtn" type="button">
+                💾 Save to Library
             </button>
         </div>
     </header>

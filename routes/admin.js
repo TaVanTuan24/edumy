@@ -120,6 +120,10 @@ router.get('/', async (req, res) => {
 router.get('/ai/quiz', async (req, res) => {
     res.render('admin/aiQuiz');
 });
+
+router.get('/ai/slide', async (req, res) => {
+    res.render('admin/aiSlide', { courseId: req.query.courseId || '' });
+});
 router.get('/courses/:id/editor', async (req, res) => {
 
     const course = await Course.findById(req.params.id)

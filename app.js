@@ -20,6 +20,7 @@ const exploreRoutes = require('./routes/explore');
 const dashboardRoutes = require("./routes/dashboard");
 const adminRoutes = require('./routes/admin');
 const apiAdminRoutes = require('./routes/api/admin');
+const libraryRoutes = require('./routes/library');
 const aiRoutes = require('./routes/ai');
 const videoModelsRoutes = require('./routes/videoModels');
 const trackRoutes = require('./routes/track');
@@ -204,6 +205,7 @@ app.use('/courses/:id/reviews', reviewRoutes)
 app.use("/dashboard", dashboardRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/admin', apiAdminRoutes);
+app.use('/', libraryRoutes);
 app.use('/ai', aiRoutes);
 app.use('/video-models', videoModelsRoutes);
 app.use('/track', trackRoutes);

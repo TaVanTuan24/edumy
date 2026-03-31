@@ -577,6 +577,18 @@ body {
     background: #fbfcfe;
     cursor: grab;
 }
+.library-item .delete-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+}
+.library-item .delete-btn:hover {
+    color: #a71d2a;
+}
 
 .library-item:hover {
     border-color: #c7d0dc;

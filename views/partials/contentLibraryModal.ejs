@@ -181,6 +181,19 @@
         font-size: 12px;
     }
 
+    .delete-btn {
+        background: transparent;
+        border: none;
+        color: #dc3545;
+        cursor: pointer;
+        font-size: 14px;
+        margin-left: 10px;
+    }
+
+    .delete-btn:hover {
+        color: #a71d2a;
+    }
+
     .empty-library {
         text-align: center;
         padding: 40px;
@@ -270,8 +283,8 @@
                     <button class="btn btn-sm btn-outline-primary" onclick="useLibraryItem('${item._id}', '${type}')" title="Add to section">
                         <i class="fas fa-plus"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteLibraryItem('${item._id}')" title="Delete">
-                        <i class="fas fa-trash"></i>
+                    <button class="delete-btn" onclick="deleteLibraryItem('${item._id}')" title="Delete">
+                        Delete
                     </button>
                 </div>
             </div>
@@ -498,15 +511,18 @@
         if (!confirm('Are you sure you want to delete this item?')) return;
 
         try {
-            const response = await fetch(`/api/admin/library/${id}`, {
+            const response = await fetch(`/library/${id}`, {
                 method: 'DELETE'
             });
 
             const result = await response.json();
-            if (result.success) {
-                loadLibraryItems();
-                showToast('Item deleted', 'success');
+            if (!result.success) {
+                alert(result.error || 'Delete failed');
+                return;
             }
+
+            loadLibraryItems();
+            showToast('Item deleted', 'success');
         } catch (error) {
             console.error('Error deleting item:', error);
         }
