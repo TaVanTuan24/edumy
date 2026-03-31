@@ -191,12 +191,27 @@
 
       setupYouTubePlayer(videoId, lesson);
       if (player) player.style.display = 'block';
+      if (typeof window.__updateContext === 'function') {
+        window.__updateContext({
+          lessonId: String(lesson._id || ''),
+          type: 'video',
+          slideIndex: null
+        });
+      }
       return;
     }
 
     teardownYouTubePlayer();
     if (iframe) iframe.src = url;
     if (player) player.style.display = 'block';
+
+    if (typeof window.__updateContext === 'function') {
+      window.__updateContext({
+        lessonId: String(lesson._id || ''),
+        type: 'video',
+        slideIndex: null
+      });
+    }
 
     window.__videoPlayback = window.__videoPlayback || {};
     window.__videoPlayback.isPlaying = true;
@@ -226,6 +241,13 @@
     }
 
     showSlide(lesson);
+    if (typeof window.__updateContext === 'function') {
+      window.__updateContext({
+        lessonId: String(lesson._id || ''),
+        type: 'slide',
+        slideIndex: currentSlideIndex
+      });
+    }
   }
 
   function showSlide(lesson) {
@@ -380,6 +402,14 @@
     selectedAnswers = new Array(quizData.length).fill(-1);
     submittedQuestions = new Array(quizData.length).fill(false);
     quizAttemptCount = 0;
+
+    if (typeof window.__updateContext === 'function') {
+      window.__updateContext({
+        lessonId: String(lesson._id || ''),
+        type: 'quiz',
+        slideIndex: null
+      });
+    }
 
     showQuestion(lesson);
   }

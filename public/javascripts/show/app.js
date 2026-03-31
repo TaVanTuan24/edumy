@@ -11,6 +11,12 @@
   const heartbeatIntervalMs = 30000;
   const activityGraceMs = 45000;
 
+  window.currentContext = {
+    lessonId: null,
+    type: null,
+    slideIndex: null
+  };
+
   function init() {
     if (!window.LearningStore || !window.LearningRender) {
       console.error('Learning modules are not loaded');
@@ -138,6 +144,11 @@
     activeLessonId = String(lesson._id || '');
     activeLessonType = String(lesson.type || '');
     watchStart = Date.now();
+    updateContext({
+      lessonId: activeLessonId,
+      type: activeLessonType === 'lecture' ? 'video' : activeLessonType,
+      slideIndex: null
+    });
     window.__videoPlayback = window.__videoPlayback || {};
     if (activeLessonType !== 'lecture') {
       window.__videoPlayback.isPlaying = true;
@@ -314,6 +325,24 @@
     }).catch(function(err) {
       console.error('[Track Error]', err);
     });
+  }
+
+  function updateContext(payload) {
+    const next = payload || {};
+    window.currentContext = {
+      lessonId: next.lessonId || null,
+      type: next.type || null,
+      slideIndex: next.slideIndex !== undefined ? next.slideIndex : null
+    };
+
+    console.log('[Context Updated]', window.currentContext);
+
+    const ctxLabel = document.getElementById('aiContextLabel') || document.getElementById('aiStatus');
+    if (ctxLabel) {
+      const typeLabel = window.currentContext.type || 'N/A';
+      const lessonLabel = window.currentContext.lessonId || 'N/A';
+      ctxLabel.innerText = 'Type: ' + typeLabel + ' | Lesson: ' + lessonLabel;
+    }
   }
 
   function isYouTubeUrl(url) {
@@ -516,11 +545,14 @@
 
   window.__trackSlideChange = function(lessonId, lessonType, slideIndex) {
     sendSlideEvent(lessonId, lessonType, slideIndex);
+    updateContext({ lessonId: lessonId, type: 'slide', slideIndex: slideIndex });
   };
 
   window.__trackQuizResult = function(lessonId, lessonType, scoreValue, totalValue, attempts) {
     sendQuizEvent(lessonId, lessonType, scoreValue, totalValue, attempts);
   };
+
+  window.__updateContext = updateContext;
 
   window.__trackVideoEvent = function(eventType, position) {
     const deps = window.LearningStore;

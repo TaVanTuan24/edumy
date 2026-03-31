@@ -105,6 +105,32 @@
         </div>
       </div>
     </div>
+
+    <button id="aiChatToggle" class="ai-chat-toggle" type="button" aria-label="Open AI chat">💬</button>
+    <div id="aiChatPopup" class="ai-chat-popup hidden" data-course-id="<%= course._id %>">
+      <div class="ai-chat-header">
+        <div>
+          <h6 class="mb-0">AI Assistant</h6>
+          <small class="text-muted">Tư vấn theo bài học hiện tại</small>
+        </div>
+        <button class="ai-chat-close" type="button" data-chat-close>✖</button>
+      </div>
+
+      <div class="ai-quick-actions">
+        <button class="btn btn-sm btn-outline-secondary" data-ai-quick="Giải thích slide này">Giải thích slide này</button>
+        <button class="btn btn-sm btn-outline-secondary" data-ai-quick="Tóm tắt bài học">Tóm tắt bài học</button>
+        <button class="btn btn-sm btn-outline-secondary" data-ai-quick="Câu hỏi ôn tập">Câu hỏi ôn tập</button>
+      </div>
+
+      <div id="chatMessages" class="ai-chat-messages"></div>
+
+      <div class="ai-chat-input">
+        <input id="chatInput" class="form-control" placeholder="Hỏi về bài học..." maxlength="800" />
+        <button id="chatSendBtn" class="btn btn-primary">➤</button>
+      </div>
+      <div id="chatTyping" class="ai-typing" style="display:none;">AI đang trả lời...</div>
+      <div class="ai-context" id="aiStatus">Sẵn sàng</div>
+    </div>
   </main>
 
   <aside class="learning-sidebar">
@@ -146,3 +172,4 @@
 <script src="/javascripts/show/store.js" defer></script>
 <script src="/javascripts/show/render.js" defer></script>
 <script src="/javascripts/show/app.js" defer></script>
+<script src="/javascripts/show/aiChat.js" defer></script>
