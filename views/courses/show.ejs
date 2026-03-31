@@ -30,40 +30,80 @@
       <iframe id="videoIframe" src="" allow="autoplay" allowfullscreen></iframe>
     </div>
 
-    <div class="card mb-3">
-      <div class="card-body" id="videoNoteSection" style="display: none;">
-        <h5 class="card-title">Ghi chú buổi học</h5>
-        <% course.driveStructure.forEach((section, index) => { %>
-          <textarea class="form-control section-note"
-            id="note-section-<%= index %>"
-            rows="5"
-            placeholder="Nhập ghi chú cho <%= section.section %>..."
-            onblur="saveNote(<%= index %>)"
-            style="display:none;"><%= sectionNotes[index] || '' %></textarea>
-        <% }) %>
+    <div class="course-tabs-wrap">
+      <div class="course-tabs">
+        <button class="tab-btn active" type="button" data-tab="overview">Overview</button>
+        <button class="tab-btn" type="button" data-tab="notes">Notes</button>
+        <button class="tab-btn" type="button" data-tab="reviews">Reviews</button>
       </div>
+      <div class="tab-content">
+        <div id="tab-overview" class="tab-pane active">
+          <div class="card mb-3" id="courseInfo">
+            <div class="card-body">
+              <h5 class="card-title"><%= course.title %></h5>
+              <p class="card-text"><%= course.description %></p>
+            </div>
 
-      <div class="card-body" id="courseInfo">
-        <h5 class="card-title"><%= course.title %></h5>
-        <p class="card-text"><%= course.description %></p>
-        <% if (course.driveStructure && course.driveStructure.length > 0) { %>
-          <a href="/courses/<%= course._id %>/learn" class="btn btn-primary">
-            <i class="fas fa-play me-2"></i>Start Learning
-          </a>
-        <% } %>
-      </div>
-
-      <% if ((currentUser && course.author.equals(currentUser._id)) || currentUser._id == '675da20f3dfdaa4f789ffa00') { %>
-        <div class="card-body">
-          <!-- <a href="/admin/courses/<%= course._id %>/editor-new" class="btn btn-warning">
-            <i class="fas fa-edit me-2"></i>Course Editor (New)
-          </a> -->
-          <!-- <a class="card-link btn btn-info" href="/courses/<%=course._id%>/edit">Edit</a> -->
-          <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
-            <button class="btn btn-danger">Delete</button>
-          </form>
+            <% if ((currentUser && course.author.equals(currentUser._id)) || currentUser._id == '675da20f3dfdaa4f789ffa00') { %>
+              <div class="card-body">
+                <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
+                  <button class="btn btn-danger">Delete</button>
+                </form>
+              </div>
+            <% } %>
+          </div>
         </div>
-      <% } %>
+        <div id="tab-notes" class="tab-pane">
+          <div class="card mb-3" id="videoNoteSection">
+            <div class="card-body">
+              <h5 class="card-title">Ghi chú buổi học</h5>
+              <% course.driveStructure.forEach((section, index) => { %>
+                <textarea class="form-control section-note"
+                  id="note-section-<%= index %>"
+                  rows="5"
+                  placeholder="Nhập ghi chú cho <%= section.section %>..."
+                  onblur="saveNote(<%= index %>)"
+                  style="display:none;"><%= sectionNotes[index] || '' %></textarea>
+              <% }) %>
+            </div>
+          </div>
+        </div>
+        <div id="tab-reviews" class="tab-pane">
+          <div class="card mb-3">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                <h5 class="mb-0">Student Reviews</h5>
+                <span id="ratingSummary" class="text-muted">No reviews yet.</span>
+              </div>
+
+              <form id="reviewForm" class="mb-3">
+                <div class="row g-2 align-items-end">
+                  <div class="col-12 col-md-3">
+                    <label class="form-label" for="rating">Rating</label>
+                    <select id="rating" class="form-select">
+                      <option value="">Select rating</option>
+                      <option value="5">5 - Excellent</option>
+                      <option value="4">4 - Good</option>
+                      <option value="3">3 - Average</option>
+                      <option value="2">2 - Poor</option>
+                      <option value="1">1 - Terrible</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-7">
+                    <label class="form-label" for="comment">Comment</label>
+                    <textarea id="comment" class="form-control" rows="2" placeholder="Share your experience..."></textarea>
+                  </div>
+                  <div class="col-12 col-md-2">
+                    <button id="reviewSubmitBtn" type="button" class="btn btn-primary w-100">Submit</button>
+                  </div>
+                </div>
+              </form>
+
+              <div id="review-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 

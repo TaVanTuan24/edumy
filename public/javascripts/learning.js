@@ -10,7 +10,8 @@
         currentQuestionIndex: 0,
         score: 0,
         answers: {},
-        submittedQuestions: {}
+        submittedQuestions: {},
+        sectionNotes: []
     };
 
     const els = {
@@ -18,7 +19,19 @@
         progressMeta: document.getElementById('lessonProgressMeta'),
         lessonTitleLive: document.getElementById('lessonTitleLive'),
         sidebarContent: document.getElementById('sidebarContent'),
-        contentStage: document.getElementById('contentStage')
+        contentStage: document.getElementById('contentStage'),
+        tabButtons: Array.from(document.querySelectorAll('.tab-btn')),
+        tabPanes: Array.from(document.querySelectorAll('.tab-pane')),
+        tabOverview: document.getElementById('tab-overview'),
+        tabNotes: document.getElementById('tab-notes'),
+        tabReviews: document.getElementById('tab-reviews'),
+        notesInput: document.getElementById('notesInput'),
+        notesSaveBtn: document.getElementById('notesSaveBtn'),
+        ratingSelect: document.getElementById('rating'),
+        commentInput: document.getElementById('comment'),
+        reviewSubmitBtn: document.getElementById('reviewSubmitBtn'),
+        reviewList: document.getElementById('review-list'),
+        ratingSummary: document.getElementById('ratingSummary')
     };
 
     document.addEventListener('DOMContentLoaded', init);
@@ -27,6 +40,9 @@
         hydrateState();
         bindEvents();
         renderSidebar();
+        setupTabs();
+        renderOverview();
+        loadReviews();
 
         if (state.flatLessons.length > 0) {
             loadLesson(state.flatLessons[0]._id);
@@ -48,8 +64,12 @@
 
         state.course = {
             _id: raw._id || '',
-            title: raw.title || 'Untitled Course'
+            title: raw.title || 'Untitled Course',
+            description: raw.description || '',
+            topic: raw.topic || ''
         };
+
+        state.sectionNotes = Array.isArray(window.sectionNotes) ? window.sectionNotes : [];
 
         const driveStructure = Array.isArray(raw.driveStructure) ? raw.driveStructure : [];
         state.sections = driveStructure.map(normalizeSection);
@@ -201,6 +221,128 @@
                 restartQuiz();
             }
         });
+
+        if (els.notesSaveBtn) {
+            els.notesSaveBtn.addEventListener('click', saveNotes);
+        }
+
+        if (els.reviewSubmitBtn) {
+            els.reviewSubmitBtn.addEventListener('click', submitReview);
+        }
+    }
+
+    function setupTabs() {
+        if (!els.tabButtons.length) return;
+        els.tabButtons.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                els.tabButtons.forEach(function(b) { b.classList.remove('active'); });
+                els.tabPanes.forEach(function(p) { p.classList.remove('active'); });
+
+                btn.classList.add('active');
+                const target = document.getElementById('tab-' + btn.dataset.tab);
+                if (target) target.classList.add('active');
+            });
+        });
+    }
+
+    function renderOverview() {
+        if (!els.tabOverview) return;
+
+        console.log('Course data:', state.course);
+
+        els.tabOverview.innerHTML = '' +
+            '<div class="overview-container">' +
+              '<h4 class="course-title">' + escapeHtml(state.course.title || 'Untitled Course') + '</h4>' +
+              '<h6>Description</h6>' +
+              '<p>' + escapeHtml(state.course.description || 'No description available.') + '</p>' +
+              '<h6>Topic</h6>' +
+              '<span class="topic-tag">' + escapeHtml(state.course.topic || 'No topic') + '</span>' +
+            '</div>';
+    }
+
+    function renderNotesPanel() {
+        if (!els.notesInput) return;
+        const current = getCurrentLesson();
+        if (!current) return;
+
+        const note = state.sectionNotes[current.sectionIndex] || '';
+        els.notesInput.value = note;
+    }
+
+    function saveNotes() {
+        const current = getCurrentLesson();
+        if (!current || !els.notesInput) return;
+
+        const content = els.notesInput.value || '';
+        state.sectionNotes[current.sectionIndex] = content;
+
+        fetch('/courses/' + String(state.course._id) + '/notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sectionIndex: current.sectionIndex, content: content })
+        }).catch(function(error) {
+            console.error('[Notes Save Error]', error);
+        });
+    }
+
+    function submitReview() {
+        if (!els.ratingSelect || !els.commentInput) return;
+        const rating = Number(els.ratingSelect.value || 5);
+        const comment = els.commentInput.value || '';
+
+        fetch('/courses/' + String(state.course._id) + '/review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rating: rating, comment: comment })
+        })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data.success) return;
+                els.commentInput.value = '';
+                loadReviews();
+            })
+            .catch(function(error) {
+                console.error('[Review Submit Error]', error);
+            });
+    }
+
+    function loadReviews() {
+        if (!els.reviewList) return;
+        fetch('/courses/' + String(state.course._id) + '/reviews')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data.success) return;
+                renderRatingSummary(data.averageRating, data.reviewCount);
+                renderReviewList(data.reviews || []);
+            })
+            .catch(function(error) {
+                console.error('[Review Fetch Error]', error);
+            });
+    }
+
+    function renderRatingSummary(avg, count) {
+        if (!els.ratingSummary) return;
+        const safeAvg = Number.isFinite(avg) ? avg : 0;
+        const safeCount = Number.isFinite(count) ? count : 0;
+        els.ratingSummary.innerHTML = '' +
+            '<div class="rating-summary">⭐ ' + safeAvg.toFixed(1) + ' / 5 (' + safeCount + ' reviews)</div>';
+    }
+
+    function renderReviewList(reviews) {
+        if (!els.reviewList) return;
+        if (!reviews.length) {
+            els.reviewList.innerHTML = '<p class="text-muted">No reviews yet.</p>';
+            return;
+        }
+
+        els.reviewList.innerHTML = reviews.map(function(r) {
+            const stars = '★'.repeat(Number(r.rating || 0));
+            return '' +
+                '<div class="review-item">' +
+                    '<strong>' + stars + '</strong>' +
+                    '<p>' + escapeHtml(r.comment || '') + '</p>' +
+                '</div>';
+        }).join('');
     }
 
     function renderSidebar() {
@@ -256,6 +398,7 @@
 
         updateActiveLessonItem(id);
         updateProgress();
+        renderNotesPanel();
 
         if (lesson.type === 'lecture') {
             renderLecture(lesson);

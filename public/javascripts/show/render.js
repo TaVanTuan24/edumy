@@ -9,6 +9,9 @@
   let submittedQuestions = [];
   let currentSlideIndex = 0;
   let slideData = [];
+  const SLIDE_BASE_WIDTH = 1003;
+  const SLIDE_BASE_HEIGHT = 563;
+  let slideResizeBound = false;
 
   function getDeps() {
     const deps = window.LearningStore;
@@ -97,11 +100,6 @@
 
     renderLessonList(store.currentSectionIndex);
     updateSidebarUI();
-
-    const courseInfo = document.getElementById('courseInfo');
-    const noteSection = document.getElementById('videoNoteSection');
-    if (courseInfo) courseInfo.style.display = 'none';
-    if (noteSection) noteSection.style.display = 'block';
 
     document.querySelectorAll('.section-note').forEach(function(note, idx) {
       note.style.display = idx === store.currentSectionIndex ? 'block' : 'none';
@@ -197,6 +195,13 @@
     slideData = window.slideData;
     currentSlideIndex = 0;
 
+    if (!slideResizeBound) {
+      window.addEventListener('resize', function() {
+        showSlide(lesson);
+      });
+      slideResizeBound = true;
+    }
+
     showSlide(lesson);
   }
 
@@ -209,27 +214,20 @@
     }
 
     const html = '' +
-      '<div class="presentation-shell">' +
-        '<div class="presentation-progress">Slide ' + (currentSlideIndex + 1) + ' / ' + slideData.length + '</div>' +
-        '<div class="presentation-stage">' +
-          '<div id="slide-canvas" class="presentation-canvas"></div>' +
-        '</div>' +
-        '<div class="presentation-nav mt-3">' +
-          '<button class="btn btn-outline-secondary" type="button" data-slide-nav="prev" ' + (currentSlideIndex === 0 ? 'disabled' : '') + '>←</button>' +
-          '<button class="btn btn-outline-primary" type="button" data-slide-nav="next" ' + (currentSlideIndex >= slideData.length - 1 ? 'disabled' : '') + '>→</button>' +
+      '<div class="slide-wrapper">' +
+        '<div id="slide-stage">' +
+          '<div id="slide-canvas"></div>' +
+          '<div class="slide-nav">' +
+            '<button class="btn btn-light" type="button" data-slide-nav="prev" ' + (currentSlideIndex === 0 ? 'disabled' : '') + '>←</button>' +
+            '<span id="slide-indicator"></span>' +
+            '<button class="btn btn-light" type="button" data-slide-nav="next" ' + (currentSlideIndex >= slideData.length - 1 ? 'disabled' : '') + '>→</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
 
     renderPanel('Slide', lesson.title, html, false);
 
-    const canvas = document.getElementById('slide-canvas');
-    if (!canvas) return;
-
-    const elements = getSlideElements(slide);
-    elements.forEach(function(el) {
-      const node = renderSlideElement(el, deps);
-      if (node) canvas.appendChild(node);
-    });
+    renderSlideElements(slide, deps);
 
     const panel = document.getElementById('lessonFallbackPanel');
     if (!panel) return;
@@ -248,6 +246,8 @@
         nextSlide(lesson);
       });
     }
+
+    updateSlideIndicator();
   }
 
   function getSlideElements(slide) {
@@ -270,33 +270,58 @@
     }];
   }
 
-  function renderSlideElement(el, deps) {
-    if (!el || typeof el !== 'object') return null;
+  function renderSlideElements(slide, deps) {
+    const canvas = document.getElementById('slide-canvas');
+    if (!canvas) return;
 
-    if (el.type === 'text') {
-      const div = document.createElement('div');
-      div.className = 'presentation-text';
-      div.style.left = Number(el.x || 0) + 'px';
-      div.style.top = Number(el.y || 0) + 'px';
-      div.style.fontSize = Number(el.fontSize || 28) + 'px';
-      div.style.color = String(el.color || '#1c1d1f');
-      div.style.fontWeight = el.bold ? '700' : '400';
-      div.style.textAlign = ['left', 'center', 'right'].includes(el.align) ? el.align : 'left';
-      div.textContent = String(el.text || '');
-      return div;
-    }
+    canvas.innerHTML = '';
+    const scale = getSlideScale();
+    const elements = getSlideElements(slide);
 
-    if (el.type === 'image') {
-      const img = document.createElement('img');
-      img.className = 'presentation-image';
-      img.src = String(el.src || '');
-      img.alt = 'Slide image';
-      img.style.left = Number(el.x || 0) + 'px';
-      img.style.top = Number(el.y || 0) + 'px';
-      return img;
-    }
+    elements.forEach(function(el) {
+      if (!el || typeof el !== 'object') return;
 
-    return null;
+      if (el.type === 'text') {
+        const div = document.createElement('div');
+        div.className = 'slide-text';
+        div.style.left = (Number(el.x || 0) * scale) + 'px';
+        div.style.top = (Number(el.y || 0) * scale) + 'px';
+        div.style.fontSize = (Number(el.fontSize || 28) * scale) + 'px';
+        div.style.color = String(el.color || '#1c1d1f');
+        div.style.fontWeight = el.bold ? '700' : '400';
+        div.style.textAlign = ['left', 'center', 'right'].includes(el.align) ? el.align : 'left';
+        div.style.whiteSpace = 'pre-wrap';
+        div.textContent = String(el.text || '');
+        canvas.appendChild(div);
+        return;
+      }
+
+      if (el.type === 'image') {
+        const img = document.createElement('img');
+        img.className = 'slide-image';
+        img.src = String(el.src || '');
+        img.alt = 'Slide image';
+        img.style.left = (Number(el.x || 0) * scale) + 'px';
+        img.style.top = (Number(el.y || 0) * scale) + 'px';
+        const width = Number(el.width || 200);
+        if (Number.isFinite(width)) {
+          img.style.width = (width * scale) + 'px';
+        }
+        canvas.appendChild(img);
+      }
+    });
+  }
+
+  function getSlideScale() {
+    const stage = document.getElementById('slide-stage');
+    if (!stage) return 1;
+    return stage.offsetWidth / SLIDE_BASE_WIDTH;
+  }
+
+  function updateSlideIndicator() {
+    const indicator = document.getElementById('slide-indicator');
+    if (!indicator) return;
+    indicator.textContent = (currentSlideIndex + 1) + ' / ' + slideData.length;
   }
 
   function nextSlide(lesson) {

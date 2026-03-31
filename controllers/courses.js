@@ -283,38 +283,63 @@ module.exports.saveNote = async (req, res) => {
   }
 };
 
-// Render the new Udemy-style learning page
-module.exports.renderLearnPage = async (req, res) => {
-  const course = await Course.findById(req.params.id)
-    .populate('author');
+module.exports.createReview = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    const rating = Number(req.body.rating);
+    const comment = String(req.body.comment || '').trim();
 
-  if (!course) {
-    req.flash('error', 'Cannot find that course!');
-    return res.redirect('/courses');
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, error: 'Invalid rating' });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
+    course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+    course.reviewEntries.push({
+      user: req.user && req.user._id,
+      rating: rating,
+      comment: comment
+    });
+
+    await course.save();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Review Create Error]', err);
+    res.status(500).json({ success: false, error: err.message });
   }
-
-  const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
-
-  normalizeCourseContent(course);
-  console.log(JSON.stringify(course.sections, null, 2));
-
-  // Get completed videos
-  let completedVideos = [];
-  if (req.user) {
-    const progress = await Progress.findOne({ user: req.user._id, course: course._id });
-    if (progress?.completedVideos) completedVideos = progress.completedVideos;
-  }
-
-  // Calculate total lessons
-  const totalLessons = course.driveStructure.reduce((acc, sec) => acc + (sec.videos || []).length, 0);
-
-  const completedCount = completedVideos.length;
-
-  res.render('courses/learn', { 
-    course, 
-    completedVideos, 
-    totalLessons,
-    completedCount,
-    hasCourseUpdate: updateStatus.hadUpdate
-  });
 };
+
+module.exports.getReviews = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id)
+      .populate('reviewEntries.user', 'username');
+
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
+    const reviews = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+    const total = reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0);
+    const avg = reviews.length ? total / reviews.length : 0;
+
+    res.json({
+      success: true,
+      reviews: reviews.map((r) => ({
+        user: r.user && r.user.username ? r.user.username : '',
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.createdAt
+      })),
+      averageRating: avg,
+      reviewCount: reviews.length
+    });
+  } catch (err) {
+    console.error('[Review Fetch Error]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+

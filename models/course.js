@@ -197,6 +197,27 @@ const CourseSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User'
     },
+    reviewEntries: [{
+        user: {
+            type: Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        rating: {
+            type: Number,
+            min: 1,
+            max: 5,
+            default: 5
+        },
+        comment: {
+            type: String,
+            trim: true,
+            default: ''
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
     reviews: [{
         type: Schema.Types.ObjectId,
         ref: 'Review'

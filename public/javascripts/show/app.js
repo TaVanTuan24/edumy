@@ -1,6 +1,8 @@
 (function() {
   'use strict';
 
+  let reviewsLoaded = false;
+
   function init() {
     if (!window.LearningStore || !window.LearningRender) {
       console.error('Learning modules are not loaded');
@@ -13,10 +15,31 @@
     exposeLegacyHooks();
     resumeLastContext();
     updateProgressUI();
+    initializeTabs();
+    toggleNotesVisibility(false);
   }
 
   function bindEvents() {
     document.addEventListener('click', function(e) {
+      const tabBtn = e.target.closest('.tab-btn');
+      if (tabBtn) {
+        const tab = tabBtn.dataset.tab;
+        if (!tab) return;
+
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+          btn.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-pane').forEach(function(pane) {
+          pane.classList.remove('active');
+        });
+
+        tabBtn.classList.add('active');
+        const target = document.getElementById('tab-' + tab);
+        if (target) target.classList.add('active');
+        handleTabActivation(tab);
+        return;
+      }
+
       const sectionHeader = e.target.closest('.section-header');
       if (sectionHeader) {
         const sectionIndex = Number(sectionHeader.dataset.sectionIndex);
@@ -59,6 +82,11 @@
       if (e.key === 'ArrowRight') goNextLesson();
       if (e.key === 'ArrowLeft') goPrevLesson();
     });
+
+    const reviewBtn = document.getElementById('reviewSubmitBtn');
+    if (reviewBtn) {
+      reviewBtn.addEventListener('click', submitReview);
+    }
   }
 
   function exposeLegacyHooks() {
@@ -153,6 +181,140 @@
     bar.style.width = percent + '%';
     bar.setAttribute('aria-valuenow', completed);
     label.innerText = 'Tiến độ học: ' + completed + ' / ' + total + ' video (' + percent + '%)';
+  }
+
+  function initializeTabs() {
+    const hasTabs = document.querySelector('.course-tabs');
+    if (!hasTabs) return;
+
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.tab === 'overview');
+    });
+    document.querySelectorAll('.tab-pane').forEach(function(pane) {
+      pane.classList.toggle('active', pane.id === 'tab-overview');
+    });
+
+    handleTabActivation('overview');
+  }
+
+  function handleTabActivation(tab) {
+    toggleNotesVisibility(tab === 'notes');
+    if (tab === 'reviews') {
+      loadReviews(false);
+    }
+  }
+
+  function toggleNotesVisibility(isVisible) {
+    const sectionCard = document.getElementById('videoNoteSection');
+    if (!sectionCard) return;
+    sectionCard.style.display = isVisible ? 'block' : 'none';
+  }
+
+  function submitReview() {
+    const deps = window.LearningStore;
+    const course = deps.store.course || {};
+    const ratingInput = document.getElementById('rating');
+    const commentInput = document.getElementById('comment');
+    const button = document.getElementById('reviewSubmitBtn');
+
+    const rating = ratingInput ? Number(ratingInput.value) : 0;
+    const comment = commentInput ? commentInput.value.trim() : '';
+
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      alert('Vui lòng chọn số sao từ 1 đến 5.');
+      return;
+    }
+
+    if (button) button.disabled = true;
+
+    fetch('/courses/' + String(course._id || '') + '/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: rating, comment: comment })
+    })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (!data || !data.success) {
+          throw new Error(data && data.error ? data.error : 'Review submit failed');
+        }
+
+        if (ratingInput) ratingInput.value = '';
+        if (commentInput) commentInput.value = '';
+        loadReviews(true);
+      })
+      .catch(function(err) {
+        console.error('[Review Submit Error]', err);
+        alert('Gửi đánh giá thất bại.');
+      })
+      .finally(function() {
+        if (button) button.disabled = false;
+      });
+  }
+
+  function loadReviews(force) {
+    if (!force && reviewsLoaded) return;
+
+    const deps = window.LearningStore;
+    const course = deps.store.course || {};
+    const list = document.getElementById('review-list');
+    const summary = document.getElementById('ratingSummary');
+
+    if (!list) return;
+
+    list.innerHTML = '<div class="text-muted">Loading reviews...</div>';
+
+    fetch('/courses/' + String(course._id || '') + '/reviews')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (!data || !data.success) {
+          throw new Error(data && data.error ? data.error : 'Review fetch failed');
+        }
+
+        renderReviewList(list, data.reviews);
+        updateReviewSummary(summary, data.averageRating, data.reviewCount);
+        reviewsLoaded = true;
+      })
+      .catch(function(err) {
+        console.error('[Review Fetch Error]', err);
+        list.innerHTML = '<p class="text-muted mb-0">Failed to load reviews.</p>';
+      });
+  }
+
+  function renderReviewList(list, reviews) {
+    const deps = window.LearningStore;
+    const items = Array.isArray(reviews) ? reviews : [];
+
+    if (!items.length) {
+      list.innerHTML = '<p class="text-muted mb-0">No reviews yet.</p>';
+      return;
+    }
+
+    list.innerHTML = items.map(function(review) {
+      const rating = Math.max(0, Math.min(5, Number(review.rating) || 0));
+      const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+      const author = review.user ? String(review.user) : 'User';
+      const comment = review.comment ? deps.escapeHtml(review.comment) : '';
+
+      return '' +
+        '<div class="review-item mb-3">' +
+          '<strong>' + stars + '</strong>' +
+          '<p class="mb-1">' + comment + '</p>' +
+          '<small class="text-muted">by ' + deps.escapeHtml(author) + '</small>' +
+        '</div>';
+    }).join('');
+  }
+
+  function updateReviewSummary(summaryEl, averageRating, reviewCount) {
+    if (!summaryEl) return;
+
+    const count = Number(reviewCount) || 0;
+    if (!count) {
+      summaryEl.textContent = 'No reviews yet.';
+      return;
+    }
+
+    const avg = Math.round((Number(averageRating) || 0) * 10) / 10;
+    summaryEl.textContent = avg + ' / 5 (' + count + ' reviews)';
   }
 
   function goNextLesson() {

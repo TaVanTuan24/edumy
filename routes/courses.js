@@ -23,10 +23,9 @@ router
 
 router.get('/:id/edit', isLoggedIn, catchAsync(course.renderEditForm));
 
-// Learning page route (student view - Udemy style)
-router.get('/:id/learn', isLoggedIn, catchAsync(course.renderLearnPage));
-
 router.post('/:courseId/progress', isLoggedIn, catchAsync(course.updateProgress));
 router.post('/:courseId/notes', isLoggedIn, catchAsync(course.saveNote));
+router.post('/:id/review', isLoggedIn, catchAsync(course.createReview));
+router.get('/:id/reviews', isLoggedIn, catchAsync(course.getReviews));
 
 module.exports = router;
