@@ -77,12 +77,38 @@ function normalizeLessonContent(item) {
     const questions = questionsFromContent.length ? questionsFromContent : questionsFromLegacy;
 
     normalizedContent = {
-      questions: questions.map((q) => ({
-        question: q && q.question ? q.question : '',
-        options: Array.isArray(q && q.options) ? q.options : [],
-        correctAnswer: q && q.correctAnswer ? q.correctAnswer : '',
-        explanation: q && q.explanation ? q.explanation : ''
-      }))
+      questions: questions.map((q) => {
+        const rawOptions = Array.isArray(q && q.options)
+          ? q.options
+          : Array.isArray(q && q.answers)
+            ? q.answers
+            : [];
+
+        const options = rawOptions.map((opt) => {
+          if (typeof opt === 'string') return opt;
+          if (opt && typeof opt === 'object') {
+            return String(opt.text || opt.answer || '').trim();
+          }
+          return '';
+        }).filter(Boolean);
+
+        let correctAnswer = q && q.correctAnswer ? q.correctAnswer : '';
+        if (!correctAnswer) {
+          const correctOption = rawOptions.find((opt) => opt && (opt.correct === true || opt.isCorrect === true));
+          if (correctOption) {
+            correctAnswer = typeof correctOption === 'string'
+              ? correctOption
+              : String(correctOption.text || correctOption.answer || '').trim();
+          }
+        }
+
+        return {
+          question: q && q.question ? q.question : '',
+          options: options,
+          correctAnswer: correctAnswer,
+          explanation: q && q.explanation ? q.explanation : ''
+        };
+      })
     };
   } else if (type === 'slide') {
     const slidesFromContent = Array.isArray(item.content && item.content.slides) ? item.content.slides : [];

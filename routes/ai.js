@@ -139,6 +139,53 @@ router.post("/chat", async (req, res) => {
     }
 })
 
+router.post("/generate-quiz", async (req, res) => {
+    try {
+        const userPrompt = String(req.body.prompt || '').trim();
+        const difficulty = String(req.body.difficulty || 'medium').toLowerCase();
+        const count = Math.min(Math.max(parseInt(req.body.count, 10) || 5, 1), 10);
+
+        if (!userPrompt) {
+            return res.status(400).json({ error: 'Prompt is required' });
+        }
+
+        const safeDifficulty = ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
+        const trimmedPrompt = userPrompt.slice(0, 1000);
+
+        const prompt = `You are a quiz generator.\n\nGenerate EXACTLY ${count} multiple choice questions.\nEach question MUST have EXACTLY 4 answers.\nDifficulty: ${safeDifficulty}.\n\nRULES:\n- Only ONE correct answer\n- Other 3 answers must be plausible but incorrect\n- DO NOT return less than 4 answers\n- DO NOT return explanations\n\nTopic: ${trimmedPrompt}\n\nReturn JSON format ONLY:\n[\n  {\n    "question": "string",\n    "answers": [\n      {"text": "A", "correct": false},\n      {"text": "B", "correct": false},\n      {"text": "C", "correct": true},\n      {"text": "D", "correct": false}\n    ]\n  }\n]\n`;
+
+        const ai = await axios.post(
+            "http://localhost:11434/api/generate",
+            {
+                model: "llama3.2",
+                prompt: prompt,
+                stream: false,
+                options: {
+                    temperature: 0.3,
+                    top_p: 0.9,
+                    max_tokens: 1600
+                }
+            },
+            { timeout: 120000 }
+        );
+
+        const raw = ai.data && ai.data.response ? String(ai.data.response) : '';
+        const parsed = parseQuizJson(raw);
+
+        if (!parsed.length) {
+            return res.status(422).json({ error: 'Invalid AI response' });
+        }
+
+        res.json({ success: true, questions: parsed });
+    } catch (err) {
+        console.error('AI Quiz Error:', err.message);
+        if (err.code === 'ECONNREFUSED') {
+            return res.status(503).json({ error: 'AI service unavailable. Is Ollama running?' });
+        }
+        res.status(500).json({ error: 'Failed to generate quiz' });
+    }
+});
+
 // List all chats for current user
 router.get("/list", async (req, res) => {
     try {
@@ -251,6 +298,73 @@ function stripHtml(value) {
 function chunkText(text) {
     if (!text) return []
     return String(text).match(/[\s\S]{1,500}/g) || []
+}
+
+function parseQuizJson(raw) {
+    const cleaned = String(raw || '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim()
+
+    let jsonText = cleaned
+    const start = cleaned.indexOf('[')
+    const end = cleaned.lastIndexOf(']')
+    if (start !== -1 && end !== -1 && end > start) {
+        jsonText = cleaned.slice(start, end + 1)
+    }
+
+    let parsed = []
+    try {
+        const data = JSON.parse(jsonText)
+        if (Array.isArray(data)) parsed = data
+        if (!Array.isArray(data) && Array.isArray(data.questions)) parsed = data.questions
+    } catch (err) {
+        return []
+    }
+
+    return parsed.map((item) => normalizeQuizQuestion(item)).filter(Boolean)
+}
+
+function normalizeQuizQuestion(item) {
+    if (!item || typeof item !== 'object') return null
+
+    const question = String(item.question || item.prompt || '').trim()
+    const answersSource = Array.isArray(item.answers)
+        ? item.answers
+        : Array.isArray(item.options)
+            ? item.options
+            : []
+
+    const answers = answersSource.map((answer) => {
+        if (typeof answer === 'string') {
+            return { text: answer.trim(), correct: false }
+        }
+        return {
+            text: String(answer.text || answer.answer || '').trim(),
+            correct: Boolean(answer.correct || answer.isCorrect)
+        }
+    }).filter((answer) => answer.text)
+
+    if (!question) return null
+
+    while (answers.length < 4) {
+        answers.push({ text: 'Placeholder answer', correct: false })
+    }
+
+    if (answers.length > 4) {
+        answers.length = 4
+    }
+
+    let correctIndex = answers.findIndex((answer) => answer.correct)
+    if (correctIndex < 0) {
+        correctIndex = 0
+    }
+
+    answers.forEach((answer, idx) => {
+        answer.correct = idx === correctIndex
+    })
+
+    return { question, answers }
 }
 
 function buildLessonDocs(course) {

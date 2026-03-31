@@ -116,6 +116,10 @@ router.get('/', async (req, res) => {
     res.render('admin/courseManager', { courses });
 
 });
+
+router.get('/ai/quiz', async (req, res) => {
+    res.render('admin/aiQuiz');
+});
 router.get('/courses/:id/editor', async (req, res) => {
 
     const course = await Course.findById(req.params.id)

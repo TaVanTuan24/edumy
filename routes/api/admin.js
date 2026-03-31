@@ -468,6 +468,62 @@ router.post('/lesson/from-library', async (req, res) => {
     }
 });
 
+// Add library item to legacy driveStructure course
+router.post('/course/add-item', async (req, res) => {
+    try {
+        const { courseId, sectionId, type, refId } = req.body;
+
+        if (!courseId || !sectionId || !type || !refId) {
+            return res.status(400).json({ success: false, error: 'Missing data' });
+        }
+
+        const course = await Course.findById(courseId);
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' });
+        }
+
+        const sectionIndex = course.driveStructure.findIndex((section) => String(section._id) === String(sectionId));
+        if (sectionIndex < 0) {
+            return res.status(404).json({ success: false, error: 'Section not found' });
+        }
+
+        const libraryItem = await ContentLibrary.findById(refId);
+        if (!libraryItem) {
+            return res.status(404).json({ success: false, error: 'Library item not found' });
+        }
+
+        const normalizedType = type === 'lesson' ? 'video' : type;
+        const newItem = {
+            type: normalizedType,
+            name: libraryItem.title || ('New ' + normalizedType),
+            preview: normalizedType === 'video' ? (libraryItem.data?.videoUrl || '') : '',
+            refId: String(libraryItem._id),
+            content: {},
+            questions: [],
+            order: course.driveStructure[sectionIndex].videos.length
+        };
+
+        if (normalizedType === 'slide') {
+            newItem.content = { slides: libraryItem.data?.slides || [] };
+        } else if (normalizedType === 'quiz') {
+            const quiz = libraryItem.data?.quiz || [];
+            newItem.content = { questions: quiz };
+            newItem.questions = quiz;
+        }
+
+        course.driveStructure[sectionIndex].videos.push(newItem);
+
+        libraryItem.usageCount += 1;
+        await libraryItem.save();
+        await course.save();
+
+        res.json({ success: true, item: newItem });
+    } catch (err) {
+        console.error('Add library item error:', err);
+        res.status(500).json({ success: false, error: 'Failed to add item' });
+    }
+});
+
 // Save lesson to library
 router.post('/lesson/to-library', async (req, res) => {
     try {

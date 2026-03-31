@@ -1246,38 +1246,53 @@
 
         if (!hasLibraryPayload(e)) return;
 
+        const sectionId = lessonList.dataset.sectionId;
+        let itemId = e.dataTransfer.getData('id');
+        let itemType = e.dataTransfer.getData('type');
+
         const data = e.dataTransfer.getData('application/json');
-        if (data) {
+        if ((!itemId || !itemType) && data) {
             const item = JSON.parse(data);
-            if (item.fromLibrary) {
-                const sectionId = lessonList.dataset.sectionId;
-                await addItemToSection(sectionId, item.type, item.id);
+            if (item && item.fromLibrary) {
+                itemId = item.id;
+                itemType = item.type;
             }
         }
+
+        if (!itemId || !itemType) {
+            alert('Invalid library item data.');
+            return;
+        }
+
+        await addItemToSection(sectionId, itemType, itemId);
     }
 
     function hasLibraryPayload(e) {
         if (!e || !e.dataTransfer || !e.dataTransfer.types) return false;
         const types = Array.from(e.dataTransfer.types);
-        return types.includes('application/json');
+        return types.includes('application/json') || (types.includes('id') && types.includes('type'));
     }
 
     async function addItemToSection(sectionId, type, refId) {
         try {
+            const normalizedType = type === 'lesson' ? 'video' : type;
             const res = await fetch('/api/admin/course/add-item', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     courseId,
                     sectionId,
-                    type,
+                    type: normalizedType,
                     refId
                 })
             });
             const data = await res.json();
-            if (data.success) {
-                location.reload();
+            if (!data.success) {
+                console.error('[CourseEditor] Failed to add library item', data);
+                alert('Failed to add item');
+                return;
             }
+            location.reload();
         } catch(e) {
             alert('Failed to add item');
         }
@@ -1463,6 +1478,12 @@
             type: libraryItem.dataset.type
         };
         e.dataTransfer.setData('application/json', JSON.stringify(item));
+        if (item.id) {
+            e.dataTransfer.setData('id', item.id);
+        }
+        if (item.type) {
+            e.dataTransfer.setData('type', item.type);
+        }
     }
 
     // ==================== SAVE COURSE ====================
