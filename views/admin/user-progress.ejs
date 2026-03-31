@@ -1,0 +1,34 @@
+<% layout('/layouts/boilerplate')%>
+
+<h2 class="mb-3">User Progress</h2>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <h5 class="card-title mb-1"><%= course.title %></h5>
+    <p class="text-muted mb-0">User progress details</p>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <h4>Progress: <%= completed %> / <%= totalLessons %></h4>
+    <div class="progress mt-2" role="progressbar" aria-valuenow="<%= completed %>" aria-valuemin="0" aria-valuemax="<%= totalLessons %>">
+      <div class="progress-bar" style="width: <%= totalLessons ? Math.round((completed / totalLessons) * 100) : 0 %>%"></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h5 class="mb-3">Quiz Scores</h5>
+    <% if (quizResults && quizResults.length) { %>
+      <ul class="list-group">
+        <% quizResults.forEach(q => { %>
+          <li class="list-group-item">Quiz <%= q.quizId %>: <%= q.score %> / <%= q.total %></li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="text-muted mb-0">No quiz results yet.</p>
+    <% } %>
+  </div>
+</div>

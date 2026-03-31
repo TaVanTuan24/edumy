@@ -12,6 +12,12 @@
   const SLIDE_BASE_WIDTH = 1003;
   const SLIDE_BASE_HEIGHT = 563;
   let slideResizeBound = false;
+  let lastQuizReportKey = '';
+  let quizAttemptCount = 0;
+  let youtubePlayer = null;
+  let youtubePollId = null;
+  let lastYoutubeTime = 0;
+  let youtubeReadyPromise = null;
 
   function getDeps() {
     const deps = window.LearningStore;
@@ -175,8 +181,25 @@
       return;
     }
 
+    if (isYouTubeUrl(url)) {
+      const videoId = getYouTubeId(url);
+      if (!videoId) {
+        if (iframe) iframe.src = url;
+        if (player) player.style.display = 'block';
+        return;
+      }
+
+      setupYouTubePlayer(videoId, lesson);
+      if (player) player.style.display = 'block';
+      return;
+    }
+
+    teardownYouTubePlayer();
     if (iframe) iframe.src = url;
     if (player) player.style.display = 'block';
+
+    window.__videoPlayback = window.__videoPlayback || {};
+    window.__videoPlayback.isPlaying = true;
   }
 
   function renderSlide(lesson) {
@@ -248,6 +271,10 @@
     }
 
     updateSlideIndicator();
+
+    if (typeof window.__trackSlideChange === 'function') {
+      window.__trackSlideChange(String(lesson._id || ''), String(lesson.type || 'slide'), currentSlideIndex);
+    }
   }
 
   function getSlideElements(slide) {
@@ -352,6 +379,7 @@
     answered = false;
     selectedAnswers = new Array(quizData.length).fill(-1);
     submittedQuestions = new Array(quizData.length).fill(false);
+    quizAttemptCount = 0;
 
     showQuestion(lesson);
   }
@@ -482,6 +510,13 @@
 
     renderPanel('Quiz', lesson.title, html, false);
 
+    saveQuizResult(lesson, score, quizData.length);
+
+    quizAttemptCount += 1;
+    if (typeof window.__trackQuizResult === 'function') {
+      window.__trackQuizResult(String(lesson._id || ''), String(lesson.type || 'quiz'), score, quizData.length, quizAttemptCount);
+    }
+
     const retryBtn = document.getElementById('quizRetryBtn');
     if (retryBtn) {
       retryBtn.addEventListener('click', function() {
@@ -498,6 +533,24 @@
     if (completeBtn && typeof window.__learningMarkCurrent === 'function') {
       completeBtn.addEventListener('click', window.__learningMarkCurrent);
     }
+  }
+
+  function saveQuizResult(lesson, scoreValue, totalValue) {
+    const deps = getDeps();
+    const course = deps.store.course || {};
+    const quizId = lesson && lesson._id ? String(lesson._id) : '';
+    const reportKey = quizId + ':' + scoreValue + ':' + totalValue;
+
+    if (!quizId || reportKey === lastQuizReportKey) return;
+    lastQuizReportKey = reportKey;
+
+    fetch('/courses/' + String(course._id || '') + '/quiz-results', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quizId: quizId, score: scoreValue, total: totalValue })
+    }).catch(function(err) {
+      console.error('[Quiz Result Sync Error]', err);
+    });
   }
 
   function normalizeOption(option, question) {
@@ -566,6 +619,143 @@
     if (completeBtn && typeof window.__learningMarkCurrent === 'function') {
       completeBtn.addEventListener('click', window.__learningMarkCurrent);
     }
+  }
+
+  function isYouTubeUrl(url) {
+    return /(?:youtube\.com|youtu\.be)/i.test(String(url || ''));
+  }
+
+  function getYouTubeId(url) {
+    const value = String(url || '');
+    const shortMatch = value.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+    if (shortMatch) return shortMatch[1];
+
+    const longMatch = value.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+    if (longMatch) return longMatch[1];
+
+    const embedMatch = value.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/);
+    if (embedMatch) return embedMatch[1];
+
+    return '';
+  }
+
+  function setupYouTubePlayer(videoId, lesson) {
+    ensureYouTubeApi().then(function() {
+      const iframe = ensureVideoIframe();
+      if (!iframe) return;
+
+      if (!youtubePlayer) {
+        youtubePlayer = new window.YT.Player('videoIframe', {
+          videoId: videoId,
+          playerVars: { rel: 0, origin: window.location.origin },
+          events: {
+            onStateChange: function(event) {
+              handleYouTubeStateChange(event, lesson);
+            }
+          }
+        });
+      } else {
+        youtubePlayer.loadVideoById(videoId);
+      }
+
+      startYouTubePolling(lesson);
+    }).catch(function(err) {
+      console.error('[YouTube API Error]', err);
+    });
+  }
+
+  function handleYouTubeStateChange(event, lesson) {
+    if (!window.YT || !window.YT.PlayerState) return;
+
+    const state = event.data;
+    const player = event.target;
+    const position = player && typeof player.getCurrentTime === 'function'
+      ? player.getCurrentTime()
+      : 0;
+
+    if (state === window.YT.PlayerState.PLAYING) {
+      lastYoutubeTime = position;
+      if (typeof window.__trackVideoEvent === 'function') {
+        window.__trackVideoEvent('play', position);
+      }
+    }
+
+    if (state === window.YT.PlayerState.PAUSED) {
+      if (typeof window.__trackVideoEvent === 'function') {
+        window.__trackVideoEvent('pause', position);
+      }
+    }
+
+    if (state === window.YT.PlayerState.ENDED) {
+      if (typeof window.__trackVideoEvent === 'function') {
+        window.__trackVideoEvent('ended', position);
+      }
+    }
+  }
+
+  function startYouTubePolling(lesson) {
+    if (youtubePollId) clearInterval(youtubePollId);
+    youtubePollId = setInterval(function() {
+      if (!youtubePlayer || typeof youtubePlayer.getCurrentTime !== 'function') return;
+      const current = youtubePlayer.getCurrentTime();
+      const delta = Math.abs(current - lastYoutubeTime);
+
+      if (lastYoutubeTime && delta > 4) {
+        if (typeof window.__trackVideoEvent === 'function') {
+          window.__trackVideoEvent('seek', current);
+        }
+      }
+
+      lastYoutubeTime = current;
+    }, 2000);
+  }
+
+  function teardownYouTubePlayer() {
+    if (youtubePollId) {
+      clearInterval(youtubePollId);
+      youtubePollId = null;
+    }
+
+    if (youtubePlayer && typeof youtubePlayer.destroy === 'function') {
+      youtubePlayer.destroy();
+    }
+
+    youtubePlayer = null;
+    lastYoutubeTime = 0;
+
+    ensureVideoIframe();
+  }
+
+  function ensureVideoIframe() {
+    const container = document.getElementById('videoPlayerContainer');
+    if (!container) return null;
+
+    let iframe = document.getElementById('videoIframe');
+    if (iframe) return iframe;
+
+    iframe = document.createElement('iframe');
+    iframe.id = 'videoIframe';
+    iframe.src = '';
+    iframe.allow = 'autoplay';
+    iframe.allowFullscreen = true;
+    container.appendChild(iframe);
+    return iframe;
+  }
+
+  function ensureYouTubeApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve();
+
+    if (!youtubeReadyPromise) {
+      youtubeReadyPromise = new Promise(function(resolve) {
+        const previous = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = function() {
+          if (typeof previous === 'function') previous();
+          resolve();
+        };
+      });
+    }
+
+    return youtubeReadyPromise;
   }
 
   window.LearningRender = {

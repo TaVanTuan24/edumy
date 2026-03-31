@@ -4,7 +4,16 @@ const { cloudinary } = require('../cloudinary');
 const Progress = require('../models/progress');
 const Note = require('../models/note');
 const User = require('../models/user');
+const UserCourseProgress = require('../models/userCourseProgress');
 const mongoose = require('mongoose');
+
+function countCourseLessons(course) {
+  if (!course || !Array.isArray(course.driveStructure)) return 0;
+  return course.driveStructure.reduce((total, section) => {
+    const items = Array.isArray(section && section.videos) ? section.videos : [];
+    return total + items.length;
+  }, 0);
+}
 
 function getEnrolledCourseIds(user) {
   if (!user || typeof user.getEnrolledCourseIdSet !== 'function') return [];
@@ -233,31 +242,115 @@ module.exports.deleteCourse = async (req, res) => {
 module.exports.updateProgress = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { video, completed } = req.body;
+    const { video, completed, lessonId } = req.body;
     const userId = req.user._id;
 
-    if (!video || typeof video !== 'string') throw new Error('Thiếu hoặc sai định dạng video URL');
+    const hasLessonId = !!lessonId;
+    const hasVideo = typeof video === 'string' && video.length > 0;
+    if (!hasVideo && !hasLessonId) throw new Error('Thiếu hoặc sai định dạng video URL');
 
-    const videoLink = video.split('?')[0];
+    const videoLink = hasVideo ? video.split('?')[0] : '';
     const courseObjectId = new mongoose.Types.ObjectId(courseId);
 
-    let progress = await Progress.findOne({ user: userId, course: courseObjectId });
-    if (!progress) {
-      progress = new Progress({ user: userId, course: courseObjectId, completedVideos: [] });
+    if (hasVideo) {
+      let progress = await Progress.findOne({ user: userId, course: courseObjectId });
+      if (!progress) {
+        progress = new Progress({ user: userId, course: courseObjectId, completedVideos: [] });
+      }
+
+      const alreadyExists = progress.completedVideos.some(v => v.split('?')[0] === videoLink);
+
+      if (completed === true || completed === 'true') {
+        if (!alreadyExists) progress.completedVideos.push(videoLink);
+      } else {
+        progress.completedVideos = progress.completedVideos.filter(v => v.split('?')[0] !== videoLink);
+      }
+
+      await progress.save();
     }
 
-    const alreadyExists = progress.completedVideos.some(v => v.split('?')[0] === videoLink);
+    if (lessonId) {
+      const progressDoc = await UserCourseProgress.findOneAndUpdate(
+        { user: userId, course: courseObjectId },
+        { $setOnInsert: { user: userId, course: courseObjectId } },
+        { new: true, upsert: true }
+      );
 
-    if (completed === true || completed === 'true') {
-      if (!alreadyExists) progress.completedVideos.push(videoLink);
-    } else {
-      progress.completedVideos = progress.completedVideos.filter(v => v.split('?')[0] !== videoLink);
+      const lessonKey = String(lessonId);
+      const hasLesson = progressDoc.completedLessons.includes(lessonKey);
+
+      if (completed === true || completed === 'true') {
+        if (!hasLesson) progressDoc.completedLessons.push(lessonKey);
+      } else if (hasLesson) {
+        progressDoc.completedLessons = progressDoc.completedLessons.filter((id) => id !== lessonKey);
+      }
+
+      if (progressDoc.lessonViews && typeof progressDoc.lessonViews.get === 'function') {
+        const current = Number(progressDoc.lessonViews.get(lessonKey) || 0);
+        progressDoc.lessonViews.set(lessonKey, current + 1);
+      } else {
+        progressDoc.lessonViews = progressDoc.lessonViews || {};
+        const current = Number(progressDoc.lessonViews[lessonKey] || 0);
+        progressDoc.lessonViews[lessonKey] = current + 1;
+      }
+
+      progressDoc.lastAccessed = new Date();
+
+      const watchDelta = Number(req.body.watchTime);
+      if (Number.isFinite(watchDelta) && watchDelta > 0) {
+        progressDoc.watchTime = Number(progressDoc.watchTime || 0) + watchDelta;
+      }
+
+      const course = await Course.findById(courseObjectId).select('driveStructure');
+      const totalLessons = countCourseLessons(course);
+      progressDoc.completionRate = totalLessons
+        ? Math.round((progressDoc.completedLessons.length / totalLessons) * 100)
+        : 0;
+
+      await progressDoc.save();
     }
-
-    await progress.save();
     res.json({ success: true });
   } catch (err) {
     console.error('[❌ Lỗi khi lưu progress]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+module.exports.saveQuizResult = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { quizId, score, total } = req.body;
+    const userId = req.user._id;
+
+    if (!quizId) {
+      return res.status(400).json({ success: false, error: 'Missing quizId' });
+    }
+
+    const courseObjectId = new mongoose.Types.ObjectId(courseId);
+    const progressDoc = await UserCourseProgress.findOneAndUpdate(
+      { user: userId, course: courseObjectId },
+      { $setOnInsert: { user: userId, course: courseObjectId } },
+      { new: true, upsert: true }
+    );
+
+    const quizKey = String(quizId);
+    const nextScore = Number(score) || 0;
+    const nextTotal = Number(total) || 0;
+    const existingIndex = progressDoc.quizResults.findIndex((entry) => String(entry.quizId) === quizKey);
+
+    if (existingIndex >= 0) {
+      progressDoc.quizResults[existingIndex].score = nextScore;
+      progressDoc.quizResults[existingIndex].total = nextTotal;
+    } else {
+      progressDoc.quizResults.push({ quizId: quizKey, score: nextScore, total: nextTotal });
+    }
+
+    progressDoc.lastAccessed = new Date();
+
+    await progressDoc.save();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Quiz Result Save Error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

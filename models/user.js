@@ -11,6 +11,11 @@ const UserSchema = new Schema({
     enrolledCourses: {
         type: [Schema.Types.Mixed],
         default: []
+    },
+    enrolledCourseIds: {
+        type: [Schema.Types.ObjectId],
+        ref: 'Course',
+        default: []
     }
 })
 
@@ -29,12 +34,18 @@ UserSchema.methods.getEnrolledCourseIdSet = function() {
 
         return null;
     }).filter(Boolean);
+    const directIds = (this.enrolledCourseIds || []).map((id) => id ? String(id) : null).filter(Boolean);
 
-    return new Set(ids);
+    return new Set(ids.concat(directIds));
 };
 
 UserSchema.methods.findEnrollment = function(courseId) {
     const target = String(courseId);
+
+    if (Array.isArray(this.enrolledCourseIds)) {
+        const match = this.enrolledCourseIds.find((entry) => String(entry) === target);
+        if (match) return { courseId: match };
+    }
 
     return (this.enrolledCourses || []).find((entry) => {
         if (!entry) return false;

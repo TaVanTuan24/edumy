@@ -14,7 +14,10 @@
 
                         <%= course.title %>
                     </button>
-                    <a class="btn btn-primary" href="/admin/courses/<%= course._id %>/editor">Edit</a>
+                    <div class="d-flex gap-2">
+                        <a class="btn btn-primary" href="/admin/courses/<%= course._id %>/editor">Edit</a>
+                        <a class="btn btn-sm btn-outline-primary" href="/admin/courses/<%= course._id %>/analytics">View</a>
+                    </div>
 
 
                 </h2>

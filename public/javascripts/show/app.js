@@ -2,6 +2,14 @@
   'use strict';
 
   let reviewsLoaded = false;
+  let watchStart = 0;
+  let activeLessonId = '';
+  let activeLessonType = '';
+  let lastSlideEventAt = 0;
+  let heartbeatId = null;
+  let lastActivityAt = Date.now();
+  const heartbeatIntervalMs = 30000;
+  const activityGraceMs = 45000;
 
   function init() {
     if (!window.LearningStore || !window.LearningRender) {
@@ -17,6 +25,9 @@
     updateProgressUI();
     initializeTabs();
     toggleNotesVisibility(false);
+    bindTrackingFlush();
+    bindActivityTracking();
+    startHeartbeat();
   }
 
   function bindEvents() {
@@ -119,9 +130,25 @@
   }
 
   function selectLesson(id) {
+    flushWatchTime();
     const deps = window.LearningStore;
     const lesson = deps.selectLesson(id);
     if (!lesson) return;
+
+    activeLessonId = String(lesson._id || '');
+    activeLessonType = String(lesson.type || '');
+    watchStart = Date.now();
+    window.__videoPlayback = window.__videoPlayback || {};
+    if (activeLessonType !== 'lecture') {
+      window.__videoPlayback.isPlaying = true;
+    }
+    if (activeLessonType === 'lecture') {
+      const url = (lesson.preview || (lesson.content && lesson.content.videoUrl)) || '';
+      if (!isYouTubeUrl(url)) {
+        trackEvent('play', lesson, null);
+        window.__videoPlayback.isPlaying = true;
+      }
+    }
 
     localStorage.setItem(deps.storageKey(deps.STORAGE_SUFFIX.lastLesson), String(lesson._id));
     localStorage.setItem(deps.storageKey(deps.STORAGE_SUFFIX.lastSection), String(lesson.sectionIndex));
@@ -140,19 +167,17 @@
 
     if (syncBackend) {
       const lesson = deps.getLessonById(lessonId);
-      const videoUrl = lesson && (lesson.preview || (lesson.content && lesson.content.videoUrl));
-      if (videoUrl) {
-        syncProgressBackend(videoUrl, completed);
-      }
+      const videoUrl = lesson && (lesson.preview || (lesson.content && lesson.content.videoUrl)) || '';
+      syncProgressBackend(videoUrl, completed, lessonId);
     }
   }
 
-  function syncProgressBackend(videoUrl, completed) {
+  function syncProgressBackend(videoUrl, completed, lessonId) {
     const course = window.LearningStore.store.course || {};
     fetch('/courses/' + String(course._id || '') + '/progress', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ video: videoUrl, completed: !!completed })
+      body: JSON.stringify({ video: videoUrl, completed: !!completed, lessonId: lessonId })
     }).catch(function(err) {
       console.error('[Progress Sync Error]', err);
     });
@@ -163,9 +188,136 @@
     if (!current) return;
 
     setLessonProgress(current._id, true, true);
+    trackEvent('completed', current, null);
     window.LearningRender.renderLessonList(window.LearningStore.store.currentSectionIndex);
     window.LearningRender.updateSidebarUI();
     updateProgressUI();
+  }
+
+  function bindTrackingFlush() {
+    window.addEventListener('beforeunload', flushWatchTime);
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState !== 'visible') {
+        flushWatchTime();
+      }
+    });
+  }
+
+  function bindActivityTracking() {
+    ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach(function(evt) {
+      document.addEventListener(evt, function() {
+        lastActivityAt = Date.now();
+      }, { passive: true });
+    });
+  }
+
+  function startHeartbeat() {
+    if (heartbeatId) {
+      clearInterval(heartbeatId);
+    }
+    heartbeatId = setInterval(heartbeatTick, heartbeatIntervalMs);
+  }
+
+  function heartbeatTick() {
+    if (!activeLessonId) return;
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastActivityAt > activityGraceMs) return;
+
+    if (activeLessonType === 'lecture') {
+      const playback = window.__videoPlayback || {};
+      if (!playback.isPlaying) return;
+    }
+
+    sendWatchTime(activeLessonId, activeLessonType, heartbeatIntervalMs);
+  }
+
+  function flushWatchTime() {
+    if (!activeLessonId || !watchStart) return;
+    const delta = Date.now() - watchStart;
+    if (delta < 2000) return;
+    sendWatchTime(activeLessonId, activeLessonType, delta);
+    watchStart = Date.now();
+  }
+
+  function trackEvent(eventType, lesson, position) {
+    const course = window.LearningStore.store.course || {};
+    if (!lesson || !course._id) return;
+
+    const payload = {
+      courseId: String(course._id),
+      lessonId: String(lesson._id || ''),
+      lessonType: String(lesson.type || ''),
+      eventType: eventType,
+      position: Number.isFinite(Number(position)) ? Number(position) : undefined
+    };
+
+    console.log('[Track Event]', payload);
+    postTrack('/track/event', payload);
+  }
+
+  function sendWatchTime(lessonId, lessonType, watchTimeMs) {
+    const course = window.LearningStore.store.course || {};
+    if (!course._id || !lessonId) return;
+
+    const payload = {
+      courseId: String(course._id),
+      lessonId: String(lessonId),
+      lessonType: String(lessonType || ''),
+      watchTime: Math.max(0, Math.round(watchTimeMs))
+    };
+
+    console.log('[Track WatchTime]', payload);
+    postTrack('/track/watch-time', payload);
+  }
+
+  function sendSlideEvent(lessonId, lessonType, slideIndex) {
+    const course = window.LearningStore.store.course || {};
+    if (!course._id || !lessonId) return;
+
+    const now = Date.now();
+    if (now - lastSlideEventAt < 800) return;
+    lastSlideEventAt = now;
+
+    const payload = {
+      courseId: String(course._id),
+      lessonId: String(lessonId),
+      lessonType: String(lessonType || 'slide'),
+      slideIndex: Number.isFinite(Number(slideIndex)) ? Number(slideIndex) : 0
+    };
+
+    console.log('[Track Slide]', payload);
+    postTrack('/track/slide', payload);
+  }
+
+  function sendQuizEvent(lessonId, lessonType, score, total, attempts) {
+    const course = window.LearningStore.store.course || {};
+    if (!course._id || !lessonId) return;
+
+    const payload = {
+      courseId: String(course._id),
+      lessonId: String(lessonId),
+      lessonType: String(lessonType || 'quiz'),
+      score: Number(score) || 0,
+      total: Number(total) || 0,
+      attempts: Number(attempts) || 1
+    };
+
+    console.log('[Track Quiz]', payload);
+    postTrack('/track/quiz', payload);
+  }
+
+  function postTrack(url, payload) {
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(function(err) {
+      console.error('[Track Error]', err);
+    });
+  }
+
+  function isYouTubeUrl(url) {
+    return /(?:youtube\.com|youtu\.be)/i.test(String(url || ''));
   }
 
   function updateProgressUI() {
@@ -361,4 +513,36 @@
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  window.__trackSlideChange = function(lessonId, lessonType, slideIndex) {
+    sendSlideEvent(lessonId, lessonType, slideIndex);
+  };
+
+  window.__trackQuizResult = function(lessonId, lessonType, scoreValue, totalValue, attempts) {
+    sendQuizEvent(lessonId, lessonType, scoreValue, totalValue, attempts);
+  };
+
+  window.__trackVideoEvent = function(eventType, position) {
+    const deps = window.LearningStore;
+    const lesson = deps.store.currentLesson;
+    if (!lesson) return;
+
+    if (eventType === 'play') {
+      watchStart = Date.now();
+      window.__videoPlayback = window.__videoPlayback || {};
+      window.__videoPlayback.isPlaying = true;
+    }
+
+    if (eventType === 'pause' || eventType === 'seek') {
+      flushWatchTime();
+    }
+
+    if (eventType === 'ended') {
+      flushWatchTime();
+      window.__videoPlayback = window.__videoPlayback || {};
+      window.__videoPlayback.isPlaying = false;
+    }
+
+    trackEvent(eventType, lesson, position);
+  };
 })();

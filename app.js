@@ -22,6 +22,7 @@ const adminRoutes = require('./routes/admin');
 const apiAdminRoutes = require('./routes/api/admin');
 const aiRoutes = require('./routes/ai');
 const videoModelsRoutes = require('./routes/videoModels');
+const trackRoutes = require('./routes/track');
 const Course = require('./models/course');
 const { content } = require('googleapis/build/src/apis/content');
 const mongoStore = require('connect-mongo');
@@ -77,6 +78,7 @@ const scriptSrcUrls = [
     "https://kit.fontawesome.com/",
     "https://cdnjs.cloudflare.com/",
     "https://cdn.jsdelivr.net",
+    "https://www.youtube.com"
 ];
 const styleSrcUrls = [
     "https://kit-free.fontawesome.com/",
@@ -96,6 +98,12 @@ app.use(
             scriptSrcAttr: ["'self'", "'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls],
             workerSrc: ["'self'", "blob:"],
+            frameSrc: [
+                "'self'",
+                "https://drive.google.com/",
+                "https://www.youtube.com",
+                "https://www.youtube-nocookie.com"
+            ],
             objectSrc: [],
             imgSrc: [
                 "'self'",
@@ -198,6 +206,7 @@ app.use('/admin', adminRoutes);
 app.use('/api/admin', apiAdminRoutes);
 app.use('/ai', aiRoutes);
 app.use('/video-models', videoModelsRoutes);
+app.use('/track', trackRoutes);
 
 app.get('/', (req, res) => {
     res.render('home')

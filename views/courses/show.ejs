@@ -46,9 +46,9 @@
 
             <% if ((currentUser && course.author.equals(currentUser._id)) || currentUser._id == '675da20f3dfdaa4f789ffa00') { %>
               <div class="card-body">
-                <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
+                <!-- <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
                   <button class="btn btn-danger">Delete</button>
-                </form>
+                </form> -->
               </div>
             <% } %>
           </div>
@@ -142,6 +142,7 @@
   const sectionNotes = window.sectionNotes;
   const hasCourseUpdate = <%- JSON.stringify(!!hasCourseUpdate) %>;
 </script>
+<script src="https://www.youtube.com/iframe_api"></script>
 <script src="/javascripts/show/store.js" defer></script>
 <script src="/javascripts/show/render.js" defer></script>
 <script src="/javascripts/show/app.js" defer></script>

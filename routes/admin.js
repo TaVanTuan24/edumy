@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Course = require('../models/course');
+const User = require('../models/user');
+const UserCourseProgress = require('../models/userCourseProgress');
 
 function normalizeItemType(rawType, fallbackType) {
     if (typeof rawType === 'string') {
@@ -66,6 +68,47 @@ function normalizeSlidesPayload(slides) {
     })
 }
 
+function countTotalLessons(course) {
+    if (!course || !Array.isArray(course.driveStructure)) return 0;
+    return course.driveStructure.reduce((total, section) => {
+        const items = Array.isArray(section && section.videos) ? section.videos : [];
+        return total + items.length;
+    }, 0);
+}
+
+function buildLessonTitleMap(course) {
+    const map = new Map();
+    if (!course || !Array.isArray(course.driveStructure)) return map;
+
+    course.driveStructure.forEach((section) => {
+        const items = Array.isArray(section && section.videos) ? section.videos : [];
+        items.forEach((item) => {
+            if (!item || !item._id) return;
+            map.set(String(item._id), item.name || item.title || 'Lesson');
+        });
+    });
+
+    return map;
+}
+
+function averageQuizPercent(quizResults) {
+    const results = Array.isArray(quizResults) ? quizResults : [];
+    let totalScore = 0;
+    let totalPossible = 0;
+
+    results.forEach((entry) => {
+        const score = Number(entry && entry.score) || 0;
+        const total = Number(entry && entry.total) || 0;
+        if (total > 0) {
+            totalScore += score;
+            totalPossible += total;
+        }
+    });
+
+    if (!totalPossible) return 0;
+    return Math.round((totalScore / totalPossible) * 100);
+}
+
 router.get('/', async (req, res) => {
 
     const courses = await Course.find({});
@@ -95,6 +138,172 @@ router.get('/courses/:id/editor', async (req, res) => {
     res.render('admin/courseEditor', { course })
 
 })
+
+router.get('/courses/:id/analytics', async (req, res) => {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+        return res.status(404).send('Course not found');
+    }
+
+    const courseId = course._id;
+    const users = await User.find({
+        $or: [
+            { enrolledCourseIds: courseId },
+            { enrolledCourses: courseId },
+            { enrolledCourses: { $elemMatch: { courseId: courseId } } }
+        ]
+    });
+
+    const progressDocs = await UserCourseProgress.find({ course: courseId }).lean();
+    const progressByUser = new Map(progressDocs.map((doc) => [String(doc.user), doc]));
+
+    const totalLessons = countTotalLessons(course);
+    const completionRates = users.map((user) => {
+        const progress = progressByUser.get(String(user._id));
+        const completed = progress && Array.isArray(progress.completedLessons)
+            ? progress.completedLessons.length
+            : 0;
+        return totalLessons ? Math.round((completed / totalLessons) * 100) : 0;
+    });
+
+    const totalStudents = users.length;
+    const avgCompletion = completionRates.length
+        ? Math.round(completionRates.reduce((a, b) => a + b, 0) / completionRates.length)
+        : 0;
+
+    let totalQuizScore = 0;
+    let totalQuizPossible = 0;
+    const quizBuckets = new Map();
+
+    progressDocs.forEach((doc) => {
+        (doc.quizResults || []).forEach((entry) => {
+            const score = Number(entry && entry.score) || 0;
+            const total = Number(entry && entry.total) || 0;
+            const quizId = String(entry && entry.quizId || '');
+
+            if (total > 0) {
+                totalQuizScore += score;
+                totalQuizPossible += total;
+            }
+
+            if (!quizId || total <= 0) return;
+            const current = quizBuckets.get(quizId) || { totalScore: 0, totalPossible: 0 };
+            current.totalScore += score;
+            current.totalPossible += total;
+            quizBuckets.set(quizId, current);
+        });
+    });
+
+    const avgQuizScore = totalQuizPossible
+        ? Math.round((totalQuizScore / totalQuizPossible) * 100)
+        : 0;
+
+    const quizLabels = Array.from(quizBuckets.keys());
+    const quizAverages = quizLabels.map((key) => {
+        const bucket = quizBuckets.get(key);
+        if (!bucket || !bucket.totalPossible) return 0;
+        return Math.round((bucket.totalScore / bucket.totalPossible) * 100);
+    });
+
+    const now = Date.now();
+    const activeWindowMs = 7 * 24 * 60 * 60 * 1000;
+    const activeUsers = progressDocs.filter((doc) => {
+        const last = doc.lastAccessed ? new Date(doc.lastAccessed).getTime() : 0;
+        return last && now - last <= activeWindowMs;
+    }).length;
+
+    const progressBuckets = [0, 0, 0, 0];
+    completionRates.forEach((rate) => {
+        if (rate < 25) progressBuckets[0] += 1;
+        else if (rate < 50) progressBuckets[1] += 1;
+        else if (rate < 75) progressBuckets[2] += 1;
+        else progressBuckets[3] += 1;
+    });
+
+    const studentRows = users.map((user) => {
+        const progress = progressByUser.get(String(user._id));
+        const completed = progress && Array.isArray(progress.completedLessons)
+            ? progress.completedLessons.length
+            : 0;
+        const progressRate = totalLessons ? Math.round((completed / totalLessons) * 100) : 0;
+        const avgScore = averageQuizPercent(progress && progress.quizResults);
+        const status = progressRate >= 80 ? 'Active' : 'At Risk';
+
+        return {
+            id: String(user._id),
+            name: user.username || user.email || 'User',
+            progressRate,
+            avgScore,
+            status
+        };
+    });
+
+    const insights = [];
+    if (avgCompletion < 50) insights.push('Many students are dropping early.');
+    if (avgQuizScore < 50) insights.push('Quiz difficulty may be too high.');
+    if (activeUsers < totalStudents * 0.3) insights.push('Low engagement detected.');
+
+    const lessonTitleMap = buildLessonTitleMap(course);
+    const lessonCounts = new Map();
+    progressDocs.forEach((doc) => {
+        if (!doc.lessonViews) return;
+        const entries = doc.lessonViews instanceof Map
+            ? Array.from(doc.lessonViews.entries())
+            : Object.entries(doc.lessonViews);
+        entries.forEach(([lessonId, count]) => {
+            const current = Number(lessonCounts.get(lessonId) || 0);
+            lessonCounts.set(lessonId, current + Number(count || 0));
+        });
+    });
+
+    const topLessons = Array.from(lessonCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([lessonId, count]) => ({
+            lessonId,
+            title: lessonTitleMap.get(String(lessonId)) || 'Lesson',
+            count
+        }));
+
+    res.render('admin/course-analytics', {
+        course,
+        users,
+        analytics: {
+            totalStudents,
+            avgCompletion,
+            avgQuizScore,
+            activeUsers,
+            progressBuckets,
+            quizLabels,
+            quizAverages,
+            studentRows,
+            insights,
+            topLessons
+        }
+    });
+});
+
+router.get('/courses/:courseId/user/:userId', async (req, res) => {
+    const { courseId, userId } = req.params;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+        return res.status(404).send('Course not found');
+    }
+
+    const progress = await UserCourseProgress.findOne({ user: userId, course: courseId });
+    const totalLessons = countTotalLessons(course);
+    const completed = progress ? progress.completedLessons.length : 0;
+    const quizResults = progress ? progress.quizResults : [];
+
+    res.render('admin/user-progress', {
+        course,
+        progress,
+        totalLessons,
+        completed,
+        quizResults
+    });
+});
 
 router.get('/courses/:id/slide-editor', async (req, res) => {
     const course = await Course.findById(req.params.id)

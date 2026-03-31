@@ -1,0 +1,162 @@
+<% layout('/layouts/boilerplate')%>
+
+<div class="analytics-header mb-3">
+  <div>
+    <h2 class="mb-1">Course Analytics</h2>
+    <p class="text-muted mb-0"><%= course.title %> · <%= course.description || 'No description available.' %></p>
+  </div>
+  <a class="btn btn-outline-secondary" href="/admin">Back to Course Manager</a>
+</div>
+
+<div class="analytics-grid">
+  <div class="stat-card">
+    <h6>Total Students</h6>
+    <div class="stat-value"><%= analytics.totalStudents %></div>
+  </div>
+  <div class="stat-card">
+    <h6>Completion Rate</h6>
+    <div class="stat-value"><%= analytics.avgCompletion %>%</div>
+  </div>
+  <div class="stat-card">
+    <h6>Average Quiz Score</h6>
+    <div class="stat-value"><%= analytics.avgQuizScore %>%</div>
+  </div>
+  <div class="stat-card">
+    <h6>Active Users (7d)</h6>
+    <div class="stat-value"><%= analytics.activeUsers %></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <h5 class="mb-0">Progress Distribution</h5>
+      <span class="text-muted">Completion buckets</span>
+    </div>
+    <canvas id="progressChart" height="160"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <h5 class="mb-0">Quiz Performance</h5>
+      <span class="text-muted">Average score by quiz</span>
+    </div>
+    <canvas id="quizChart" height="160"></canvas>
+  </div>
+
+  <div class="insights-card">
+    <h5 class="mb-3">Insights</h5>
+    <% if (analytics.insights.length) { %>
+      <% analytics.insights.forEach(i => { %>
+        <p class="insight-item">⚠️ <%= i %></p>
+      <% }) %>
+    <% } else { %>
+      <p class="text-muted mb-0">No major risks detected.</p>
+    <% } %>
+  </div>
+
+  <div class="insights-card">
+    <h5 class="mb-3">Top Lessons</h5>
+    <% if (analytics.topLessons.length) { %>
+      <ul class="list-group">
+        <% analytics.topLessons.forEach(item => { %>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><%= item.title %></span>
+            <span class="badge bg-primary">Views: <%= item.count %></span>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="text-muted mb-0">No lesson engagement data yet.</p>
+    <% } %>
+  </div>
+
+  <div class="student-table">
+    <div class="table-header">
+      <h5 class="mb-0">Student Progress</h5>
+      <span class="text-muted">Click a student to view details</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Progress</th>
+            <th>Avg Score</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% analytics.studentRows.forEach(row => { %>
+            <tr>
+              <td><%= row.name %></td>
+              <td><%= row.progressRate %>%</td>
+              <td><%= row.avgScore %>%</td>
+              <td>
+                <span class="badge <%= row.status === 'Active' ? 'bg-success' : 'bg-warning text-dark' %>"><%= row.status %></span>
+              </td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" href="/admin/courses/<%= course._id %>/user/<%= row.id %>">View</a>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.__ANALYTICS__ = <%- JSON.stringify({
+    progressBuckets: analytics.progressBuckets,
+    quizLabels: analytics.quizLabels,
+    quizAverages: analytics.quizAverages
+  }) %>;
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  (function() {
+    const data = window.__ANALYTICS__ || {};
+
+    const progressCtx = document.getElementById('progressChart');
+    if (progressCtx) {
+      new Chart(progressCtx, {
+        type: 'bar',
+        data: {
+          labels: ['0-25%', '25-50%', '50-75%', '75-100%'],
+          datasets: [{
+            label: 'Students',
+            data: data.progressBuckets || [0, 0, 0, 0],
+            backgroundColor: '#4f46e5'
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
+      });
+    }
+
+    const quizCtx = document.getElementById('quizChart');
+    if (quizCtx) {
+      new Chart(quizCtx, {
+        type: 'line',
+        data: {
+          labels: data.quizLabels || [],
+          datasets: [{
+            label: 'Average Score %',
+            data: data.quizAverages || [],
+            borderColor: '#0ea5e9',
+            backgroundColor: 'rgba(14, 165, 233, 0.15)',
+            tension: 0.35,
+            fill: true
+          }]
+        },
+        options: {
+          scales: {
+            y: { beginAtZero: true, max: 100 }
+          }
+        }
+      });
+    }
+  })();
+</script>

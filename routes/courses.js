@@ -25,6 +25,7 @@ router.get('/:id/edit', isLoggedIn, catchAsync(course.renderEditForm));
 
 router.post('/:courseId/progress', isLoggedIn, catchAsync(course.updateProgress));
 router.post('/:courseId/notes', isLoggedIn, catchAsync(course.saveNote));
+router.post('/:courseId/quiz-results', isLoggedIn, catchAsync(course.saveQuizResult));
 router.post('/:id/review', isLoggedIn, catchAsync(course.createReview));
 router.get('/:id/reviews', isLoggedIn, catchAsync(course.getReviews));
 
