@@ -15,7 +15,8 @@
         drag: null,
         resize: null,
         activePointerId: null,
-        toastTimer: null
+        toastTimer: null,
+        dragSlideId: null
     };
 
     const els = {
@@ -46,8 +47,11 @@
         propWidth: document.getElementById('propWidth'),
         propHeight: document.getElementById('propHeight'),
         deleteElementBtn: document.getElementById('deleteElementBtn'),
+        slideThemeSelect: document.getElementById('slideThemeSelect'),
         previewCanvas: document.getElementById('previewCanvas'),
-        previewModal: document.getElementById('previewModal')
+        previewModal: document.getElementById('previewModal'),
+        guideX: null,
+        guideY: null
     };
 
     document.addEventListener('DOMContentLoaded', init);
@@ -91,8 +95,20 @@
         }
         els.previewBtn.addEventListener('click', openPreview);
         els.deleteElementBtn.addEventListener('click', deleteSelectedElement);
+        if (els.slideThemeSelect) {
+            els.slideThemeSelect.addEventListener('change', function() {
+                const slide = getActiveSlide();
+                if (!slide) return;
+                slide.theme = String(els.slideThemeSelect.value || 'light');
+                renderCanvas();
+                renderSlidesList();
+            });
+        }
 
         els.slidesList.addEventListener('click', onSlidesListClick);
+        els.slidesList.addEventListener('dragstart', onSlidesDragStart);
+        els.slidesList.addEventListener('dragover', onSlidesDragOver);
+        els.slidesList.addEventListener('drop', onSlidesDrop);
         els.layersList.addEventListener('click', onLayersListClick);
         els.canvas.addEventListener('click', onCanvasClick);
         els.canvas.addEventListener('dblclick', onCanvasDoubleClick);
@@ -136,11 +152,51 @@
             return;
         }
 
+        const duplicateBtn = event.target.closest('.duplicate-slide-btn');
+        if (duplicateBtn) {
+            event.stopPropagation();
+            duplicateSlide(duplicateBtn.dataset.slideId);
+            return;
+        }
+
         const item = event.target.closest('[data-slide-id]');
         if (!item) return;
 
         state.activeSlideId = item.dataset.slideId;
         state.selectedElementId = null;
+        renderAll();
+    }
+
+    function onSlidesDragStart(event) {
+        if (event.target.closest('button')) return;
+        const item = event.target.closest('[data-slide-id]');
+        if (!item) return;
+        state.dragSlideId = item.dataset.slideId;
+        event.dataTransfer.effectAllowed = 'move';
+    }
+
+    function onSlidesDragOver(event) {
+        const item = event.target.closest('[data-slide-id]');
+        if (!item || !state.dragSlideId) return;
+        event.preventDefault();
+        document.querySelectorAll('.se-list-item').forEach((node) => node.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+    }
+
+    function onSlidesDrop(event) {
+        const item = event.target.closest('[data-slide-id]');
+        if (!item || !state.dragSlideId) return;
+        event.preventDefault();
+
+        const fromIndex = state.slides.findIndex((slide) => slide.id === state.dragSlideId);
+        const toIndex = state.slides.findIndex((slide) => slide.id === item.dataset.slideId);
+        state.dragSlideId = null;
+        document.querySelectorAll('.se-list-item').forEach((node) => node.classList.remove('drag-over'));
+
+        if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+        const moved = state.slides.splice(fromIndex, 1)[0];
+        state.slides.splice(toIndex, 0, moved);
+        state.activeSlideId = moved.id;
         renderAll();
     }
 
@@ -260,8 +316,13 @@
             if (!item) return;
 
             const point = canvasPoint(event);
-            item.x = clamp(Math.round(point.x - state.drag.offsetX), 0, BASE_WIDTH - item.width);
-            item.y = clamp(Math.round(point.y - state.drag.offsetY), 0, BASE_HEIGHT - item.height);
+            const proposedX = clamp(Math.round(point.x - state.drag.offsetX), 0, BASE_WIDTH - item.width);
+            const proposedY = clamp(Math.round(point.y - state.drag.offsetY), 0, BASE_HEIGHT - item.height);
+            const snapped = applySnap(item, slide, proposedX, proposedY);
+
+            item.x = snapped.x;
+            item.y = snapped.y;
+            updateGuides(snapped.guides);
             syncElementNode(item);
             renderProperties();
             return;
@@ -312,6 +373,7 @@
         state.drag = null;
         state.resize = null;
         state.activePointerId = null;
+        updateGuides(null);
         // Repaint once at interaction end to keep handles and controls aligned.
         renderCanvas();
     }
@@ -351,7 +413,7 @@
     }
 
     function handleAddImage() {
-        const fromUrl = window.prompt('Paste image URL (leave empty to upload from your device):', '');
+        const fromUrl = window.prompt('Enter image URL:', '');
 
         if (fromUrl && fromUrl.trim()) {
             addImageElement(fromUrl.trim());
@@ -472,6 +534,23 @@
         renderAll();
     }
 
+    function duplicateSlide(slideId) {
+        const index = state.slides.findIndex((slide) => slide.id === slideId);
+        if (index < 0) return;
+        const base = state.slides[index];
+        const cloned = JSON.parse(JSON.stringify(base));
+        cloned.id = uid('slide');
+        cloned.title = (base.title || 'Slide') + ' (Copy)';
+        cloned.elements = (cloned.elements || []).map((el) => ({
+            ...el,
+            id: uid('el')
+        }));
+        state.slides.splice(index + 1, 0, cloned);
+        state.activeSlideId = cloned.id;
+        state.selectedElementId = null;
+        renderAll();
+    }
+
     function updateFromProperties() {
         const selected = getSelectedElement();
         if (!selected) return;
@@ -580,6 +659,8 @@
         if (!slide) return;
 
         els.previewCanvas.innerHTML = '';
+        applySlideTheme(slide, els.previewCanvas);
+        applySlideTheme(slide, els.previewCanvas);
 
         slide.elements.forEach(function(element) {
             const node = document.createElement('div');
@@ -590,23 +671,13 @@
             node.style.height = element.height + 'px';
             node.style.overflow = 'hidden';
 
-            if (element.type === 'text') {
-                node.style.fontSize = (element.styles.fontSize || 28) + 'px';
-                node.style.color = element.styles.color || '#1c1d1f';
-                node.style.fontWeight = String(element.styles.fontWeight || 400);
-                node.style.textAlign = element.styles.textAlign || 'left';
-                node.style.whiteSpace = 'pre-wrap';
-                node.style.lineHeight = '1.25';
-                node.textContent = element.content || '';
-            } else {
-                const image = document.createElement('img');
-                image.src = element.src || '';
-                image.alt = '';
-                image.style.width = '100%';
-                image.style.height = '100%';
-                image.style.objectFit = 'cover';
-                node.appendChild(image);
-            }
+            node.style.fontSize = (element.styles.fontSize || 28) + 'px';
+            node.style.color = element.styles.color || '#1c1d1f';
+            node.style.fontWeight = String(element.styles.fontWeight || 400);
+            node.style.textAlign = element.styles.textAlign || 'left';
+            node.style.whiteSpace = 'pre-wrap';
+            node.style.lineHeight = '1.25';
+            node.textContent = element.content || '';
 
             els.previewCanvas.appendChild(node);
         });
@@ -628,19 +699,46 @@
         els.slidesList.innerHTML = state.slides.map(function(slide, index) {
             const isActive = slide.id === activeId ? 'active' : '';
             return '' +
-                '<li class="se-list-item ' + isActive + '" data-slide-id="' + slide.id + '">' +
+                '<li class="se-list-item ' + isActive + '" data-slide-id="' + slide.id + '" draggable="true">' +
                     '<div>' +
                         '<strong>' + escapeHtml(slide.title || ('Slide ' + (index + 1))) + '</strong>' +
                         '<div class="se-list-item-meta">' + slide.elements.length + ' elements</div>' +
+                        renderSlideThumbnail(slide) +
                     '</div>' +
                     '<div class="se-list-actions">' +
-                        '<span class="badge text-bg-light border">' + (index + 1) + '</span>' +
+                        '<button class="duplicate-slide-btn" data-slide-id="' + slide.id + '" type="button" aria-label="Duplicate slide">' +
+                            '<i class="fa-regular fa-copy"></i>' +
+                        '</button>' +
                         '<button class="delete-slide-btn" data-slide-id="' + slide.id + '" type="button" aria-label="Delete slide">' +
                             '<i class="fa-regular fa-trash-can"></i>' +
                         '</button>' +
                     '</div>' +
                 '</li>';
         }).join('');
+    }
+
+    function renderSlideThumbnail(slide) {
+        const thumbWidth = 160;
+        const thumbHeight = 90;
+        const scaleX = thumbWidth / BASE_WIDTH;
+        const scaleY = thumbHeight / BASE_HEIGHT;
+
+        const elementsHtml = (slide.elements || []).map(function(el) {
+            const left = Math.round((el.x || 0) * scaleX);
+            const top = Math.round((el.y || 0) * scaleY);
+            const fontSize = Math.max(8, Math.round((el.styles && el.styles.fontSize ? el.styles.fontSize : el.fontSize || 18) * scaleX));
+
+            if (el.type === 'image') {
+                const width = Math.max(12, Math.round((el.width || 120) * scaleX));
+                const height = Math.max(10, Math.round((el.height || 80) * scaleY));
+                return '<div class="se-thumb-element se-thumb-image" style="left:' + left + 'px;top:' + top + 'px;width:' + width + 'px;height:' + height + 'px;"></div>';
+            }
+
+            return '<div class="se-thumb-element se-thumb-text" style="left:' + left + 'px;top:' + top + 'px;font-size:' + fontSize + 'px;">' + escapeHtml(el.content || el.text || '') + '</div>';
+        }).join('');
+
+        const palette = getThemePalette(slide && slide.theme);
+        return '<div class="se-thumb-canvas" style="background:' + palette.bg + ';color:' + palette.text + ';" aria-hidden="true">' + elementsHtml + '</div>';
     }
 
     function renderLayersList() {
@@ -671,22 +769,19 @@
             return;
         }
 
+        applySlideTheme(slide, els.canvas);
+
         els.canvas.innerHTML = '';
+        ensureGuides();
         slide.elements.forEach(function(item) {
             const node = document.createElement('div');
-            node.className = 'slide-element ' + (item.type === 'text' ? 'text-element' : 'image-element') + (item.id === state.selectedElementId ? ' selected' : '');
+            node.className = 'slide-element ' + (item.type === 'image' ? 'image-element' : 'text-element') + (item.id === state.selectedElementId ? ' selected' : '');
             node.dataset.elementId = item.id;
             node.dataset.type = item.type;
 
             syncElementNode(item, node);
 
-            if (item.type === 'text') {
-                node.style.fontSize = (item.styles.fontSize || 28) + 'px';
-                node.style.color = item.styles.color || '#1c1d1f';
-                node.style.fontWeight = String(item.styles.fontWeight || 400);
-                node.style.textAlign = item.styles.textAlign || 'left';
-                node.textContent = item.content || 'Text';
-            } else {
+            if (item.type === 'image') {
                 const image = document.createElement('img');
                 image.src = item.src || '';
                 image.alt = 'Slide image';
@@ -695,6 +790,12 @@
                     console.error('[SlideEditor] Invalid image URL:', item.src || '');
                 }, { once: true });
                 node.appendChild(image);
+            } else {
+                node.style.fontSize = (item.styles.fontSize || 28) + 'px';
+                node.style.color = item.styles.color || '#1c1d1f';
+                node.style.fontWeight = String(item.styles.fontWeight || 400);
+                node.style.textAlign = item.styles.textAlign || 'left';
+                node.textContent = item.content || 'Text';
             }
 
             node.insertAdjacentHTML('beforeend', resizeHandles());
@@ -703,7 +804,7 @@
             deleteButton.className = 'delete-element-btn';
             deleteButton.type = 'button';
             deleteButton.dataset.elementId = item.id;
-            deleteButton.setAttribute('aria-label', 'Delete element');
+        
             deleteButton.innerHTML = '<i class="fa-regular fa-trash-can"></i>';
             node.appendChild(deleteButton);
 
@@ -713,6 +814,10 @@
 
     function renderProperties() {
         const selected = getSelectedElement();
+        const activeSlide = getActiveSlide();
+        if (els.slideThemeSelect && activeSlide) {
+            els.slideThemeSelect.value = String(activeSlide.theme || 'light');
+        }
         if (!selected) {
             els.emptyProperties.classList.remove('d-none');
             els.propertiesPanel.classList.add('d-none');
@@ -772,6 +877,8 @@
         const safeSlide = {
             id: slide.id || uid('slide'),
             title: slide.title || ('Slide ' + (index + 1)),
+            layout: slide.layout || 'left-text',
+            theme: slide.theme || 'light',
             elements: Array.isArray(slide.elements) ? slide.elements : []
         };
 
@@ -827,6 +934,8 @@
         return (Array.isArray(slides) ? slides : []).map(function(slide, slideIndex) {
             return {
                 id: slide.id || ('slide-' + (slideIndex + 1)),
+                layout: slide.layout || 'left-text',
+                theme: slide.theme || 'light',
                 elements: (Array.isArray(slide.elements) ? slide.elements : []).map(function(element, elementIndex) {
                     const isImage = element.type === 'image';
                     const textAlign = element.styles && element.styles.textAlign;
@@ -893,6 +1002,104 @@
         return Math.max(min, Math.min(max, value));
     }
 
+    function ensureGuides() {
+        if (!els.canvas) return;
+        if (!els.guideX) {
+            els.guideX = document.createElement('div');
+            els.guideX.className = 'se-guide-line se-guide-line--v';
+        }
+        if (!els.guideY) {
+            els.guideY = document.createElement('div');
+            els.guideY.className = 'se-guide-line se-guide-line--h';
+        }
+        els.guideX.style.display = 'none';
+        els.guideY.style.display = 'none';
+        els.canvas.appendChild(els.guideX);
+        els.canvas.appendChild(els.guideY);
+    }
+
+    function updateGuides(guides) {
+        if (!els.guideX || !els.guideY) return;
+        if (!guides) {
+            els.guideX.style.display = 'none';
+            els.guideY.style.display = 'none';
+            return;
+        }
+
+        if (typeof guides.x === 'number') {
+            els.guideX.style.display = 'block';
+            els.guideX.style.left = guides.x + 'px';
+        } else {
+            els.guideX.style.display = 'none';
+        }
+
+        if (typeof guides.y === 'number') {
+            els.guideY.style.display = 'block';
+            els.guideY.style.top = guides.y + 'px';
+        } else {
+            els.guideY.style.display = 'none';
+        }
+    }
+
+    function applySnap(item, slide, proposedX, proposedY) {
+        const threshold = 8;
+        const guides = { x: null, y: null };
+        let snapX = proposedX;
+        let snapY = proposedY;
+
+        const centerX = BASE_WIDTH / 2;
+        const centerY = BASE_HEIGHT / 2;
+        const itemCenterX = proposedX + item.width / 2;
+        const itemCenterY = proposedY + item.height / 2;
+
+        if (Math.abs(itemCenterX - centerX) < threshold) {
+            snapX = Math.round(centerX - item.width / 2);
+            guides.x = Math.round(centerX);
+        }
+        if (Math.abs(itemCenterY - centerY) < threshold) {
+            snapY = Math.round(centerY - item.height / 2);
+            guides.y = Math.round(centerY);
+        }
+
+        (slide.elements || []).forEach((other) => {
+            if (other.id === item.id) return;
+            const otherLeft = other.x;
+            const otherRight = other.x + other.width;
+            const otherCenter = other.x + other.width / 2;
+            const otherTop = other.y;
+            const otherBottom = other.y + other.height;
+            const otherMiddle = other.y + other.height / 2;
+
+            if (Math.abs(proposedX - otherLeft) < threshold) {
+                snapX = Math.round(otherLeft);
+                guides.x = Math.round(otherLeft);
+            } else if (Math.abs(proposedX + item.width - otherRight) < threshold) {
+                snapX = Math.round(otherRight - item.width);
+                guides.x = Math.round(otherRight);
+            } else if (Math.abs(itemCenterX - otherCenter) < threshold) {
+                snapX = Math.round(otherCenter - item.width / 2);
+                guides.x = Math.round(otherCenter);
+            }
+
+            if (Math.abs(proposedY - otherTop) < threshold) {
+                snapY = Math.round(otherTop);
+                guides.y = Math.round(otherTop);
+            } else if (Math.abs(proposedY + item.height - otherBottom) < threshold) {
+                snapY = Math.round(otherBottom - item.height);
+                guides.y = Math.round(otherBottom);
+            } else if (Math.abs(itemCenterY - otherMiddle) < threshold) {
+                snapY = Math.round(otherMiddle - item.height / 2);
+                guides.y = Math.round(otherMiddle);
+            }
+        });
+
+        return {
+            x: clamp(snapX, 0, BASE_WIDTH - item.width),
+            y: clamp(snapY, 0, BASE_HEIGHT - item.height),
+            guides: guides
+        };
+    }
+
     function escapeHtml(value) {
         return String(value)
             .replace(/&/g, '&amp;')
@@ -929,5 +1136,23 @@
         state.toastTimer = window.setTimeout(function() {
             toast.classList.remove('show');
         }, 1800);
+    }
+
+    function applySlideTheme(slide, target) {
+        if (!target) return;
+        const theme = String(slide && slide.theme || 'light').toLowerCase();
+        const palette = getThemePalette(theme);
+        target.style.background = palette.bg;
+    }
+
+    function getThemePalette(theme) {
+        const themeMap = {
+            light: { bg: '#ffffff', text: '#1c1d1f' },
+            dark: { bg: '#1c1d1f', text: '#ffffff' },
+            purple: { bg: '#f3e8ff', text: '#4c1d95' },
+            blue: { bg: '#e0f2fe', text: '#1d4ed8' }
+        };
+        const key = String(theme || 'light').toLowerCase();
+        return themeMap[key] || themeMap.light;
     }
 })();

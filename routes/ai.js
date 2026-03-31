@@ -222,9 +222,9 @@ router.post("/generate-slide", async (req, res) => {
         const safeStyle = ['professional', 'minimal'].includes(style) ? style : 'professional';
         const trimmedPrompt = userPrompt.slice(0, 1000);
 
-        const prompt = `You are a professional presentation designer (like Canva / PowerPoint AI).\n\nYour job is NOT to generate text.\nYour job is to DESIGN slides visually.\n\nGOAL:\nGenerate ${count} beautiful slides.\nTopic: ${trimmedPrompt}\n\nEach slide must:\n- Have layout\n- Have spacing\n- Have hierarchy\n- Use full canvas (1003x563)\n\nDESIGN SYSTEM:\nEach slide MUST choose ONE layout:\n1) TITLE + BULLETS (LEFT)\n2) TITLE + IMAGE (RIGHT)\n3) FULL CENTER TITLE (INTRO SLIDE)\n4) SPLIT 2 COLUMNS\nDo NOT use the same layout for all slides.\n\nCANVAS:\nWidth: 1003\nHeight: 563\n\nELEMENT RULES:\nEach slide MUST have:\n- 1 Title\n- 2-4 content elements\n- Optional image\n\nLAYOUT TEMPLATES:\nLAYOUT 1: LEFT TEXT\nTitle: x 120-200, y 70\nBullets: x 140, y 220/280/340/400\n\nLAYOUT 2: LEFT TEXT + RIGHT IMAGE\nTitle: x 120, y 80\nText: x 140, y 220/280/340\nImage: x 620-700, y 180-250, width 280-320\n\nLAYOUT 3: CENTER INTRO\nTitle: x 200-300, y 200, fontSize 48\nSubtitle: x 250, y 300, fontSize 24\n\nLAYOUT 4: TWO COLUMNS\nTitle: x 200, y 60\nLeft: x 120, y 200/260\nRight: x 550, y 200/260\n\nCONTENT RULES:\n- Keep text SHORT (max 8 words per line)\n- Use bullet style: "• something"\n- Avoid long paragraphs\n\nIMAGE RULE:\nUse: https://source.unsplash.com/400x300/?${trimmedPrompt}\n\nOUTPUT FORMAT (STRICT JSON):\n{\n  "slides": [\n    {\n      "id": "slide-1",\n      "elements": [\n        {\n          "id": "el-1",\n          "type": "text",\n          "x": 200,\n          "y": 80,\n          "text": "Title",\n          "fontSize": 42,\n          "color": "#1c1d1f",\n          "align": "center",\n          "bold": true\n        }\n      ]\n    }\n  ]\n}\n\nFORBIDDEN:\n- DO NOT stack elements\n- DO NOT reuse same y\n- DO NOT return 1 element slide\n- DO NOT output markdown\n\nRETURN JSON ONLY`;
+        const prompt = `You are a professional presentation designer (like Canva / PowerPoint AI).\n\nYour job is NOT to generate text.\nYour job is to DESIGN slides visually.\n\nGOAL:\nGenerate ${count} BEAUTIFUL slides.\nTopic: ${trimmedPrompt}\n\nEach slide must:\n- Have layout\n- Have spacing\n- Have hierarchy\n- Use full canvas (1003x563)\n\nDESIGN SYSTEM:\nEach slide MUST choose ONE layout:\n1) left-text\n2) center-title\n3) two-columns\nDo NOT use the same layout for all slides.\n\nCANVAS:\nWidth: 1003\nHeight: 563\n\nELEMENT RULES:\nEach slide MUST have:\n- 1 Title\n- 2-4 content elements\n- Text elements ONLY (no images)\n\nCONTENT RULES:\n- Keep text SHORT (max 8 words per line)\n- Use bullet style: "• something"\n- Avoid long paragraphs\n\nOUTPUT FORMAT (STRICT JSON ONLY):\n{\n  "slides": [\n    {\n      "id": "slide-1",\n      "layout": "left-text",\n      "theme": "light",\n      "title": "Slide Title",\n      "bullets": ["• Bullet 1", "• Bullet 2", "• Bullet 3"]\n    }\n  ]\n}\n\nFORBIDDEN:\n- DO NOT stack elements\n- DO NOT reuse same y\n- DO NOT return 1 element slide\n- DO NOT output markdown\n\nRETURN JSON ONLY`;
 
-        const slides = await generateWithRetry(prompt, 3);
+        const slides = await generateWithRetry(prompt, 3, trimmedPrompt);
         res.json({ success: true, slides: slides });
     } catch (err) {
         console.error('AI Slide Error:', err.message);
@@ -396,7 +396,7 @@ function normalizeQuizQuestion(item) {
     return { question, answers }
 }
 
-function parseSlideJson(raw) {
+function parseSlideJson(raw, topic) {
     const cleaned = cleanAIResponse(raw)
     let parsed = null
     try {
@@ -411,26 +411,35 @@ function parseSlideJson(raw) {
             ? parsed.slides
             : []
 
-    const normalized = slides.map((slide, index) => normalizeSlide(slide, index)).filter(Boolean)
+    const normalized = slides.map((slide, index) => normalizeSlide(slide, index, topic)).filter(Boolean)
     return smartLayoutEnhance(normalized)
 }
 
-function normalizeSlide(slide, index) {
+function normalizeSlide(slide, index, topic) {
     if (!slide || typeof slide !== 'object') return null
 
     const slideId = String(slide.id || `slide-${index + 1}`)
     const elementsSource = Array.isArray(slide.elements) ? slide.elements : []
 
+    if (!elementsSource.length) {
+        return applyTemplate(slide, index, topic)
+    }
+
     const elements = elementsSource.map((el, elIndex) => normalizeSlideElement(el, index, elIndex)).filter(Boolean)
     if (!elements.length) return null
 
-    return { id: slideId, elements }
+    return {
+        id: slideId,
+        layout: normalizeLayout(slide.layout, index),
+        theme: normalizeTheme(slide.theme, index),
+        elements
+    }
 }
 
 function normalizeSlideElement(el, slideIndex, elementIndex) {
     if (!el || typeof el !== 'object') return null
 
-    const type = el.type === 'image' ? 'image' : 'text'
+    const type = 'text'
     const id = String(el.id || `el-${slideIndex + 1}-${elementIndex + 1}`)
     const x = Number.isFinite(Number(el.x)) ? Number(el.x) : 100
     const y = Number.isFinite(Number(el.y)) ? Number(el.y) : 100
@@ -439,13 +448,8 @@ function normalizeSlideElement(el, slideIndex, elementIndex) {
     const align = ['left', 'center', 'right'].includes(String(el.align || 'left')) ? String(el.align) : 'left'
     const bold = Boolean(el.bold)
 
-    const text = type === 'text'
-        ? String(el.text || 'Placeholder text').trim()
-        : ''
-
-    const src = type === 'image'
-        ? String(el.src || 'https://via.placeholder.com/300x200')
-        : ''
+    const text = String(el.text || 'Placeholder text').trim()
+    const src = ''
 
     return {
         id,
@@ -461,11 +465,11 @@ function normalizeSlideElement(el, slideIndex, elementIndex) {
     }
 }
 
-async function generateWithRetry(prompt, retries) {
+async function generateWithRetry(prompt, retries, topic) {
     for (let attempt = 0; attempt < retries; attempt += 1) {
         try {
             const raw = await callOllama(prompt)
-            const slides = parseSlideJson(raw)
+            const slides = parseSlideJson(raw, topic)
             if (slides.length) {
                 return slides
             }
@@ -530,7 +534,7 @@ function buildFallbackSlides() {
     ]
 }
 
-function applySlideLayout(elements) {
+function applySlideLayout(elements, layout) {
     const CANVAS_HEIGHT = 563
     const textElements = elements.filter((el) => el.type === 'text')
     const imageElements = elements.filter((el) => el.type === 'image')
@@ -547,24 +551,46 @@ function applySlideLayout(elements) {
     const bulletStartY = 200
     const bulletSpacing = 60
 
-    title.x = clampNumber(title.x, 150, 300, 200)
-    title.y = clampNumber(title.y, 60, 100, 80)
-    title.fontSize = clampNumber(title.fontSize, 36, 48, 40)
-    title.align = title.align === 'center' ? 'center' : 'left'
+    if (layout === 'center-title') {
+        title.x = clampNumber(title.x, 200, 300, 240)
+        title.y = clampNumber(title.y, 180, 220, 200)
+        title.fontSize = clampNumber(title.fontSize, 44, 54, 48)
+        title.align = 'center'
+    } else if (layout === 'two-columns') {
+        title.x = clampNumber(title.x, 180, 240, 200)
+        title.y = clampNumber(title.y, 50, 80, 60)
+        title.fontSize = clampNumber(title.fontSize, 36, 44, 40)
+        title.align = 'center'
+    } else {
+        title.x = clampNumber(title.x, 120, 300, 160)
+        title.y = clampNumber(title.y, 60, 100, 80)
+        title.fontSize = clampNumber(title.fontSize, 36, 48, 40)
+        title.align = title.align === 'center' ? 'center' : 'left'
+    }
     title.bold = true
 
     trimmedText.slice(1).forEach((item, idx) => {
-        item.x = 150
-        item.y = clampNumber(bulletStartY + idx * bulletSpacing, 200, CANVAS_HEIGHT - 40, bulletStartY)
+        if (layout === 'two-columns') {
+            const isRight = idx >= 2
+            item.x = isRight ? 550 : 120
+            item.y = 200 + (idx % 2) * bulletSpacing
+        } else if (layout === 'center-title') {
+            item.x = clampNumber(item.x, 220, 300, 250)
+            item.y = clampNumber(item.y, 280, 340, 300)
+            item.align = 'center'
+        } else {
+            item.x = 140
+            item.y = clampNumber(bulletStartY + idx * bulletSpacing, 200, CANVAS_HEIGHT - 40, bulletStartY)
+        }
         item.fontSize = clampNumber(item.fontSize, 20, 24, 22)
-        item.align = 'left'
+        item.align = item.align || 'left'
         item.bold = Boolean(item.bold)
     })
 
     if (imageElements.length) {
         imageElements.forEach((image) => {
-            image.x = clampNumber(image.x, 650, 750, 650)
-            image.y = clampNumber(image.y, 200, CANVAS_HEIGHT - 260, 200)
+            image.x = clampNumber(image.x, 620, 720, 650)
+            image.y = clampNumber(image.y, 180, CANVAS_HEIGHT - 260, 200)
         })
     }
 
@@ -621,17 +647,89 @@ function smartLayoutEnhance(slides) {
             y += 60
         })
 
-        if (index % 2 === 1) {
-            elements.forEach((el) => {
-                if (el.type === 'text') {
-                    el.x = Number(el.x) + 50
-                }
-            })
-        }
-
-        slide.elements = elements
+        slide.elements = applySlideLayout(elements, slide.layout)
         return slide
     })
+}
+
+const SLIDE_LAYOUTS = ['left-text', 'center-title', 'two-columns']
+const SLIDE_THEMES = ['light', 'dark', 'purple', 'blue']
+
+function normalizeLayout(layout, index) {
+    const value = String(layout || '').trim().toLowerCase()
+    if (SLIDE_LAYOUTS.includes(value)) return value
+    return SLIDE_LAYOUTS[index % SLIDE_LAYOUTS.length]
+}
+
+function normalizeTheme(theme, index) {
+    const value = String(theme || '').trim().toLowerCase()
+    if (SLIDE_THEMES.includes(value)) return value
+    return SLIDE_THEMES[index % SLIDE_THEMES.length]
+}
+
+function normalizeBullets(bullets) {
+    const list = Array.isArray(bullets) ? bullets : []
+    return list
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .slice(0, 4)
+        .map((item) => item.startsWith('•') ? item : `• ${item}`)
+}
+
+function applyTemplate(slide, index, topic) {
+    const layout = normalizeLayout(slide.layout, index)
+    const theme = normalizeTheme(slide.theme, index)
+    const title = String(slide.title || slide.heading || 'Slide Title').trim() || 'Slide Title'
+    const bullets = normalizeBullets(slide.bullets || slide.points || slide.content)
+    const elements = []
+    const pushText = (id, x, y, text, fontSize, align, bold) => {
+        elements.push({
+            id,
+            type: 'text',
+            x,
+            y,
+            text,
+            fontSize,
+            color: themeTextColor(theme),
+            align: align || 'left',
+            bold: Boolean(bold)
+        })
+    }
+
+    if (layout === 'center-title') {
+        pushText(`el-${index + 1}-1`, 240, 200, title, 48, 'center', true)
+        const subtitle = bullets[0] || 'Subtitle'
+        pushText(`el-${index + 1}-2`, 250, 300, subtitle, 24, 'center', false)
+    } else if (layout === 'two-columns') {
+        pushText(`el-${index + 1}-1`, 200, 60, title, 40, 'center', true)
+        const left = bullets.slice(0, 2)
+        const right = bullets.slice(2, 4)
+        left.forEach((text, i) => {
+            pushText(`el-${index + 1}-${i + 2}`, 120, 200 + i * 60, text, 22, 'left', false)
+        })
+        right.forEach((text, i) => {
+            pushText(`el-${index + 1}-${i + 4}`, 550, 200 + i * 60, text, 22, 'left', false)
+        })
+    } else {
+        pushText(`el-${index + 1}-1`, 160, 70, title, 40, 'left', true)
+        bullets.slice(0, 4).forEach((text, i) => {
+            pushText(`el-${index + 1}-${i + 2}`, 140, 220 + i * 60, text, 22, 'left', false)
+        })
+    }
+
+    return {
+        id: String(slide.id || `slide-${index + 1}`),
+        layout,
+        theme,
+        elements
+    }
+}
+
+function themeTextColor(theme) {
+    if (theme === 'dark') return '#ffffff'
+    if (theme === 'purple') return '#4c1d95'
+    if (theme === 'blue') return '#1d4ed8'
+    return '#1c1d1f'
 }
 
 function buildLessonDocs(course) {
