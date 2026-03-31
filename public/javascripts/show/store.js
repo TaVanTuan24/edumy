@@ -71,7 +71,7 @@
       preview: item && item.preview ? item.preview : '',
       content: {
         videoUrl: content.videoUrl || (item && (item.videoUrl || item.preview)) || '',
-        slides: Array.isArray(content.slides) ? content.slides : Array.isArray(item && item.slides) ? item.slides : [],
+        slides: Array.isArray(content.slides) ? content.slides : [],
         questions: Array.isArray(content.questions) ? content.questions : Array.isArray(item && item.questions) ? item.questions : Array.isArray(item && item.quiz) ? item.quiz : []
       }
     };
