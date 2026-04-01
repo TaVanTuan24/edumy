@@ -1,0 +1,37 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/stylesheets/discussions.css">
+
+<div class="discussion-shell container py-4">
+  <header class="discussion-head mb-3">
+    <div>
+      <h1 class="mb-1">Ask A Question</h1>
+      <p class="text-muted mb-0"><%= course ? course.title : 'Course' %></p>
+    </div>
+    <a class="btn btn-outline-secondary" href="/courses/<%= course._id %>/discussions">Back to Discussions</a>
+  </header>
+
+  <form class="card card-body" method="POST" action="/courses/<%= course._id %>/discussions">
+    <div class="mb-3">
+      <label class="form-label" for="title">Title</label>
+      <input id="title" name="title" class="form-control" maxlength="180" required placeholder="Be specific and imagine you're asking another student">
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="body">Detailed Body</label>
+      <textarea id="body" name="body" class="form-control" rows="8" required placeholder="Explain your issue with context, what you've tried, and expected result"></textarea>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="tags">Tags (comma separated)</label>
+        <input id="tags" name="tags" class="form-control" placeholder="javascript, arrays, recursion">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="lessonId">Lesson ID (optional)</label>
+        <input id="lessonId" name="lessonId" class="form-control" value="<%= lessonId || '' %>" placeholder="Attach question to a lesson">
+      </div>
+    </div>
+    <div class="mt-4 d-flex gap-2">
+      <button class="btn btn-primary" type="submit">Post Question</button>
+      <a class="btn btn-outline-secondary" href="/courses/<%= course._id %>/discussions">Cancel</a>
+    </div>
+  </form>
+</div>

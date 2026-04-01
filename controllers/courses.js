@@ -7,6 +7,7 @@ const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const mongoose = require('mongoose');
 const { awardGamification, buildGamificationViewModel } = require('../utils/gamification');
+const Discussion = require('../models/discussion');
 
 function countCourseLessons(course) {
   if (!course || !Array.isArray(course.driveStructure)) return 0;
@@ -240,12 +241,37 @@ module.exports.showCourses = async (req, res) => {
   }
 
   const notes = await Note.find({ user: req.user?._id, course: course._id });
+  const discussionHighlights = await Discussion.find({ course: course._id })
+    .populate('author', 'username')
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+
+  const normalizedDiscussionHighlights = (discussionHighlights || []).map((entry) => {
+    const answersCount = Array.isArray(entry.answers) ? entry.answers.length : 0;
+    const score = (Array.isArray(entry.upvoters) ? entry.upvoters.length : 0)
+      - (Array.isArray(entry.downvoters) ? entry.downvoters.length : 0);
+
+    return {
+      ...entry,
+      answersCount,
+      score
+    };
+  });
+
   const sectionNotes = Array(course.driveStructure.length).fill('');
   notes.forEach(n => {
     sectionNotes[n.sectionIndex] = n.content;
   });
 
-  res.render('courses/show', { course, completedVideos, sectionNotes, hasCourseUpdate: updateStatus.hadUpdate, gamification });
+  res.render('courses/show', {
+    course,
+    completedVideos,
+    sectionNotes,
+    hasCourseUpdate: updateStatus.hadUpdate,
+    gamification,
+    discussionHighlights: normalizedDiscussionHighlights
+  });
 };
 
 module.exports.renderEditForm = async (req, res) => {

@@ -1,0 +1,49 @@
+.leaderboard-page {
+  max-width: 980px;
+}
+
+.leaderboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.leaderboard-card {
+  background: #ffffff;
+  border: 1px solid #dce5ef;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  padding: 14px;
+}
+
+.leaderboard-table-wrap {
+  overflow-x: auto;
+}
+
+.leaderboard-table thead th {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.leaderboard-table tbody tr td {
+  vertical-align: middle;
+}
+
+.leaderboard-table tbody tr.is-current-user {
+  background: #eff6ff;
+}
+
+.current-user-card h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.position-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}

@@ -1,0 +1,104 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/stylesheets/discussions.css">
+
+<div class="discussion-shell container py-4" data-course-id="<%= course._id %>" data-discussion-id="<%= discussion._id %>">
+  <header class="discussion-head mb-3">
+    <div>
+      <h1 class="mb-1"><%= discussion.title %></h1>
+      <p class="text-muted mb-0">Asked by <strong><%= discussion.author && discussion.author.username ? discussion.author.username : 'User' %></strong> on <%= new Date(discussion.createdAt).toLocaleString() %></p>
+    </div>
+    <a class="btn btn-outline-secondary" href="/courses/<%= course._id %>/discussions">Back</a>
+  </header>
+
+  <article class="discussion-item detail mb-3">
+    <div class="vote-col">
+      <button class="vote-btn vote-up <%= discussion.userVote === 'up' ? 'is-active' : '' %>" data-vote-target="question" data-vote-type="up" aria-pressed="<%= discussion.userVote === 'up' ? 'true' : 'false' %>">▲</button>
+      <div id="questionScore" class="vote-num"><%= discussion.score %></div>
+      <button class="vote-btn vote-down <%= discussion.userVote === 'down' ? 'is-active' : '' %>" data-vote-target="question" data-vote-type="down" aria-pressed="<%= discussion.userVote === 'down' ? 'true' : 'false' %>">▼</button>
+    </div>
+    <div class="content-col">
+      <div class="question-body markdown-body" data-markdown><%= discussion.body %></div>
+      <% if (discussion.tags && discussion.tags.length) { %>
+        <div class="tag-list mt-2">
+          <% discussion.tags.forEach((tag) => { %>
+            <span class="tag-pill"><%= tag %></span>
+          <% }) %>
+        </div>
+      <% } %>
+      <div class="meta-row mt-2">
+        <span><span id="answersCount"><%= discussion.answers.length %></span> answers</span>
+      </div>
+    </div>
+  </article>
+
+  <section class="card card-body mb-3 ai-answer-box">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h5 mb-0">AI Auto Answer</h2>
+      <button id="generateAiAnswerBtn" class="btn btn-primary btn-sm" type="button">Generate AI Answer</button>
+    </div>
+    <div id="aiAnswerStatus" class="small text-muted mb-2">Use this to generate a context-aware answer from course content.</div>
+    <textarea id="aiAnswerEditor" class="form-control" rows="6" placeholder="AI answer preview will appear here..."></textarea>
+    <div class="small text-muted mt-2 mb-1">Live Markdown Preview</div>
+    <div id="aiAnswerPreview" class="markdown-body ai-preview"></div>
+    <div class="mt-2 d-flex gap-2">
+      <button id="postAiAnswerBtn" class="btn btn-success btn-sm" type="button">Post This Answer</button>
+      <button id="discardAiAnswerBtn" class="btn btn-outline-secondary btn-sm" type="button">Discard</button>
+    </div>
+  </section>
+
+  <section class="card card-body mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h5 mb-0">Answers</h2>
+      <div class="btn-group btn-group-sm" role="group">
+        <a href="/courses/<%= course._id %>/discussions/<%= discussion._id %>?sortAnswersBy=best" class="btn <%= sortAnswersBy === 'best' ? 'btn-primary' : 'btn-outline-primary' %>">Best</a>
+        <a href="/courses/<%= course._id %>/discussions/<%= discussion._id %>?sortAnswersBy=newest" class="btn <%= sortAnswersBy === 'newest' ? 'btn-primary' : 'btn-outline-primary' %>">Newest</a>
+      </div>
+    </div>
+
+    <% if (!discussion.answers.length) { %>
+      <p class="text-muted mb-0">No answers yet. Be the first to respond.</p>
+    <% } %>
+
+    <% discussion.answers.forEach((answer) => { %>
+      <article class="discussion-item answer <%= answer.isAccepted ? 'accepted' : '' %>" id="answer-<%= answer._id %>">
+        <div class="vote-col">
+          <button class="vote-btn vote-up <%= answer.userVote === 'up' ? 'is-active' : '' %>" data-vote-target="answer" data-answer-id="<%= answer._id %>" data-vote-type="up" aria-pressed="<%= answer.userVote === 'up' ? 'true' : 'false' %>">▲</button>
+          <div class="vote-num" id="answerScore-<%= answer._id %>"><%= answer.score %></div>
+          <button class="vote-btn vote-down <%= answer.userVote === 'down' ? 'is-active' : '' %>" data-vote-target="answer" data-answer-id="<%= answer._id %>" data-vote-type="down" aria-pressed="<%= answer.userVote === 'down' ? 'true' : 'false' %>">▼</button>
+        </div>
+        <div class="content-col">
+          <% if (answer.isAccepted) { %>
+            <div class="accepted-badge">Accepted Answer</div>
+          <% } %>
+          <div class="question-body markdown-body" data-markdown><%= answer.body %></div>
+          <div class="meta-row mt-2">
+            <span>by <strong><%= answer.author && answer.author.username ? answer.author.username : 'User' %></strong></span>
+            <span><%= new Date(answer.createdAt).toLocaleString() %></span>
+          </div>
+          <div class="d-flex gap-2 mt-2 flex-wrap">
+            <% if (String(discussion.author && discussion.author._id || '') === String(currentUser && currentUser._id || '') && !answer.isAccepted) { %>
+              <button class="btn btn-sm btn-outline-success" data-accept-answer="<%= answer._id %>">Mark As Accepted</button>
+            <% } %>
+            <% if (String(answer.author && answer.author._id || '') === String(currentUser && currentUser._id || '')) { %>
+              <button class="btn btn-sm btn-outline-danger" data-delete-answer="<%= answer._id %>"><i class="fa-solid fa-trash"></i> Delete</button>
+            <% } %>
+          </div>
+        </div>
+      </article>
+    <% }) %>
+  </section>
+
+  <section class="card card-body">
+    <h2 class="h5 mb-3">Your Answer</h2>
+    <form method="POST" action="/courses/<%= course._id %>/discussions/<%= discussion._id %>/answers">
+      <textarea name="body" class="form-control" rows="6" required placeholder="Write your answer..."></textarea>
+      <div class="mt-3">
+        <button class="btn btn-primary" type="submit">Post Answer</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+<script src="/javascripts/discussions.js" defer></script>

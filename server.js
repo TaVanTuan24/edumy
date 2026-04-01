@@ -30,6 +30,7 @@ const libraryRoutes = require('./routes/library');
 const aiRoutes = require('./routes/ai');
 const videoModelsRoutes = require('./routes/videoModels');
 const trackRoutes = require('./routes/track');
+const discussionRoutes = require('./routes/discussions');
 
 // Connect DB
 connectDB();
@@ -219,6 +220,7 @@ app.use('/', libraryRoutes);
 app.use('/ai', aiRoutes);
 app.use('/video-models', videoModelsRoutes);
 app.use('/track', trackRoutes);
+app.use('/courses/:courseId/discussions', discussionRoutes);
 
 app.get('/', (req, res) => {
   res.render('home');

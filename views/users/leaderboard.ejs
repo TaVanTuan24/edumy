@@ -1,0 +1,55 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/stylesheets/leaderboard.css">
+
+<div class="leaderboard-page container py-4">
+  <header class="leaderboard-header mb-4">
+    <div>
+      <h1 class="mb-1">Global Leaderboard</h1>
+      <p class="text-muted mb-0">Top learners ranked by total XP.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="/profile">Back to Profile</a>
+  </header>
+
+  <section class="leaderboard-card mb-4">
+    <div class="leaderboard-table-wrap">
+      <table class="table leaderboard-table mb-0">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Username</th>
+            <th>Level</th>
+            <th>Total XP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (leaderboard.topUsers.length === 0) { %>
+            <tr>
+              <td colspan="4" class="text-center text-muted py-4">No leaderboard data yet.</td>
+            </tr>
+          <% } %>
+          <% leaderboard.topUsers.forEach((entry) => { %>
+            <tr class="<%= entry.isCurrentUser ? 'is-current-user' : '' %>">
+              <td>#<%= entry.rank %></td>
+              <td><%= entry.username %> <%= entry.isCurrentUser ? '(You)' : '' %></td>
+              <td>Level <%= entry.level %></td>
+              <td><strong><%= entry.totalXP %> XP</strong></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <% if (leaderboard.currentUserEntry && !leaderboard.topUsers.some((u) => u.userId === leaderboard.currentUserEntry.userId)) { %>
+    <section class="leaderboard-card current-user-card">
+      <h2>Your Position</h2>
+      <div class="position-row">
+        <span class="badge bg-primary">Rank #<%= leaderboard.currentUserEntry.rank %></span>
+        <span><strong><%= leaderboard.currentUserEntry.totalXP %> XP</strong></span>
+        <span>Level <%= leaderboard.currentUserEntry.level %></span>
+      </div>
+    </section>
+  <% } %>
+</div>
+
+<script src="/javascripts/leaderboard.js" defer></script>

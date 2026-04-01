@@ -3,6 +3,50 @@ const UserCourseProgress = require('../models/userCourseProgress');
 const { buildGamificationViewModel, awardGamification } = require('../utils/gamification');
 // const Participant = require('../models/participant');
 
+async function getLeaderboardSnapshot(limit, currentUserId) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
+
+    const topUsers = await User.find({})
+        .select('username gamification.totalXP gamification.currentLevel')
+        .sort({ 'gamification.totalXP': -1, username: 1 })
+        .limit(safeLimit)
+        .lean();
+
+    const formattedTopUsers = topUsers.map((entry, index) => ({
+        rank: index + 1,
+        userId: String(entry._id),
+        username: entry.username || 'User',
+        totalXP: Number(entry.gamification && entry.gamification.totalXP || 0),
+        level: Number(entry.gamification && entry.gamification.currentLevel || 1),
+        isCurrentUser: String(entry._id) === String(currentUserId)
+    }));
+
+    const currentUser = await User.findById(currentUserId)
+        .select('username gamification.totalXP gamification.currentLevel')
+        .lean();
+
+    let currentUserEntry = null;
+    if (currentUser) {
+        const currentUserXP = Number(currentUser.gamification && currentUser.gamification.totalXP || 0);
+        const higherCount = await User.countDocuments({ 'gamification.totalXP': { $gt: currentUserXP } });
+
+        currentUserEntry = {
+            rank: higherCount + 1,
+            userId: String(currentUser._id),
+            username: currentUser.username || 'You',
+            totalXP: currentUserXP,
+            level: Number(currentUser.gamification && currentUser.gamification.currentLevel || 1),
+            isCurrentUser: true
+        };
+    }
+
+    return {
+        limit: safeLimit,
+        topUsers: formattedTopUsers,
+        currentUserEntry
+    };
+}
+
 module.exports.renderRegister = (req, res) => {
     res.render('users/register');
 }
@@ -69,10 +113,12 @@ module.exports.renderProfile = async (req, res) => {
     await user.save();
 
     const gamification = buildGamificationViewModel(user);
+    const leaderboard = await getLeaderboardSnapshot(5, req.user._id);
 
     res.render('users/profile', {
         profileUser: user,
-        gamification
+        gamification,
+        leaderboard
     });
 };
 
@@ -105,6 +151,25 @@ module.exports.getGamificationProfile = async (req, res) => {
     res.json({
         success: true,
         gamification
+    });
+};
+
+module.exports.renderLeaderboard = async (req, res) => {
+    const limit = Number(req.query.limit) || 20;
+    const leaderboard = await getLeaderboardSnapshot(limit, req.user._id);
+
+    res.render('users/leaderboard', {
+        leaderboard
+    });
+};
+
+module.exports.getLeaderboard = async (req, res) => {
+    const limit = Number(req.query.limit) || 20;
+    const leaderboard = await getLeaderboardSnapshot(limit, req.user._id);
+
+    res.json({
+        success: true,
+        leaderboard
     });
 };
 

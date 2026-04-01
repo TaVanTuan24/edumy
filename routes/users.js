@@ -27,7 +27,9 @@ router.route('/login')
 
 router.get('/logout', users.logout);
 router.get('/profile', isLoggedIn, catchAsync(users.renderProfile));
+router.get('/leaderboard', isLoggedIn, catchAsync(users.renderLeaderboard));
 router.get('/api/gamification', isLoggedIn, catchAsync(users.getGamificationProfile));
+router.get('/api/gamification/leaderboard', isLoggedIn, catchAsync(users.getLeaderboard));
 router.post('/api/gamification/award', isLoggedIn, catchAsync(users.awardGamificationAction));
 
 // router.get('/join', users.join)
