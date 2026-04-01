@@ -173,6 +173,54 @@ module.exports.getLeaderboard = async (req, res) => {
     });
 };
 
+module.exports.markCourseNotificationsRead = async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (!Array.isArray(user.enrolledCourses) || user.enrolledCourses.length === 0) {
+        return res.json({ success: true, updatedCount: 0 });
+    }
+
+    const now = new Date();
+    let updatedCount = 0;
+
+    user.enrolledCourses = user.enrolledCourses.map((entry) => {
+        if (!entry) return entry;
+
+        if (entry.courseId) {
+            updatedCount += 1;
+            return {
+                ...entry,
+                lastSeenUpdatedAt: now
+            };
+        }
+
+        if (entry._bsontype === 'ObjectId' || typeof entry === 'string') {
+            updatedCount += 1;
+            return {
+                courseId: entry,
+                progress: {
+                    completedCount: 0,
+                    lastLessonId: ''
+                },
+                lastSeenUpdatedAt: now,
+                enrolledAt: now
+            };
+        }
+
+        return entry;
+    });
+
+    await user.save();
+
+    return res.json({
+        success: true,
+        updatedCount
+    });
+};
+
 module.exports.awardGamificationAction = async (req, res) => {
     const allowed = new Set(['lessonComplete', 'quizResult', 'aiTutor', 'aiQuizGenerate', 'aiSlideGenerate', 'courseComplete']);
     const action = String(req.body && req.body.action || '').trim();
