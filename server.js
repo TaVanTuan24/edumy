@@ -208,17 +208,21 @@ app.use(async (req, res, next) => {
 });
 
 // Routes
-app.use('/users', userRoutes);
+app.use('/', userRoutes);
 app.use('/courses', courseRoutes);
-app.use('/reviews', reviewRoutes);
+app.use('/courses/:id/reviews', reviewRoutes);
 app.use('/explore', exploreRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/admin', apiAdminRoutes);
-app.use('/library', libraryRoutes);
+app.use('/', libraryRoutes);
 app.use('/ai', aiRoutes);
-app.use('/videoModels', videoModelsRoutes);
+app.use('/video-models', videoModelsRoutes);
 app.use('/track', trackRoutes);
+
+app.get('/', (req, res) => {
+  res.render('home');
+});
 
 // Catch-all 404 handler
 app.all('*', (req, res, next) => {

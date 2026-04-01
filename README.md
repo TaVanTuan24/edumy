@@ -52,7 +52,7 @@ SESSION_SECRET=your-secret-key
 
 ### 4. Chạy ứng dụng
 ```bash
-node app.js
+node server.js
 ```
 Truy cập tại: [http://localhost:3000](http://localhost:3000)
 
@@ -71,7 +71,7 @@ Truy cập tại: [http://localhost:3000](http://localhost:3000)
 ├── views/              # EJS Templates
 ├── public/             # Static Assets (CSS, JS)
 ├── utils/              # Drive API utils, middleware
-├── app.js              # Main entry point
+├── server.js           # Main entry point
 └── .env                # Config file (not committed)
 ```
 

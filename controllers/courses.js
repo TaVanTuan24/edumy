@@ -6,6 +6,7 @@ const Note = require('../models/note');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const mongoose = require('mongoose');
+const { awardGamification, buildGamificationViewModel } = require('../utils/gamification');
 
 function countCourseLessons(course) {
   if (!course || !Array.isArray(course.driveStructure)) return 0;
@@ -227,9 +228,15 @@ module.exports.showCourses = async (req, res) => {
   console.log(JSON.stringify(course.sections, null, 2));
 
   let completedVideos = [];
+  let gamification = null;
   if (req.user) {
     const progress = await Progress.findOne({ user: req.user._id, course: course._id });
     if (progress?.completedVideos) completedVideos = progress.completedVideos;
+
+    const profileUser = await User.findById(req.user._id);
+    if (profileUser) {
+      gamification = buildGamificationViewModel(profileUser);
+    }
   }
 
   const notes = await Note.find({ user: req.user?._id, course: course._id });
@@ -238,7 +245,7 @@ module.exports.showCourses = async (req, res) => {
     sectionNotes[n.sectionIndex] = n.content;
   });
 
-  res.render('courses/show', { course, completedVideos, sectionNotes, hasCourseUpdate: updateStatus.hadUpdate });
+  res.render('courses/show', { course, completedVideos, sectionNotes, hasCourseUpdate: updateStatus.hadUpdate, gamification });
 };
 
 module.exports.renderEditForm = async (req, res) => {
@@ -305,8 +312,10 @@ module.exports.updateProgress = async (req, res) => {
       const lessonKey = String(lessonId);
       const hasLesson = progressDoc.completedLessons.includes(lessonKey);
 
+      let lessonJustCompleted = false;
       if (completed === true || completed === 'true') {
         if (!hasLesson) progressDoc.completedLessons.push(lessonKey);
+        lessonJustCompleted = !hasLesson;
       } else if (hasLesson) {
         progressDoc.completedLessons = progressDoc.completedLessons.filter((id) => id !== lessonKey);
       }
@@ -334,6 +343,17 @@ module.exports.updateProgress = async (req, res) => {
         : 0;
 
       await progressDoc.save();
+
+      if (lessonJustCompleted) {
+        const user = await User.findById(userId);
+        if (user) {
+          await awardGamification(user, { action: 'lessonComplete' });
+
+          if (progressDoc.completionRate === 100) {
+            await awardGamification(user, { action: 'courseComplete' });
+          }
+        }
+      }
     }
     res.json({ success: true });
   } catch (err) {
@@ -374,6 +394,7 @@ module.exports.saveQuizResult = async (req, res) => {
     progressDoc.lastAccessed = new Date();
 
     await progressDoc.save();
+
     res.json({ success: true });
   } catch (err) {
     console.error('[Quiz Result Save Error]', err);

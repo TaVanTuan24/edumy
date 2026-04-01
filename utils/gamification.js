@@ -1,0 +1,321 @@
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const ACTION_XP = {
+  lessonComplete: 120,
+  quizAttempt: 40,
+  quizPassed: 90,
+  quizExcellent: 140,
+  aiTutor: 15,
+  aiQuizGenerate: 25,
+  aiSlideGenerate: 30,
+  courseComplete: 260
+};
+
+const LEVELS = [
+  { level: 1, minXp: 0, maxXp: 500 },
+  { level: 2, minXp: 501, maxXp: 1500 },
+  { level: 3, minXp: 1501, maxXp: 3000 },
+  { level: 4, minXp: 3001, maxXp: 5000 },
+  { level: 5, minXp: 5001, maxXp: 8000 },
+  { level: 6, minXp: 8001, maxXp: 12000 },
+  { level: 7, minXp: 12001, maxXp: 17000 },
+  { level: 8, minXp: 17001, maxXp: Infinity }
+];
+
+const BADGES = [
+  {
+    id: 'first_lesson',
+    name: 'First Lesson',
+    description: 'Complete your first lesson.',
+    icon: 'fa-graduation-cap',
+    check: (user) => Number(user.gamification.stats.lessonsCompleted || 0) >= 1
+  },
+  {
+    id: 'learning_starter',
+    name: 'Learning Starter',
+    description: 'Complete 10 lessons.',
+    icon: 'fa-book-open',
+    check: (user) => Number(user.gamification.stats.lessonsCompleted || 0) >= 10
+  },
+  {
+    id: 'quiz_rookie',
+    name: 'Quiz Rookie',
+    description: 'Finish your first quiz.',
+    icon: 'fa-circle-question',
+    check: (user) => Number(user.gamification.stats.quizzesCompleted || 0) >= 1
+  },
+  {
+    id: 'quiz_master',
+    name: 'Quiz Master',
+    description: 'Score 80%+ in 5 quizzes.',
+    icon: 'fa-brain',
+    check: (user) => Number(user.gamification.stats.highQuizScores || 0) >= 5
+  },
+  {
+    id: 'streak_3',
+    name: '3-Day Flame',
+    description: 'Keep a 3-day learning streak.',
+    icon: 'fa-fire',
+    check: (user) => Number(user.gamification.currentStreak || 0) >= 3
+  },
+  {
+    id: 'streak_7',
+    name: '7-Day Flame',
+    description: 'Keep a 7-day learning streak.',
+    icon: 'fa-fire-flame-curved',
+    check: (user) => Number(user.gamification.currentStreak || 0) >= 7
+  },
+  {
+    id: 'streak_30',
+    name: 'Streak Legend',
+    description: 'Keep a 30-day learning streak.',
+    icon: 'fa-bolt',
+    check: (user) => Number(user.gamification.currentStreak || 0) >= 30
+  },
+  {
+    id: 'ai_explorer',
+    name: 'AI Explorer',
+    description: 'Use an AI feature for the first time.',
+    icon: 'fa-robot',
+    check: (user) => Number(user.gamification.stats.aiInteractions || 0) >= 1
+  },
+  {
+    id: 'ai_power_user',
+    name: 'AI Power User',
+    description: 'Use AI tools 25 times.',
+    icon: 'fa-microchip',
+    check: (user) => Number(user.gamification.stats.aiInteractions || 0) >= 25
+  },
+  {
+    id: 'xp_1000',
+    name: 'XP Collector',
+    description: 'Reach 1,000 XP.',
+    icon: 'fa-star',
+    check: (user) => Number(user.gamification.totalXP || 0) >= 1000
+  },
+  {
+    id: 'xp_5000',
+    name: 'XP Champion',
+    description: 'Reach 5,000 XP.',
+    icon: 'fa-trophy',
+    check: (user) => Number(user.gamification.totalXP || 0) >= 5000
+  },
+  {
+    id: 'course_completer',
+    name: 'Course Completer',
+    description: 'Fully complete one course.',
+    icon: 'fa-award',
+    check: (user) => Number(user.gamification.stats.coursesCompleted || 0) >= 1
+  }
+];
+
+function startOfUtcDay(dateValue) {
+  const date = dateValue ? new Date(dateValue) : new Date();
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function getLevelInfo(totalXP) {
+  const xp = Math.max(0, Number(totalXP) || 0);
+  const current = LEVELS.find((item) => xp >= item.minXp && xp <= item.maxXp) || LEVELS[LEVELS.length - 1];
+  const next = LEVELS.find((item) => item.level === current.level + 1) || null;
+  const span = (current.maxXp === Infinity ? (next ? next.minXp - current.minXp : 1) : current.maxXp - current.minXp + 1);
+  const intoLevel = xp - current.minXp;
+  const progressPercent = current.maxXp === Infinity ? 100 : Math.max(0, Math.min(100, Math.round((intoLevel / Math.max(1, span)) * 100)));
+
+  return {
+    level: current.level,
+    minXp: current.minXp,
+    maxXp: current.maxXp,
+    nextLevel: next ? next.level : null,
+    xpToNextLevel: next ? Math.max(0, next.minXp - xp) : 0,
+    progressPercent
+  };
+}
+
+function applyDailyStreak(user, activityDate) {
+  const today = startOfUtcDay(activityDate);
+  const last = user.gamification.lastActivityDate ? startOfUtcDay(user.gamification.lastActivityDate) : null;
+
+  let streakXp = 0;
+
+  if (!last) {
+    user.gamification.currentStreak = 1;
+    streakXp = 10;
+  } else {
+    const diffDays = Math.floor((today.getTime() - last.getTime()) / DAY_MS);
+
+    if (diffDays <= 0) {
+      return 0;
+    }
+
+    if (diffDays === 1) {
+      user.gamification.currentStreak = Number(user.gamification.currentStreak || 0) + 1;
+      streakXp = Math.min(20 + (user.gamification.currentStreak * 5), 120);
+    } else {
+      user.gamification.currentStreak = 1;
+      streakXp = 10;
+    }
+  }
+
+  user.gamification.lastActivityDate = today;
+  user.gamification.longestStreak = Math.max(
+    Number(user.gamification.longestStreak || 0),
+    Number(user.gamification.currentStreak || 0)
+  );
+
+  return streakXp;
+}
+
+function ensureGamificationState(user) {
+  if (!user.gamification) {
+    user.gamification = {};
+  }
+
+  user.gamification.totalXP = Number(user.gamification.totalXP || 0);
+  user.gamification.currentLevel = Number(user.gamification.currentLevel || 1);
+  user.gamification.currentStreak = Number(user.gamification.currentStreak || 0);
+  user.gamification.longestStreak = Number(user.gamification.longestStreak || 0);
+  user.gamification.earnedBadges = Array.isArray(user.gamification.earnedBadges) ? user.gamification.earnedBadges : [];
+  user.gamification.stats = user.gamification.stats || {};
+
+  const stats = user.gamification.stats;
+  stats.lessonsCompleted = Number(stats.lessonsCompleted || 0);
+  stats.quizzesCompleted = Number(stats.quizzesCompleted || 0);
+  stats.highQuizScores = Number(stats.highQuizScores || 0);
+  stats.aiInteractions = Number(stats.aiInteractions || 0);
+  stats.coursesCompleted = Number(stats.coursesCompleted || 0);
+  stats.completedLessonsCount = Number(stats.completedLessonsCount || stats.lessonsCompleted || 0);
+  user.gamification.stats = stats;
+}
+
+function applyActionStats(user, action, meta) {
+  const stats = user.gamification.stats;
+
+  if (action === 'lessonComplete') {
+    stats.lessonsCompleted += 1;
+    stats.completedLessonsCount = stats.lessonsCompleted;
+  }
+
+  if (action === 'quizResult') {
+    stats.quizzesCompleted += 1;
+    if (meta && Number(meta.percent || 0) >= 80 && meta.isHighScoreFirstTime) {
+      stats.highQuizScores += 1;
+    }
+  }
+
+  if (action === 'courseComplete') {
+    stats.coursesCompleted += 1;
+  }
+
+  if (action === 'aiTutor' || action === 'aiQuizGenerate' || action === 'aiSlideGenerate') {
+    stats.aiInteractions += 1;
+  }
+}
+
+function unlockBadges(user) {
+  const earnedSet = new Set((user.gamification.earnedBadges || []).map((badge) => badge.id));
+  const unlocked = [];
+
+  BADGES.forEach((badge) => {
+    if (earnedSet.has(badge.id)) return;
+    if (!badge.check(user)) return;
+
+    const unlockedBadge = {
+      id: badge.id,
+      name: badge.name,
+      description: badge.description,
+      icon: badge.icon,
+      earnedAt: new Date()
+    };
+
+    user.gamification.earnedBadges.push(unlockedBadge);
+    unlocked.push(unlockedBadge);
+    earnedSet.add(badge.id);
+  });
+
+  return unlocked;
+}
+
+function getQuizXp(percent) {
+  if (percent >= 90) return ACTION_XP.quizExcellent;
+  if (percent >= 70) return ACTION_XP.quizPassed;
+  return ACTION_XP.quizAttempt;
+}
+
+async function awardGamification(user, options = {}) {
+  ensureGamificationState(user);
+
+  const action = String(options.action || '').trim();
+  const meta = options.meta || {};
+  const activityDate = options.activityDate || new Date();
+
+  let baseXp = 0;
+
+  if (action === 'lessonComplete') baseXp = ACTION_XP.lessonComplete;
+  if (action === 'courseComplete') baseXp = ACTION_XP.courseComplete;
+  if (action === 'aiTutor') baseXp = ACTION_XP.aiTutor;
+  if (action === 'aiQuizGenerate') baseXp = ACTION_XP.aiQuizGenerate;
+  if (action === 'aiSlideGenerate') baseXp = ACTION_XP.aiSlideGenerate;
+  if (action === 'quizResult') baseXp = getQuizXp(Number(meta.percent || 0));
+
+  const streakXp = applyDailyStreak(user, activityDate);
+  applyActionStats(user, action, meta);
+
+  const gainedXp = Math.max(0, baseXp + streakXp);
+  user.gamification.totalXP += gainedXp;
+
+  const levelInfo = getLevelInfo(user.gamification.totalXP);
+  user.gamification.currentLevel = levelInfo.level;
+
+  const unlockedBadges = unlockBadges(user);
+
+  await user.save();
+
+  return {
+    gainedXp,
+    streakXp,
+    levelInfo,
+    unlockedBadges,
+    profile: buildGamificationViewModel(user)
+  };
+}
+
+function buildGamificationViewModel(user) {
+  ensureGamificationState(user);
+  const levelInfo = getLevelInfo(user.gamification.totalXP);
+  const earnedIds = new Set((user.gamification.earnedBadges || []).map((badge) => badge.id));
+
+  return {
+    totalXP: Number(user.gamification.totalXP || 0),
+    currentLevel: Number(user.gamification.currentLevel || 1),
+    currentStreak: Number(user.gamification.currentStreak || 0),
+    longestStreak: Number(user.gamification.longestStreak || 0),
+    completedLessonsCount: Number(user.gamification.stats.completedLessonsCount || user.gamification.stats.lessonsCompleted || 0),
+    levelProgress: levelInfo,
+    earnedBadges: (user.gamification.earnedBadges || []).sort((a, b) => new Date(a.earnedAt) - new Date(b.earnedAt)),
+    badges: BADGES.map((badge) => {
+      const earned = earnedIds.has(badge.id);
+      const earnedMeta = earned
+        ? (user.gamification.earnedBadges || []).find((entry) => entry.id === badge.id)
+        : null;
+
+      return {
+        id: badge.id,
+        name: badge.name,
+        description: badge.description,
+        icon: badge.icon,
+        earned,
+        earnedAt: earnedMeta ? earnedMeta.earnedAt : null
+      };
+    })
+  };
+}
+
+module.exports = {
+  ACTION_XP,
+  BADGES,
+  LEVELS,
+  getLevelInfo,
+  buildGamificationViewModel,
+  awardGamification
+};

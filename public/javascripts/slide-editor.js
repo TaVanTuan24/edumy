@@ -46,6 +46,11 @@
         alignRight: document.getElementById('alignRight'),
         propWidth: document.getElementById('propWidth'),
         propHeight: document.getElementById('propHeight'),
+        propImageSrc: document.getElementById('propImageSrc'),
+        propImageUploadBtn: document.getElementById('propImageUploadBtn'),
+        propImageUploadInput: document.getElementById('propImageUploadInput'),
+        propImagePreview: document.getElementById('propImagePreview'),
+        propImagePreviewEmpty: document.getElementById('propImagePreviewEmpty'),
         deleteElementBtn: document.getElementById('deleteElementBtn'),
         slideThemeSelect: document.getElementById('slideThemeSelect'),
         previewCanvas: document.getElementById('previewCanvas'),
@@ -129,6 +134,16 @@
 
         els.propText.addEventListener('input', updateFromProperties);
         els.propColor.addEventListener('input', updateFromProperties);
+        if (els.propImageSrc) {
+            els.propImageSrc.addEventListener('change', onImageSourceChanged);
+        }
+        if (els.propImageUploadBtn && els.propImageUploadInput) {
+            els.propImageUploadBtn.addEventListener('click', function() {
+                els.propImageUploadInput.value = '';
+                els.propImageUploadInput.click();
+            });
+            els.propImageUploadInput.addEventListener('change', onImageReplacementPicked);
+        }
 
         els.propBold.addEventListener('click', function() {
             const element = getSelectedElement();
@@ -211,15 +226,6 @@
     }
 
     function onCanvasClick(event) {
-        const deleteButton = event.target.closest('.delete-element-btn');
-        if (deleteButton) {
-            const elementId = deleteButton.dataset.elementId;
-            if (elementId) {
-                deleteElementById(elementId);
-            }
-            return;
-        }
-
         const selected = event.target.closest('.slide-element');
         if (selected) {
             state.selectedElementId = selected.dataset.elementId;
@@ -254,10 +260,6 @@
     }
 
     function onCanvasPointerDown(event) {
-        if (event.target.closest('.delete-element-btn')) {
-            return;
-        }
-
         const handle = event.target.closest('.resize-handle');
         const elementNode = event.target.closest('.slide-element');
         if (!elementNode) return;
@@ -498,22 +500,6 @@
         renderAll();
     }
 
-    function deleteElementById(elementId) {
-        const slide = getActiveSlide();
-        if (!slide) return;
-
-        slide.elements = slide.elements.filter(function(el) {
-            return el.id !== elementId;
-        });
-
-        if (state.selectedElementId === elementId) {
-            state.selectedElementId = null;
-        }
-
-        console.log('[SlideEditor] Elements:', slide.elements);
-        renderAll();
-    }
-
     function deleteSlide(slideId) {
         if (!slideId) return;
 
@@ -573,6 +559,64 @@
 
         renderCanvas();
         renderLayersList();
+    }
+
+    function onImageSourceChanged() {
+        const selected = getSelectedElement();
+        if (!selected || selected.type !== 'image' || !els.propImageSrc) return;
+
+        const nextSrc = String(els.propImageSrc.value || '').trim();
+        if (!nextSrc) {
+            showToast('Image URL is empty.');
+            els.propImageSrc.value = selected.src || '';
+            return;
+        }
+
+        setSelectedImageSource(nextSrc);
+    }
+
+    function onImageReplacementPicked(event) {
+        const selected = getSelectedElement();
+        if (!selected || selected.type !== 'image') return;
+
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(loadEvent) {
+            const result = loadEvent.target && loadEvent.target.result;
+            if (typeof result !== 'string' || !result) return;
+            setSelectedImageSource(result);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function setSelectedImageSource(src) {
+        const selected = getSelectedElement();
+        if (!selected || selected.type !== 'image') return;
+
+        const nextSrc = String(src || '').trim();
+        if (!nextSrc) return;
+
+        const previousSrc = selected.src || '';
+        const probe = new Image();
+
+        probe.onload = function() {
+            selected.src = nextSrc;
+            renderCanvas();
+            renderLayersList();
+            renderProperties();
+        };
+
+        probe.onerror = function() {
+            showToast('Unable to load image. Check the URL or choose another file.');
+            if (els.propImageSrc) {
+                els.propImageSrc.value = previousSrc;
+            }
+            renderProperties();
+        };
+
+        probe.src = nextSrc;
     }
 
     function setTextAlign(align) {
@@ -670,6 +714,18 @@
             node.style.width = element.width + 'px';
             node.style.height = element.height + 'px';
             node.style.overflow = 'hidden';
+
+            if (element.type === 'image') {
+                const image = document.createElement('img');
+                image.src = element.src || '';
+                image.alt = 'Slide image';
+                image.style.width = '100%';
+                image.style.height = '100%';
+                image.style.objectFit = 'cover';
+                node.appendChild(image);
+                els.previewCanvas.appendChild(node);
+                return;
+            }
 
             node.style.fontSize = (element.styles.fontSize || 28) + 'px';
             node.style.color = element.styles.color || '#1c1d1f';
@@ -800,14 +856,6 @@
 
             node.insertAdjacentHTML('beforeend', resizeHandles());
 
-            const deleteButton = document.createElement('button');
-            deleteButton.className = 'delete-element-btn';
-            deleteButton.type = 'button';
-            deleteButton.dataset.elementId = item.id;
-        
-            deleteButton.innerHTML = '<i class="fa-regular fa-trash-can"></i>';
-            node.appendChild(deleteButton);
-
             els.canvas.appendChild(node);
         });
     }
@@ -821,6 +869,7 @@
         if (!selected) {
             els.emptyProperties.classList.remove('d-none');
             els.propertiesPanel.classList.add('d-none');
+            updateImagePreview('');
             return;
         }
 
@@ -844,12 +893,41 @@
             toggleAlignButton(els.alignLeft, selected.styles.textAlign === 'left');
             toggleAlignButton(els.alignCenter, selected.styles.textAlign === 'center');
             toggleAlignButton(els.alignRight, selected.styles.textAlign === 'right');
+            updateImagePreview('');
         }
 
         if (selected.type === 'image') {
+            if (els.propImageSrc) {
+                els.propImageSrc.value = selected.src || '';
+            }
             els.propWidth.value = selected.width;
             els.propHeight.value = selected.height;
+            updateImagePreview(selected.src || '');
         }
+    }
+
+    function updateImagePreview(src) {
+        if (!els.propImagePreview || !els.propImagePreviewEmpty) return;
+
+        const value = String(src || '').trim();
+        if (!value) {
+            els.propImagePreview.removeAttribute('src');
+            els.propImagePreview.classList.remove('is-visible');
+            els.propImagePreviewEmpty.classList.add('is-visible');
+            return;
+        }
+
+        els.propImagePreview.src = value;
+        els.propImagePreview.onerror = function() {
+            els.propImagePreview.classList.remove('is-visible');
+            els.propImagePreviewEmpty.classList.add('is-visible');
+        };
+        els.propImagePreview.onload = function() {
+            els.propImagePreview.classList.add('is-visible');
+            els.propImagePreviewEmpty.classList.remove('is-visible');
+        };
+        els.propImagePreview.classList.add('is-visible');
+        els.propImagePreviewEmpty.classList.remove('is-visible');
     }
 
     function resizeHandles() {

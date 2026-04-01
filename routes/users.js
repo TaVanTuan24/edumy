@@ -4,7 +4,7 @@ const passport = require('passport');
 const catchAsync = require('../utils/catchAsync');
 const User = require('../models/user');
 const users = require('../controllers/users')
-const { storeReturnTo } = require('../middleware');
+const { storeReturnTo, isLoggedIn } = require('../middleware');
 
 router.route('/register')
     .get(users.renderRegister)
@@ -26,6 +26,9 @@ router.route('/login')
 // })
 
 router.get('/logout', users.logout);
+router.get('/profile', isLoggedIn, catchAsync(users.renderProfile));
+router.get('/api/gamification', isLoggedIn, catchAsync(users.getGamificationProfile));
+router.post('/api/gamification/award', isLoggedIn, catchAsync(users.awardGamificationAction));
 
 // router.get('/join', users.join)
 

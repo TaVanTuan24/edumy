@@ -16,6 +16,48 @@ const UserSchema = new Schema({
         type: [Schema.Types.ObjectId],
         ref: 'Course',
         default: []
+    },
+    gamification: {
+        totalXP: {
+            type: Number,
+            default: 0
+        },
+        currentLevel: {
+            type: Number,
+            default: 1
+        },
+        currentStreak: {
+            type: Number,
+            default: 0
+        },
+        longestStreak: {
+            type: Number,
+            default: 0
+        },
+        lastActivityDate: {
+            type: Date,
+            default: null
+        },
+        earnedBadges: {
+            type: [
+                {
+                    id: { type: String, default: '' },
+                    name: { type: String, default: '' },
+                    description: { type: String, default: '' },
+                    icon: { type: String, default: '' },
+                    earnedAt: { type: Date, default: Date.now }
+                }
+            ],
+            default: []
+        },
+        stats: {
+            lessonsCompleted: { type: Number, default: 0 },
+            quizzesCompleted: { type: Number, default: 0 },
+            highQuizScores: { type: Number, default: 0 },
+            aiInteractions: { type: Number, default: 0 },
+            coursesCompleted: { type: Number, default: 0 },
+            completedLessonsCount: { type: Number, default: 0 }
+        }
     }
 })
 

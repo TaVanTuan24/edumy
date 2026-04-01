@@ -137,11 +137,35 @@
     <div class="learning-sidebar-inner">
     <% const totalVideos = course.driveStructure.reduce((acc, sec) => acc + (sec.videos || sec.items || []).length, 0); %>
     <% const completedCount = completedVideos.length; %>
+    <% const gm = gamification || { currentLevel: 1, totalXP: 0, currentStreak: 0, levelProgress: { progressPercent: 0, nextLevel: 2, xpToNextLevel: 500 } }; %>
     <div class="mb-3">
       <h6 class="text-success">Tiến độ học: <%= completedCount %> / <%= totalVideos %> video (<%= Math.round(completedCount / totalVideos * 100) %>%)</h6>
       <div class="progress">
         <div class="progress-bar bg-success" role="progressbar" style="width: <%= Math.round(completedCount / totalVideos * 100) %>%"
           aria-valuenow="<%= completedCount %>" aria-valuemin="0" aria-valuemax="<%= totalVideos %>"></div>
+      </div>
+    </div>
+
+    <div class="card mb-3" id="learningGamificationCard">
+      <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Level <span id="gmLevelValue"><%= gm.currentLevel %></span></h6>
+          <span class="badge bg-primary" id="gmXpValue"><%= gm.totalXP %> XP</span>
+        </div>
+        <div class="progress mb-2" style="height: 8px;">
+          <div id="gmLevelProgress" class="progress-bar bg-info" role="progressbar" style="width: <%= gm.levelProgress.progressPercent || 0 %>%"></div>
+        </div>
+        <div class="small text-muted mb-2" id="gmNextLevelText">
+          <% if (gm.levelProgress.nextLevel) { %>
+            <%= gm.levelProgress.xpToNextLevel %> XP to Level <%= gm.levelProgress.nextLevel %>
+          <% } else { %>
+            Max level reached
+          <% } %>
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="small"><i class="fa-solid fa-fire text-danger me-1"></i>Streak: <strong id="gmStreakValue"><%= gm.currentStreak %></strong></span>
+          <a href="/profile" class="btn btn-sm btn-outline-primary">View Profile</a>
+        </div>
       </div>
     </div>
 
@@ -167,6 +191,7 @@
   const completedVideos = window.completedVideos;
   const sectionNotes = window.sectionNotes;
   const hasCourseUpdate = <%- JSON.stringify(!!hasCourseUpdate) %>;
+  window.__GAMIFICATION__ = <%- JSON.stringify(gamification || null) %>;
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script src="/javascripts/show/store.js" defer></script>

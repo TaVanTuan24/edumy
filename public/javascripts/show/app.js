@@ -189,9 +189,15 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ video: videoUrl, completed: !!completed, lessonId: lessonId })
-    }).catch(function(err) {
-      console.error('[Progress Sync Error]', err);
-    });
+    })
+      .then(function() {
+        if (completed) {
+          refreshGamificationUI();
+        }
+      })
+      .catch(function(err) {
+        console.error('[Progress Sync Error]', err);
+      });
   }
 
   function markCurrentLessonCompleted() {
@@ -314,17 +320,56 @@
     };
 
     console.log('[Track Quiz]', payload);
-    postTrack('/track/quiz', payload);
+    postTrack('/track/quiz', payload, true);
   }
 
-  function postTrack(url, payload) {
+  function postTrack(url, payload, shouldRefreshGamification) {
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
-    }).catch(function(err) {
-      console.error('[Track Error]', err);
-    });
+    })
+      .then(function() {
+        if (shouldRefreshGamification) {
+          refreshGamificationUI();
+        }
+      })
+      .catch(function(err) {
+        console.error('[Track Error]', err);
+      });
+  }
+
+  function refreshGamificationUI() {
+    const card = document.getElementById('learningGamificationCard');
+    if (!card) return;
+
+    fetch('/api/gamification')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (!data || !data.success || !data.gamification) return;
+        const gm = data.gamification;
+
+        const levelEl = document.getElementById('gmLevelValue');
+        const xpEl = document.getElementById('gmXpValue');
+        const streakEl = document.getElementById('gmStreakValue');
+        const barEl = document.getElementById('gmLevelProgress');
+        const nextEl = document.getElementById('gmNextLevelText');
+
+        if (levelEl) levelEl.textContent = String(gm.currentLevel || 1);
+        if (xpEl) xpEl.textContent = String(gm.totalXP || 0) + ' XP';
+        if (streakEl) streakEl.textContent = String(gm.currentStreak || 0);
+        if (barEl) barEl.style.width = String((gm.levelProgress && gm.levelProgress.progressPercent) || 0) + '%';
+        if (nextEl) {
+          if (gm.levelProgress && gm.levelProgress.nextLevel) {
+            nextEl.textContent = String(gm.levelProgress.xpToNextLevel || 0) + ' XP to Level ' + String(gm.levelProgress.nextLevel);
+          } else {
+            nextEl.textContent = 'Max level reached';
+          }
+        }
+      })
+      .catch(function(err) {
+        console.error('[Gamification UI Refresh Error]', err);
+      });
   }
 
   function updateContext(payload) {

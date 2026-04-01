@@ -3,6 +3,8 @@ const router = express.Router()
 const axios = require("axios")
 const Chat = require("../models/chat")
 const Course = require("../models/course")
+const User = require("../models/user")
+const { awardGamification } = require('../utils/gamification')
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req, res, next) => {
@@ -34,6 +36,11 @@ router.post("/chat", async (req, res) => {
                 lessonId,
                 context
             })
+
+            const gamificationUser = await User.findById(userId)
+            if (gamificationUser) {
+                await awardGamification(gamificationUser, { action: 'aiTutor' })
+            }
 
             return res.json({ success: true, answer: response })
         }
@@ -110,6 +117,11 @@ router.post("/chat", async (req, res) => {
         // Save chat with new messages
         await chat.save()
 
+        const gamificationUser = await User.findById(userId)
+        if (gamificationUser) {
+            await awardGamification(gamificationUser, { action: 'aiTutor' })
+        }
+
         res.json({
             success: true,
             reply,
@@ -176,6 +188,11 @@ router.post("/generate-quiz", async (req, res) => {
             return res.status(422).json({ error: 'Invalid AI response' });
         }
 
+        const gamificationUser = await User.findById(req.user._id);
+        if (gamificationUser) {
+            await awardGamification(gamificationUser, { action: 'aiQuizGenerate' });
+        }
+
         res.json({ success: true, questions: parsed });
     } catch (err) {
         console.error('AI Quiz Error:', err.message);
@@ -225,6 +242,12 @@ router.post("/generate-slide", async (req, res) => {
         const prompt = `You are a professional presentation designer (like Canva / PowerPoint AI).\n\nYour job is NOT to generate text.\nYour job is to DESIGN slides visually.\n\nGOAL:\nGenerate ${count} BEAUTIFUL slides.\nTopic: ${trimmedPrompt}\n\nEach slide must:\n- Have layout\n- Have spacing\n- Have hierarchy\n- Use full canvas (1003x563)\n\nDESIGN SYSTEM:\nEach slide MUST choose ONE layout:\n1) left-text\n2) center-title\n3) two-columns\nDo NOT use the same layout for all slides.\n\nCANVAS:\nWidth: 1003\nHeight: 563\n\nELEMENT RULES:\nEach slide MUST have:\n- 1 Title\n- 2-4 content elements\n- Text elements ONLY (no images)\n\nCONTENT RULES:\n- Keep text SHORT (max 8 words per line)\n- Use bullet style: "• something"\n- Avoid long paragraphs\n\nOUTPUT FORMAT (STRICT JSON ONLY):\n{\n  "slides": [\n    {\n      "id": "slide-1",\n      "layout": "left-text",\n      "theme": "light",\n      "title": "Slide Title",\n      "bullets": ["• Bullet 1", "• Bullet 2", "• Bullet 3"]\n    }\n  ]\n}\n\nFORBIDDEN:\n- DO NOT stack elements\n- DO NOT reuse same y\n- DO NOT return 1 element slide\n- DO NOT output markdown\n\nRETURN JSON ONLY`;
 
         const slides = await generateWithRetry(prompt, 3, trimmedPrompt);
+
+        const gamificationUser = await User.findById(req.user._id);
+        if (gamificationUser) {
+            await awardGamification(gamificationUser, { action: 'aiSlideGenerate' });
+        }
+
         res.json({ success: true, slides: slides });
     } catch (err) {
         console.error('AI Slide Error:', err.message);

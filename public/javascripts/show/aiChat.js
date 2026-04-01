@@ -68,6 +68,7 @@
       .then(function(data) {
         const answer = data && (data.answer || data.reply || data.error) ? (data.answer || data.reply || data.error) : 'Không có phản hồi.';
         addMessage(messages, 'ai', answer);
+        refreshGamificationWidget();
       })
       .catch(function(err) {
         console.error('[AI Chat Error]', err);
@@ -122,6 +123,39 @@
       type: lesson && lesson.type ? String(lesson.type) : null,
       slideIndex: null
     };
+  }
+
+  function refreshGamificationWidget() {
+    const card = document.getElementById('learningGamificationCard');
+    if (!card) return;
+
+    fetch('/api/gamification')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (!data || !data.success || !data.gamification) return;
+        const gm = data.gamification;
+
+        const levelEl = document.getElementById('gmLevelValue');
+        const xpEl = document.getElementById('gmXpValue');
+        const streakEl = document.getElementById('gmStreakValue');
+        const barEl = document.getElementById('gmLevelProgress');
+        const nextEl = document.getElementById('gmNextLevelText');
+
+        if (levelEl) levelEl.textContent = String(gm.currentLevel || 1);
+        if (xpEl) xpEl.textContent = String(gm.totalXP || 0) + ' XP';
+        if (streakEl) streakEl.textContent = String(gm.currentStreak || 0);
+        if (barEl) barEl.style.width = String((gm.levelProgress && gm.levelProgress.progressPercent) || 0) + '%';
+        if (nextEl) {
+          if (gm.levelProgress && gm.levelProgress.nextLevel) {
+            nextEl.textContent = String(gm.levelProgress.xpToNextLevel || 0) + ' XP to Level ' + String(gm.levelProgress.nextLevel);
+          } else {
+            nextEl.textContent = 'Max level reached';
+          }
+        }
+      })
+      .catch(function(err) {
+        console.error('[Gamification Refresh Error]', err);
+      });
   }
 
   document.addEventListener('DOMContentLoaded', init);

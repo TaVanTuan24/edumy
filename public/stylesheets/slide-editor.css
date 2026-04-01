@@ -332,30 +332,6 @@
     background: #ecf2ff;
 }
 
-.delete-element-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-    border: 1px solid #efc9cf;
-    background: rgba(255, 255, 255, 0.95);
-    color: #c2303f;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 3;
-}
-
-.slide-element.selected .delete-element-btn {
-    display: inline-flex;
-}
-
-.delete-element-btn:hover {
-    background: #fff0f3;
-}
-
 .resize-handle {
     width: 10px;
     height: 10px;
@@ -388,6 +364,42 @@
     font-weight: 700;
     color: #5f6772;
     margin-bottom: 4px;
+}
+
+.se-image-preview-wrap {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px;
+    background: #f8fbff;
+}
+
+.se-image-preview {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    border: 1px solid #d7e0eb;
+    object-fit: cover;
+    background: #ffffff;
+    display: none;
+}
+
+.se-image-preview.is-visible {
+    display: block;
+}
+
+.se-image-preview-empty {
+    display: none;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    color: #7b8694;
+    text-align: center;
+    font-size: 12px;
+    padding: 16px 8px;
+    background: #ffffff;
+}
+
+.se-image-preview-empty.is-visible {
+    display: block;
 }
 
 .se-preview-ratio {

@@ -1,4 +1,6 @@
 const UserCourseProgress = require('../models/userCourseProgress');
+const User = require('../models/user');
+const { awardGamification } = require('../utils/gamification');
 
 function normalizeLessonTracking(doc, lessonId, lessonType) {
   if (!doc.lessonTracking) doc.lessonTracking = [];
@@ -134,6 +136,7 @@ module.exports.trackQuiz = async (req, res) => {
     const scoreValue = Number(score) || 0;
     const totalValue = Number(total) || 0;
     const percent = totalValue > 0 ? Math.round((scoreValue / totalValue) * 100) : 0;
+    const previousPercent = Number(entry.quizScore || 0);
 
     entry.quizAttempts = Number(entry.quizAttempts || 0) + (Number(attempts) || 1);
     entry.quizScore = percent;
@@ -151,6 +154,17 @@ module.exports.trackQuiz = async (req, res) => {
 
     progressDoc.lastAccessed = new Date();
     await progressDoc.save();
+
+    const user = await User.findById(req.user._id);
+    if (user) {
+      await awardGamification(user, {
+        action: 'quizResult',
+        meta: {
+          percent,
+          isHighScoreFirstTime: previousPercent < 80 && percent >= 80
+        }
+      });
+    }
 
     res.json({ success: true });
   } catch (err) {

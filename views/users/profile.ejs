@@ -1,0 +1,89 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/stylesheets/profile.css">
+
+<div class="profile-page container py-4">
+  <div class="profile-header-card">
+    <div class="profile-avatar" aria-hidden="true"><%= (profileUser.username || 'U').charAt(0).toUpperCase() %></div>
+    <div>
+      <h1 class="profile-name"><%= profileUser.username %></h1>
+      <p class="profile-email mb-1"><%= profileUser.email %></p>
+      <p class="profile-meta mb-0">Member since <%= new Date(profileUser.createdAt || Date.now()).toLocaleDateString() %></p>
+    </div>
+  </div>
+
+  <section class="profile-grid mt-4">
+    <article class="profile-card">
+      <h2>Level Progress</h2>
+      <div class="level-row">
+        <span class="level-pill">Level <%= gamification.currentLevel %></span>
+        <span class="xp-pill"><%= gamification.totalXP %> XP</span>
+      </div>
+      <div class="xp-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= gamification.levelProgress.progressPercent %>">
+        <div id="xpProgressFill" class="xp-fill" data-progress="<%= gamification.levelProgress.progressPercent %>"></div>
+      </div>
+      <p class="progress-note mb-0">
+        <% if (gamification.levelProgress.nextLevel) { %>
+          <strong><%= gamification.levelProgress.xpToNextLevel %> XP</strong> to Level <%= gamification.levelProgress.nextLevel %>
+        <% } else { %>
+          Max level reached
+        <% } %>
+      </p>
+    </article>
+
+    <article class="profile-card">
+      <h2>Daily Streak</h2>
+      <div class="streak-row">
+        <div class="streak-box">
+          <i class="fa-solid fa-fire"></i>
+          <div>
+            <div class="streak-value"><%= gamification.currentStreak %> days</div>
+            <div class="streak-label">Current streak</div>
+          </div>
+        </div>
+        <div class="streak-box muted">
+          <i class="fa-solid fa-fire-flame-curved"></i>
+          <div>
+            <div class="streak-value"><%= gamification.longestStreak %> days</div>
+            <div class="streak-label">Longest streak</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="profile-card">
+      <h2>Learning Stats</h2>
+      <ul class="stat-list">
+        <li><span>Total XP</span><strong><%= gamification.totalXP %></strong></li>
+        <li><span>Completed Lessons</span><strong><%= gamification.completedLessonsCount %></strong></li>
+        <li><span>Completed Quizzes</span><strong><%= profileUser.gamification && profileUser.gamification.stats ? profileUser.gamification.stats.quizzesCompleted : 0 %></strong></li>
+        <li><span>AI Interactions</span><strong><%= profileUser.gamification && profileUser.gamification.stats ? profileUser.gamification.stats.aiInteractions : 0 %></strong></li>
+      </ul>
+    </article>
+  </section>
+
+  <section class="profile-card mt-4">
+    <div class="badge-head">
+      <h2 class="mb-0">Badges</h2>
+      <span class="badge-count"><%= gamification.earnedBadges.length %> / <%= gamification.badges.length %> unlocked</span>
+    </div>
+
+    <div class="badge-grid mt-3">
+      <% gamification.badges.forEach((badge) => { %>
+        <article class="badge-item <%= badge.earned ? 'earned' : 'locked' %>">
+          <div class="badge-icon"><i class="fa-solid <%= badge.icon %>"></i></div>
+          <div>
+            <h3><%= badge.name %></h3>
+            <p><%= badge.description %></p>
+            <% if (badge.earnedAt) { %>
+              <small>Unlocked on <%= new Date(badge.earnedAt).toLocaleDateString() %></small>
+            <% } else { %>
+              <small>Locked</small>
+            <% } %>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+  </section>
+</div>
+
+<script src="/javascripts/profile.js" defer></script>
