@@ -4,7 +4,7 @@ const { isLoggedIn } = require('../middleware');
 const catchAsync = require('../utils/catchAsync');
 const course = require('../controllers/courses');
 const multer = require('multer');
-const { storage } = require('../cloudinary');
+const { storage } = require('../config/cloudinary');
 const upload = multer({ storage });
 
 router

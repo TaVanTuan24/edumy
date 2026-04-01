@@ -1,61 +1,31 @@
-const { courseSchema, reviewSchema } = require('./schemas');
-const ExpressError = require('./utils/ExpressError');
-const Course = require('./models/course');
-const Review = require('./models/review');
+const storeReturnTo = (req, res, next) => {
+  res.locals.returnTo = req.session.returnTo || req.get('Referrer') || '/';
+  next();
+};
 
-module.exports.isLoggedIn = (req, res, next) => {
-    if (!req.isAuthenticated()) {
-        req.session.returnTo = req.originalUrl;
-        req.flash('error', 'You must be signed in first');
-        return res.redirect('/login');
-    }
-    next();
-}
+const isLoggedIn = (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    req.session.returnTo = req.originalUrl;
+    req.flash('error', 'You must be signed in!');
+    return res.redirect('/users/login');
+  }
+  next();
+};
 
-module.exports.storeReturnTo = (req, res, next) => {
-    if (req.session.returnTo) {
-        res.locals.returnTo = req.session.returnTo;
-    }
-    next();
-}
-module.exports.validateCourse = (req, res, next) => {
-    const { error } = courseSchema.validate(req.body);
-    if (error) {
-        const msg = error.details.map(el => el.message).join(',')
-        throw new ExpressError(msg, 400)
-    }
-    else {
-        next();
-    }
-}
+const isAuthor = async (req, res, next) => {
+  const Review = require('../models/review');
+  const { reviewId } = req.params;
+  const review = await Review.findById(reviewId);
+  if (!review || !review.author.equals(req.user._id)) {
+    req.flash('error', 'You do not have permission to do that!');
+    return res.redirect(`/courses/${req.params.id}`);
+  }
+  res.locals.review = review;
+  next();
+};
 
-module.exports.isAuthor = async (req, res, next) => {
-    const { id } = req.params;
-    const course = await Course.findById(id);
-    if (!course.author.equals(req.user._id)) {
-        req.flash('error', 'You do not have permission!');
-        return res.redirect(`/courses/${id}`);
-    }
-    next();
-}
-
-module.exports.isReviewAuthor = async (req, res, next) => {
-    const { id, reviewId } = req.params;
-    const review = await Review.findById(reviewId);
-    if (!review.author.equals(req.user._id)) {
-        req.flash('error', 'You do not have permission!');
-        return res.redirect(`/courses/${id}`);
-    }
-    next();
-}
-
-module.exports.validateReview = (req, res, next) => {
-    const { error } = reviewSchema.validate(req.body);
-    if (error) {
-        const msg = error.details.map(el => el.message).join(',')
-        throw new ExpressError(msg, 400)
-    }
-    else {
-        next();
-    }
-}
+module.exports = { 
+  storeReturnTo, 
+  isLoggedIn,
+  isAuthor 
+};

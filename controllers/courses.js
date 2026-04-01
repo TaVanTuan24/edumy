@@ -1,6 +1,6 @@
 const Course = require('../models/course');
 const scanDriveStructure = require('../utils/driveScanner');
-const { cloudinary } = require('../cloudinary');
+const { cloudinary } = require('../config/cloudinary');
 const Progress = require('../models/progress');
 const Note = require('../models/note');
 const User = require('../models/user');

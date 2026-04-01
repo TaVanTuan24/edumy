@@ -1,9 +1,19 @@
-// const admin = require("firebase-admin");
-// const serviceAccount = require("./serviceAccountKey.json");
+const mockDB = {
+  collection: (name) => ({
+    orderBy: (field, direction) => ({
+      get: async () => ({
+        docs: []
+      })
+    }),
+    doc: (id) => ({
+      delete: async () => {},
+      get: async () => ({
+        exists: true,
+        data: () => ({ targetName: '', scannedAt: null })
+      }),
+      update: async (data) => {}
+    })
+  })
+};
 
-// admin.initializeApp({
-//     credential: admin.credential.cert(serviceAccount),
-// });
-
-// const db = admin.firestore();
-// module.exports = db;
+module.exports = mockDB;
