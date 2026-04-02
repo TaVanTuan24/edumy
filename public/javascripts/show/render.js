@@ -16,12 +16,15 @@
   let quizAttemptCount = 0;
   let youtubePlayer = null;
   let youtubePollId = null;
+  let youtubePollIntervalMs = 250;
   let lastYoutubeTime = 0;
+  let youtubeDurationSec = 0;
   let youtubeZeroPollCount = 0;
   let youtubeFallbackTimerId = null;
   let youtubeFallbackElapsed = 0;
   let youtubeApiWatchdogId = null;
   let youtubeFallbackInteractionBound = false;
+  let interactiveHotspotTimeoutId = null;
   let youtubeReadyPromise = null;
   let html5VideoPlayer = null;
   let html5TimeHandler = null;
@@ -50,6 +53,7 @@
     quizzes: [],
     shownQuizIds: new Set(),
     activeQuiz: null,
+    pendingIconQuiz: null,
     provider: null,
     providerType: '',
     wasPlayingBeforeModal: false
@@ -879,8 +883,11 @@
     // Trigger quizzes fresh on each lesson open so authors/students can retest immediately.
     interactiveState.shownQuizIds = new Set();
     interactiveState.activeQuiz = null;
+    interactiveState.pendingIconQuiz = null;
     interactiveState.wasPlayingBeforeModal = false;
     hideInteractiveQuizModal();
+    hideInteractiveQuizHotspot();
+    bindInteractiveQuizHotspot();
 
     const next = interactiveState.quizzes.length ? Number(interactiveState.quizzes[0].triggerTimeSec || 0) : '';
     updateInteractiveDebug({
@@ -902,10 +909,12 @@
     interactiveState.quizzes = [];
     interactiveState.shownQuizIds = new Set();
     interactiveState.activeQuiz = null;
+    interactiveState.pendingIconQuiz = null;
     interactiveState.provider = null;
     interactiveState.providerType = '';
     interactiveState.wasPlayingBeforeModal = false;
     hideInteractiveQuizModal();
+    hideInteractiveQuizHotspot();
 
     updateInteractiveDebug({
       provider: '',
@@ -922,7 +931,7 @@
 
   function checkInteractiveQuizTriggers(currentTimeSec) {
     if (!interactiveState || !interactiveState.lessonId || !interactiveState.quizzes.length) return;
-    if (interactiveState.activeQuiz) return;
+    if (interactiveState.activeQuiz || interactiveState.pendingIconQuiz) return;
 
     const currentTime = Number(currentTimeSec);
     if (!Number.isFinite(currentTime) || currentTime < 0) return;
@@ -957,14 +966,73 @@
       status: 'triggered'
     });
 
-    const provider = interactiveState.provider || createFallbackProvider();
-    interactiveState.wasPlayingBeforeModal = provider.isPlaying();
+    interactiveState.pendingIconQuiz = trigger;
+    interactiveState.activeQuiz = null;
+    showInteractiveQuizHotspot(trigger);
 
-    if (trigger.pauseOnShow && interactiveState.wasPlayingBeforeModal && typeof provider.pause === 'function') {
-      provider.pause();
+    updateInteractiveDebug({
+      activeQuizId: String(trigger._id),
+      activeQuizTime: Number(trigger.triggerTimeSec || 0),
+      status: 'icon-waiting-click'
+    });
+  }
+
+  function bindInteractiveQuizHotspot() {
+    const hotspot = document.getElementById('interactiveQuizHotspot');
+    if (!hotspot || hotspot.dataset.bound === '1') return;
+
+    hotspot.dataset.bound = '1';
+    hotspot.addEventListener('click', function() {
+      const quiz = interactiveState.pendingIconQuiz;
+      if (!quiz) return;
+      const anchorRect = hotspot.getBoundingClientRect();
+      interactiveState.pendingIconQuiz = null;
+      interactiveState.activeQuiz = quiz;
+      hideInteractiveQuizHotspot();
+      showInteractiveQuizModal(quiz, anchorRect);
+    });
+  }
+
+  function showInteractiveQuizHotspot(quiz) {
+    const container = document.getElementById('videoPlayerContainer');
+    const hotspot = document.getElementById('interactiveQuizHotspot');
+    if (!container || !hotspot || !quiz) return;
+
+    if (interactiveHotspotTimeoutId) {
+      clearTimeout(interactiveHotspotTimeoutId);
+      interactiveHotspotTimeoutId = null;
     }
 
-    showInteractiveQuizModal(trigger);
+    const position = quiz.position || {};
+    const xPercent = Number.isFinite(Number(position.xPercent)) ? Number(position.xPercent) : 86;
+    const yPercent = Number.isFinite(Number(position.yPercent)) ? Number(position.yPercent) : 82;
+
+    const rect = container.getBoundingClientRect();
+    const size = 34;
+    const left = Math.max(0, Math.min(rect.width - size, (rect.width * (xPercent / 100)) - (size / 2)));
+    const top = Math.max(0, Math.min(rect.height - size, (rect.height * (yPercent / 100)) - (size / 2)));
+
+    hotspot.style.left = left + 'px';
+    hotspot.style.top = top + 'px';
+    hotspot.style.display = 'inline-flex';
+
+    interactiveHotspotTimeoutId = setTimeout(function() {
+      if (!interactiveState.pendingIconQuiz) return;
+      interactiveState.pendingIconQuiz = null;
+      interactiveState.activeQuiz = null;
+      hideInteractiveQuizHotspot();
+      updateInteractiveDebug({ status: 'icon-timeout-hidden' });
+    }, 5000);
+  }
+
+  function hideInteractiveQuizHotspot() {
+    const hotspot = document.getElementById('interactiveQuizHotspot');
+    if (interactiveHotspotTimeoutId) {
+      clearTimeout(interactiveHotspotTimeoutId);
+      interactiveHotspotTimeoutId = null;
+    }
+    if (!hotspot) return;
+    hotspot.style.display = 'none';
   }
 
   function formatQuizTime(seconds) {
@@ -974,7 +1042,7 @@
     return mins + ':' + String(secs).padStart(2, '0');
   }
 
-  function showInteractiveQuizModal(quiz) {
+  function showInteractiveQuizModal(quiz, anchorRect) {
     const modal = document.getElementById('interactiveQuizModal');
     if (!modal) return;
 
@@ -987,6 +1055,7 @@
 
     if (questionEl) questionEl.textContent = quiz.question;
     if (stampEl) stampEl.textContent = 'Checkpoint at ' + formatQuizTime(quiz.triggerTimeSec);
+    modal.classList.add('inline-quiz-mode');
     if (feedbackEl) {
       feedbackEl.className = 'interactive-quiz-feedback';
       feedbackEl.textContent = '';
@@ -1047,17 +1116,25 @@
 
         if (closeBtn) closeBtn.disabled = false;
         submitBtn.disabled = true;
+
+        // Keep playback uninterrupted and close overlay shortly after submit.
+        setTimeout(function() {
+          hideInteractiveQuizModal();
+          interactiveState.activeQuiz = null;
+          updateInteractiveDebug({
+            activeQuizId: '',
+            activeQuizTime: '',
+            status: 'answered-auto-closed'
+          });
+        }, 850);
       };
     }
 
     if (closeBtn) {
-      closeBtn.disabled = true;
+      closeBtn.disabled = false;
+      closeBtn.textContent = 'Skip';
       closeBtn.onclick = function() {
         hideInteractiveQuizModal();
-        const provider = interactiveState.provider || createFallbackProvider();
-        if (interactiveState.wasPlayingBeforeModal && typeof provider.play === 'function') {
-          provider.play();
-        }
         interactiveState.activeQuiz = null;
         updateInteractiveDebug({
           activeQuizId: '',
@@ -1065,6 +1142,37 @@
           status: 'modal-closed'
         });
       };
+    }
+
+    const container = document.getElementById('videoPlayerContainer');
+    if (container && modal.parentElement !== container) {
+      container.appendChild(modal);
+    }
+
+    if (container && anchorRect) {
+      const containerRect = container.getBoundingClientRect();
+      const gap = 10;
+
+      // Show temporarily to measure dialog size accurately before final placement.
+      modal.style.display = 'block';
+      modal.style.left = '0px';
+      modal.style.top = '0px';
+
+      const popupWidth = Math.min(340, Math.max(250, modal.offsetWidth || 320));
+      const popupHeight = Math.max(170, modal.offsetHeight || 220);
+
+      let left = (anchorRect.right - containerRect.left) + gap;
+      if (left + popupWidth > containerRect.width - 8) {
+        left = (anchorRect.left - containerRect.left) - popupWidth - gap;
+      }
+
+      left = Math.max(8, Math.min(left, containerRect.width - popupWidth - 8));
+      let top = (anchorRect.top - containerRect.top) + (anchorRect.height / 2) - (popupHeight / 2);
+      top = Math.max(8, Math.min(top, containerRect.height - popupHeight - 8));
+
+      modal.style.left = left + 'px';
+      modal.style.top = top + 'px';
+      modal.style.display = '';
     }
 
     modal.classList.add('show');
@@ -1080,6 +1188,9 @@
     const modal = document.getElementById('interactiveQuizModal');
     if (!modal) return;
     modal.classList.remove('show');
+    modal.classList.remove('inline-quiz-mode');
+    modal.style.left = '';
+    modal.style.top = '';
     modal.setAttribute('aria-hidden', 'true');
   }
 
@@ -1297,7 +1408,12 @@
   function buildYouTubeEmbedUrl(videoId) {
     const id = String(videoId || '').trim();
     if (!id) return '';
-    return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id);
+    const url = new URL('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id));
+    url.searchParams.set('enablejsapi', '1');
+    url.searchParams.set('origin', window.location.origin);
+    url.searchParams.set('rel', '0');
+    url.searchParams.set('playsinline', '1');
+    return url.toString();
   }
 
   function isDirectVideoFileUrl(url) {
@@ -1349,37 +1465,20 @@
     badge.style.right = '16px';
     badge.style.bottom = '16px';
     badge.style.transform = 'none';
-    badge.style.width = '56px';
-    badge.style.height = '56px';
+    badge.style.minWidth = '148px';
+    badge.style.height = '36px';
     badge.style.zIndex = '8';
-    badge.style.padding = '0';
-    badge.style.borderRadius = '50%';
+    badge.style.padding = '0 12px';
+    badge.style.borderRadius = '999px';
     badge.style.background = 'rgba(2, 6, 23, 0.72)';
     badge.style.color = 'rgb(248, 250, 252)';
-    badge.style.font = '14px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+    badge.style.font = '13px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
     badge.style.display = 'inline-flex';
     badge.style.alignItems = 'center';
     badge.style.justifyContent = 'center';
-    badge.style.pointerEvents = 'auto';
-    badge.style.cursor = 'pointer';
-    badge.textContent = '▶';
-    badge.title = 'Click to start/pause quiz timer (YouTube fallback)';
-
-    badge.addEventListener('click', function(ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-
-      if (!interactiveState || interactiveState.providerType !== 'youtube') return;
-
-      const playback = window.__videoPlayback || {};
-      const nextPlaying = !Boolean(playback.isPlaying);
-      setPlaybackState(nextPlaying);
-
-      updateInteractiveDebug({
-        provider: interactiveState.providerType || 'youtube',
-        status: nextPlaying ? 'youtube-badge-user-play' : 'youtube-badge-user-pause'
-      });
-    });
+    badge.style.pointerEvents = 'none';
+    badge.textContent = '00:00 / --:--';
+    badge.title = 'Playback time';
 
     container.appendChild(badge);
     playbackTimeBadge = badge;
@@ -1396,13 +1495,11 @@
     const badge = ensurePlaybackTimeBadge();
     if (!badge) return;
 
-    const current = formatPlaybackTime(currentSec);
+    const current = formatPlaybackTime(Number(currentSec) || 0);
     const duration = Number(durationSec);
     const durationText = Number.isFinite(duration) && duration > 0 ? formatPlaybackTime(duration) : '--:--';
-    const playback = window.__videoPlayback || {};
-    const isPlaying = Boolean(playback.isPlaying);
-    badge.textContent = isPlaying ? '❚❚' : '▶';
-    badge.title = current + ' / ' + durationText + ' (click to start/pause quiz timer)';
+    badge.textContent = current + ' / ' + durationText;
+    badge.title = 'Playback time';
   }
 
   function extractGoogleDriveMeta(inputUrl) {
@@ -1536,6 +1633,7 @@
   }
 
   function setupYouTubePlayer(videoId, lesson) {
+    youtubeDurationSec = 0;
     ensureYouTubeApi().then(function() {
       const iframe = ensureVideoIframe();
       if (!iframe) return;
@@ -1544,18 +1642,41 @@
         youtubePlayer = new window.YT.Player('videoIframe', {
           host: 'https://www.youtube-nocookie.com',
           videoId: videoId,
-          playerVars: { rel: 0, origin: window.location.origin },
+          playerVars: { rel: 0, origin: window.location.origin, modestbranding: 1 },
           events: {
+            onReady: function() {
+              syncYouTubeTime('youtube-ready');
+              startYouTubePolling(lesson);
+            },
             onStateChange: function(event) {
               handleYouTubeStateChange(event, lesson);
+            },
+            onError: function() {
+              if (!youtubeFallbackTimerId) {
+                startYouTubeFallbackTimer();
+              }
+              updateInteractiveDebug({
+                provider: interactiveState.providerType || 'youtube',
+                status: 'youtube-player-error-fallback'
+              });
             }
           }
         });
       } else {
         youtubePlayer.loadVideoById(videoId);
+        syncYouTubeTime('youtube-load-video');
+        startYouTubePolling(lesson);
       }
 
-      startYouTubePolling(lesson);
+      // Some embeds report duration a bit later; warm up metadata reads for the first few seconds.
+      let warmupTries = 0;
+      const warmupId = setInterval(function() {
+        warmupTries += 1;
+        syncYouTubeTime('youtube-meta-warmup');
+        if (youtubeDurationSec > 0 || warmupTries >= 20 || !youtubePlayer) {
+          clearInterval(warmupId);
+        }
+      }, 250);
     }).catch(function(err) {
       console.error('[YouTube API Error]', err);
       if (!youtubeFallbackTimerId) {
@@ -1581,6 +1702,7 @@
     if (state === window.YT.PlayerState.PLAYING) {
       setPlaybackState(true);
       lastYoutubeTime = position;
+      syncYouTubeTime('youtube-state-playing');
       if (typeof window.__trackVideoEvent === 'function') {
         window.__trackVideoEvent('play', position);
       }
@@ -1588,6 +1710,7 @@
 
     if (state === window.YT.PlayerState.PAUSED) {
       setPlaybackState(false);
+      syncYouTubeTime('youtube-state-paused');
       if (typeof window.__trackVideoEvent === 'function') {
         window.__trackVideoEvent('pause', position);
       }
@@ -1595,10 +1718,53 @@
 
     if (state === window.YT.PlayerState.ENDED) {
       setPlaybackState(false);
+      syncYouTubeTime('youtube-state-ended');
       if (typeof window.__trackVideoEvent === 'function') {
         window.__trackVideoEvent('ended', position);
       }
     }
+  }
+
+  function syncYouTubeTime(reason) {
+    if (!youtubePlayer || typeof youtubePlayer.getCurrentTime !== 'function') return;
+
+    let current = 0;
+    let duration = youtubeDurationSec;
+
+    try {
+      current = Number(youtubePlayer.getCurrentTime() || 0);
+    } catch (err) {
+      current = Number(youtubeFallbackElapsed || 0);
+    }
+
+    if (typeof youtubePlayer.getDuration === 'function') {
+      try {
+        const candidate = Number(youtubePlayer.getDuration() || 0);
+        if (candidate > 0) {
+          youtubeDurationSec = candidate;
+          duration = candidate;
+        }
+      } catch (err) {
+        duration = youtubeDurationSec;
+      }
+    }
+
+    if (current > 0.05) {
+      youtubeFallbackElapsed = current;
+      youtubeZeroPollCount = 0;
+      if (youtubeFallbackTimerId) {
+        stopYouTubeFallbackTimer();
+      }
+    }
+
+    updatePlaybackTimeBadge(current, duration, 'yt');
+    checkInteractiveQuizTriggers(current);
+    updateInteractiveDebug({
+      provider: interactiveState.providerType || 'youtube',
+      currentTime: Number(current || 0).toFixed(2),
+      status: reason || 'youtube-sync'
+    });
+    lastYoutubeTime = current;
   }
 
   function startYouTubePolling(lesson) {
@@ -1608,29 +1774,16 @@
 
     youtubePollId = setInterval(function() {
       if (!youtubePlayer || typeof youtubePlayer.getCurrentTime !== 'function') return;
-      let current = 0;
-      try {
-        current = Number(youtubePlayer.getCurrentTime() || 0);
-      } catch (err) {
-        updateInteractiveDebug({
-          provider: interactiveState.providerType || 'youtube',
-          status: 'youtube-poll-gettime-error'
-        });
-        current = Number(youtubeFallbackElapsed || 0);
-      }
-      const delta = Math.abs(current - lastYoutubeTime);
+      const before = lastYoutubeTime;
+      syncYouTubeTime(youtubeFallbackTimerId ? 'youtube-poll-fallback' : 'youtube-poll');
+      const current = lastYoutubeTime;
 
-      if (lastYoutubeTime && delta > 4) {
-        if (typeof window.__trackVideoEvent === 'function') {
-          window.__trackVideoEvent('seek', current);
-        }
+      const delta = Math.abs(current - before);
+      if (before && delta > 4 && typeof window.__trackVideoEvent === 'function') {
+        window.__trackVideoEvent('seek', current);
       }
 
-      if (current > 0.2) {
-        youtubeZeroPollCount = 0;
-        youtubeFallbackElapsed = current;
-        stopYouTubeFallbackTimer();
-      } else {
+      if (current <= 0.2) {
         youtubeZeroPollCount += 1;
       }
 
@@ -1639,24 +1792,7 @@
         startYouTubeFallbackTimer();
         setProviderNotice('YouTube API timing unavailable. Timed quizzes are running in approximate fallback mode.', 'warning');
       }
-
-      lastYoutubeTime = current;
-      let duration = 0;
-      if (youtubePlayer && typeof youtubePlayer.getDuration === 'function') {
-        try {
-          duration = Number(youtubePlayer.getDuration() || 0);
-        } catch (err) {
-          duration = 0;
-        }
-      }
-      updatePlaybackTimeBadge(current, duration, 'yt');
-      updateInteractiveDebug({
-        provider: interactiveState.providerType || 'youtube',
-        currentTime: Number(current || 0).toFixed(1),
-        status: youtubeFallbackTimerId ? 'youtube-poll-fallback' : 'youtube-poll'
-      });
-      checkInteractiveQuizTriggers(current);
-    }, 2000);
+    }, youtubePollIntervalMs);
   }
 
   function startYouTubeApiWatchdog() {
@@ -1709,15 +1845,7 @@
       }
 
       youtubeFallbackElapsed += delta;
-      let duration = 0;
-      if (youtubePlayer && typeof youtubePlayer.getDuration === 'function') {
-        try {
-          duration = Number(youtubePlayer.getDuration() || 0);
-        } catch (err) {
-          duration = 0;
-        }
-      }
-      updatePlaybackTimeBadge(youtubeFallbackElapsed, duration, 'yt');
+      updatePlaybackTimeBadge(youtubeFallbackElapsed, youtubeDurationSec, 'yt');
       updateInteractiveDebug({
         provider: interactiveState.providerType || 'youtube',
         currentTime: youtubeFallbackElapsed.toFixed(1),
@@ -1754,6 +1882,7 @@
 
     youtubePlayer = null;
     lastYoutubeTime = 0;
+    youtubeDurationSec = 0;
     youtubeZeroPollCount = 0;
     youtubeFallbackElapsed = 0;
     setPlaybackTimeBadgeVisible(false);

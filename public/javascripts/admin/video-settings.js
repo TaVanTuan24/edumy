@@ -5,7 +5,19 @@
     courseId: '',
     sectionIndex: 0,
     lessonIndex: 0,
+    videoUrl: '',
     quizzes: [],
+    previewIsYouTube: false,
+    previewPlayer: null,
+    previewPollId: null,
+    previewPendingQuiz: null,
+    previewShownQuizIds: new Set(),
+    youtubeReadyPromise: null,
+    markerDragging: false,
+    markerStartClientX: 0,
+    markerStartClientY: 0,
+    markerStartX: 86,
+    markerStartY: 82,
     dragging: false,
     dragMoved: false,
     dragStartX: 0,
@@ -27,6 +39,7 @@
     state.courseId = String(payload.courseId || '');
     state.sectionIndex = Number(payload.sectionIndex || 0);
     state.lessonIndex = Number(payload.lessonIndex || 0);
+    state.videoUrl = String(payload.videoUrl || '');
     state.quizzes = normalizeQuizzes(payload.interactiveQuizzes || []);
 
     initVideoPreview(payload.videoUrl || '');
@@ -35,7 +48,38 @@
     bindFabDragAndOpen();
     bindPopoverActions();
     bindCorrectCheckboxes();
+    bindPositionInputs();
+    bindOverlayMarker();
+    bindPreviewHotspot();
+    syncMarkerFromInputs();
     renderQuizList();
+  }
+
+  function ensureYouTubeApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve();
+    if (state.youtubeReadyPromise) return state.youtubeReadyPromise;
+
+    state.youtubeReadyPromise = new Promise(function(resolve, reject) {
+      const timeoutId = setTimeout(function() {
+        reject(new Error('YouTube API timeout'));
+      }, 7000);
+
+      const previous = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = function() {
+        if (typeof previous === 'function') previous();
+        clearTimeout(timeoutId);
+        resolve();
+      };
+
+      const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+      if (!existing) {
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(tag);
+      }
+    });
+
+    return state.youtubeReadyPromise;
   }
 
   function getYouTubeId(url) {
@@ -85,12 +129,30 @@
   function buildYouTubeEmbedUrl(videoId) {
     const id = String(videoId || '').trim();
     if (!id) return '';
-    return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id) + '?rel=0';
+    const url = new URL('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id));
+    url.searchParams.set('enablejsapi', '1');
+    url.searchParams.set('origin', window.location.origin);
+    url.searchParams.set('rel', '0');
+    return url.toString();
+  }
+
+  function normalizePercent(raw, fallback) {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return fallback;
+    if (value < 0) return 0;
+    if (value > 100) return 100;
+    return value;
   }
 
   function initVideoPreview(rawUrl) {
     const iframe = document.getElementById('videoSettingsIframe');
     if (!iframe) return;
+
+    clearPreviewPolling();
+    hidePreviewHotspot();
+    hidePreviewQuizPopup();
+    state.previewPendingQuiz = null;
+    state.previewShownQuizIds = new Set();
 
     const url = String(rawUrl || '').trim();
     if (!url) {
@@ -99,8 +161,10 @@
     }
 
     if (/(?:youtube\.com|youtu\.be)/i.test(url)) {
+      state.previewIsYouTube = true;
       const id = getYouTubeId(url);
       if (id) {
+        // Keep admin preview simple and reliable: always render iframe immediately.
         iframe.src = buildYouTubeEmbedUrl(id);
         return;
       }
@@ -108,6 +172,7 @@
       return;
     }
 
+    state.previewIsYouTube = false;
     iframe.src = url;
   }
 
@@ -155,7 +220,11 @@
           correctOptionIndex: Math.min(3, Math.max(0, Number(entry && entry.correctOptionIndex) || 0)),
           explanation: String(entry && entry.explanation || '').trim(),
           pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
-          order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index
+          order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index,
+          position: {
+            xPercent: normalizePercent(entry && entry.position && entry.position.xPercent, 86),
+            yPercent: normalizePercent(entry && entry.position && entry.position.yPercent, 82)
+          }
         };
       })
       .filter(function(entry) { return entry.question; })
@@ -316,6 +385,176 @@
     }
   }
 
+  function bindPositionInputs() {
+    const xInput = document.getElementById('timedQuizPosX');
+    const yInput = document.getElementById('timedQuizPosY');
+    if (!xInput || !yInput) return;
+
+    function onInput() {
+      xInput.value = String(normalizePercent(xInput.value, 86));
+      yInput.value = String(normalizePercent(yInput.value, 82));
+      syncMarkerFromInputs();
+    }
+
+    xInput.addEventListener('input', onInput);
+    yInput.addEventListener('input', onInput);
+  }
+
+  function bindOverlayMarker() {
+    const marker = document.getElementById('videoSettingsMarker');
+    const overlay = document.getElementById('videoPreviewOverlay');
+    if (!marker || !overlay) return;
+
+    marker.addEventListener('mousedown', function(e) {
+      state.markerDragging = true;
+      state.markerStartClientX = e.clientX;
+      state.markerStartClientY = e.clientY;
+      state.markerStartX = normalizePercent(getFormValue('timedQuizPosX'), 86);
+      state.markerStartY = normalizePercent(getFormValue('timedQuizPosY'), 82);
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!state.markerDragging) return;
+      const rect = overlay.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const dx = e.clientX - state.markerStartClientX;
+      const dy = e.clientY - state.markerStartClientY;
+
+      const nextX = state.markerStartX + ((dx / rect.width) * 100);
+      const nextY = state.markerStartY + ((dy / rect.height) * 100);
+
+      setFormValue('timedQuizPosX', String(normalizePercent(nextX, 86).toFixed(1)));
+      setFormValue('timedQuizPosY', String(normalizePercent(nextY, 82).toFixed(1)));
+      syncMarkerFromInputs();
+    });
+
+    document.addEventListener('mouseup', function() {
+      state.markerDragging = false;
+    });
+  }
+
+  function syncMarkerFromInputs() {
+    const marker = document.getElementById('videoSettingsMarker');
+    if (!marker) return;
+
+    const x = normalizePercent(getFormValue('timedQuizPosX'), 86);
+    const y = normalizePercent(getFormValue('timedQuizPosY'), 82);
+    marker.style.left = 'calc(' + x + '% - 18px)';
+    marker.style.top = 'calc(' + y + '% - 18px)';
+  }
+
+  function bindPreviewHotspot() {
+    const hotspot = document.getElementById('videoPreviewHotspot');
+    if (!hotspot || hotspot.dataset.bound === '1') return;
+    hotspot.dataset.bound = '1';
+
+    hotspot.addEventListener('click', function() {
+      const quiz = state.previewPendingQuiz;
+      if (!quiz) return;
+      showPreviewQuizPopup(quiz);
+      hidePreviewHotspot();
+      state.previewPendingQuiz = null;
+    });
+  }
+
+  function startPreviewPolling() {
+    clearPreviewPolling();
+    if (!state.previewPlayer || typeof state.previewPlayer.getCurrentTime !== 'function') return;
+
+    state.previewPollId = setInterval(function() {
+      if (!state.previewPlayer || typeof state.previewPlayer.getCurrentTime !== 'function') return;
+      const popup = document.getElementById('videoPreviewQuizPopup');
+      if (popup && popup.style.display !== 'none') return;
+
+      let current = 0;
+      try {
+        current = Number(state.previewPlayer.getCurrentTime() || 0);
+      } catch (err) {
+        current = 0;
+      }
+
+      const next = state.quizzes.find(function(quiz) {
+        const id = String(quiz && quiz._id || '');
+        if (!id) return false;
+        if (state.previewShownQuizIds.has(id)) return false;
+        return current >= Number(quiz.triggerTimeSec || 0);
+      });
+
+      if (!next) return;
+      state.previewShownQuizIds.add(String(next._id));
+      state.previewPendingQuiz = next;
+      showPreviewHotspot(next);
+    }, 300);
+  }
+
+  function clearPreviewPolling() {
+    if (state.previewPollId) {
+      clearInterval(state.previewPollId);
+      state.previewPollId = null;
+    }
+  }
+
+  function showPreviewHotspot(quiz) {
+    const overlay = document.getElementById('videoPreviewOverlay');
+    const hotspot = document.getElementById('videoPreviewHotspot');
+    if (!overlay || !hotspot || !quiz) return;
+
+    const rect = overlay.getBoundingClientRect();
+    const xPercent = normalizePercent(quiz && quiz.position && quiz.position.xPercent, 86);
+    const yPercent = normalizePercent(quiz && quiz.position && quiz.position.yPercent, 82);
+    const size = 34;
+
+    const left = Math.max(0, Math.min(rect.width - size, (rect.width * (xPercent / 100)) - (size / 2)));
+    const top = Math.max(0, Math.min(rect.height - size, (rect.height * (yPercent / 100)) - (size / 2)));
+
+    hotspot.style.left = left + 'px';
+    hotspot.style.top = top + 'px';
+    hotspot.style.display = 'inline-flex';
+  }
+
+  function hidePreviewHotspot() {
+    const hotspot = document.getElementById('videoPreviewHotspot');
+    if (!hotspot) return;
+    hotspot.style.display = 'none';
+  }
+
+  function showPreviewQuizPopup(quiz) {
+    const popup = document.getElementById('videoPreviewQuizPopup');
+    if (!popup || !quiz) return;
+
+    popup.innerHTML = '' +
+      '<div class="video-preview-quiz-head">' +
+        '<div class="video-preview-quiz-title">Quiz Preview</div>' +
+        '<button class="video-preview-quiz-close" type="button" data-preview-close>×</button>' +
+      '</div>' +
+      '<div class="video-preview-quiz-question">' + escapeHtml(quiz.question || '') + '</div>' +
+      '<div class="video-preview-quiz-options">' +
+        (quiz.options || []).map(function(opt, idx) {
+          const cls = idx === Number(quiz.correctOptionIndex) ? 'video-preview-quiz-option correct' : 'video-preview-quiz-option';
+          return '<button class="' + cls + '" type="button">' + escapeHtml(opt || ('Option ' + (idx + 1))) + '</button>';
+        }).join('') +
+      '</div>';
+
+    popup.style.display = 'block';
+    popup.setAttribute('aria-hidden', 'false');
+
+    const closeBtn = popup.querySelector('[data-preview-close]');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        hidePreviewQuizPopup();
+      });
+    }
+  }
+
+  function hidePreviewQuizPopup() {
+    const popup = document.getElementById('videoPreviewQuizPopup');
+    if (!popup) return;
+    popup.style.display = 'none';
+    popup.setAttribute('aria-hidden', 'true');
+  }
+
   function bindCorrectCheckboxes() {
     document.querySelectorAll('.timedQuizCorrectCheck').forEach(function(check) {
       check.addEventListener('change', function() {
@@ -342,6 +581,8 @@
     const question = String(getFormValue('timedQuizQuestion') || '').trim();
     const timestamp = parseTimestampToSeconds(getFormValue('timedQuizTimestamp'));
     const explanation = String(getFormValue('timedQuizExplanation') || '').trim();
+    const posX = normalizePercent(getFormValue('timedQuizPosX'), 86);
+    const posY = normalizePercent(getFormValue('timedQuizPosY'), 82);
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
     const pauseOnShow = Boolean(pauseOnShowEl && pauseOnShowEl.checked);
 
@@ -378,7 +619,11 @@
       correctOptionIndex: correctOptionIndex,
       explanation: explanation,
       pauseOnShow: pauseOnShow,
-      order: editIndex >= 0 ? editIndex : state.quizzes.length
+      order: editIndex >= 0 ? editIndex : state.quizzes.length,
+      position: {
+        xPercent: posX,
+        yPercent: posY
+      }
     };
 
     if (editIndex >= 0 && state.quizzes[editIndex]) {
@@ -411,6 +656,10 @@
       })
       .then(function(data) {
         state.quizzes = normalizeQuizzes(data.interactiveQuizzes || sorted);
+        state.previewShownQuizIds = new Set();
+        state.previewPendingQuiz = null;
+        hidePreviewHotspot();
+        hidePreviewQuizPopup();
         renderQuizList();
         resetForm();
         closePopover();
@@ -455,6 +704,8 @@
     setFormValue('timedQuizTimestamp', formatSeconds(quiz.triggerTimeSec));
     setFormValue('timedQuizQuestion', quiz.question || '');
     setFormValue('timedQuizExplanation', quiz.explanation || '');
+    setFormValue('timedQuizPosX', String(normalizePercent(quiz && quiz.position && quiz.position.xPercent, 86)));
+    setFormValue('timedQuizPosY', String(normalizePercent(quiz && quiz.position && quiz.position.yPercent, 82)));
 
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
     if (pauseOnShowEl) pauseOnShowEl.checked = quiz.pauseOnShow !== false;
@@ -469,6 +720,7 @@
 
     const title = document.getElementById('timedQuizPopoverTitle');
     if (title) title.textContent = 'Edit Timed Quiz';
+    syncMarkerFromInputs();
   }
 
   function resetForm() {
@@ -476,6 +728,8 @@
     setFormValue('timedQuizTimestamp', '');
     setFormValue('timedQuizQuestion', '');
     setFormValue('timedQuizExplanation', '');
+    setFormValue('timedQuizPosX', '86');
+    setFormValue('timedQuizPosY', '82');
 
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
     if (pauseOnShowEl) pauseOnShowEl.checked = true;
@@ -490,6 +744,7 @@
 
     const title = document.getElementById('timedQuizPopoverTitle');
     if (title) title.textContent = 'Add Timed Quiz';
+    syncMarkerFromInputs();
   }
 
   function renderQuizList() {

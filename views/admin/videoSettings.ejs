@@ -28,6 +28,11 @@
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
           allowfullscreen
           referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        <div id="videoPreviewOverlay" class="video-preview-overlay">
+          <button id="videoSettingsMarker" class="video-settings-marker" type="button" aria-label="Drag quiz position">?</button>
+          <button id="videoPreviewHotspot" class="video-preview-hotspot" type="button" aria-label="Open quiz preview" style="display:none;">?</button>
+          <div id="videoPreviewQuizPopup" class="video-preview-quiz-popup" style="display:none;" aria-hidden="true"></div>
+        </div>
       </div>
     </section>
 
@@ -82,6 +87,18 @@
         <label class="form-label">Explanation (optional)</label>
         <textarea id="timedQuizExplanation" class="form-control form-control-sm" rows="2" placeholder="Explain why the answer is correct"></textarea>
       </div>
+
+      <div class="row g-2">
+        <div class="col-6">
+          <label class="form-label">X (%)</label>
+          <input id="timedQuizPosX" type="number" min="0" max="100" step="0.1" class="form-control form-control-sm" value="86">
+        </div>
+        <div class="col-6">
+          <label class="form-label">Y (%)</label>
+          <input id="timedQuizPosY" type="number" min="0" max="100" step="0.1" class="form-control form-control-sm" value="82">
+        </div>
+      </div>
+      <p class="small text-muted mt-2 mb-0">Drag the marker on video to set quiz icon position.</p>
 
       <div class="form-check mb-2">
         <input class="form-check-input" type="checkbox" id="timedQuizPauseOnShow" checked>
