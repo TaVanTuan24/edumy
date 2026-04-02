@@ -21,6 +21,7 @@
         sectionIndex: null,
         submitting: false
     };
+    let interactiveQuizDraft = [];
 
     // ==================== INITIALIZATION ====================
     document.addEventListener('DOMContentLoaded', function() {
@@ -1095,8 +1096,8 @@
                         <button class="btn btn-primary save-lesson-btn">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
-                        <a href="/admin/lesson/${itemId}/edit" class="btn btn-secondary">
-                            <i class="fas fa-edit"></i> Advanced Edit
+                        <a href="/admin/courses/${courseId}/video-settings?section=${sectionIndex}&lesson=${lessonIndex}" class="btn btn-outline-primary">
+                            <i class="fa-solid fa-clock me-1"></i> Advanced Video Settings
                         </a>
                     </div>
                 </div>
@@ -1170,21 +1171,285 @@
         if (saveBtn) {
             saveBtn.addEventListener('click', saveLesson);
         }
+
+        const addQuizBtn = document.getElementById('interactiveQuizAddBtn');
+        if (addQuizBtn) {
+            addQuizBtn.addEventListener('click', upsertInteractiveQuizFromForm);
+        }
+
+        const resetQuizBtn = document.getElementById('interactiveQuizResetBtn');
+        if (resetQuizBtn) {
+            resetQuizBtn.addEventListener('click', resetInteractiveQuizForm);
+        }
+
+        const quizList = document.getElementById('interactiveQuizList');
+        if (quizList) {
+            quizList.addEventListener('click', handleInteractiveQuizListAction);
+        }
+    }
+
+    function parseTimestampToSeconds(rawValue) {
+        const value = String(rawValue || '').trim();
+        if (!value) return 0;
+
+        if (/^\d+$/.test(value)) {
+            return Math.max(0, parseInt(value, 10));
+        }
+
+        const parts = value.split(':').map((part) => part.trim());
+        if (parts.length === 2) {
+            const minutes = parseInt(parts[0], 10);
+            const seconds = parseInt(parts[1], 10);
+            if (!Number.isNaN(minutes) && !Number.isNaN(seconds)) {
+                return Math.max(0, (minutes * 60) + seconds);
+            }
+        }
+
+        return 0;
+    }
+
+    function formatSeconds(seconds) {
+        const total = Math.max(0, Math.floor(Number(seconds) || 0));
+        const mins = Math.floor(total / 60);
+        const secs = total % 60;
+        return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    }
+
+    function normalizeInteractiveQuizDraft(quizzes) {
+        const source = Array.isArray(quizzes) ? quizzes : [];
+        return source
+            .map((entry, index) => {
+                const rawOptions = Array.isArray(entry && entry.options) ? entry.options : [];
+                const options = rawOptions.map((opt) => String(opt || '').trim()).slice(0, 4);
+                while (options.length < 4) options.push('');
+
+                const normalized = {
+                    triggerTimeSec: parseTimestampToSeconds(entry && entry.triggerTimeSec),
+                    question: String(entry && entry.question || '').trim(),
+                    options,
+                    correctOptionIndex: Math.min(3, Math.max(0, Number(entry && entry.correctOptionIndex) || 0)),
+                    explanation: String(entry && entry.explanation || '').trim(),
+                    pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
+                    order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index
+                };
+
+                const rawId = String((entry && entry._id) || '').trim();
+                if (/^[a-fA-F0-9]{24}$/.test(rawId)) {
+                    normalized._id = rawId;
+                }
+
+                return normalized;
+            })
+            .filter((entry) => entry.question)
+            .sort((a, b) => {
+                if (a.triggerTimeSec !== b.triggerTimeSec) return a.triggerTimeSec - b.triggerTimeSec;
+                return a.order - b.order;
+            })
+            .map((entry, index) => ({ ...entry, order: index }));
+    }
+
+    function renderInteractiveQuizList() {
+        const container = document.getElementById('interactiveQuizList');
+        const countEl = document.getElementById('interactiveQuizCount');
+        if (!container) return;
+
+        interactiveQuizDraft = normalizeInteractiveQuizDraft(interactiveQuizDraft);
+        if (countEl) countEl.textContent = String(interactiveQuizDraft.length);
+
+        if (!interactiveQuizDraft.length) {
+            container.innerHTML = '<div class="text-muted small">No timed quizzes yet.</div>';
+            return;
+        }
+
+        container.innerHTML = interactiveQuizDraft.map((entry, idx) => {
+            const correctText = entry.options[entry.correctOptionIndex] || ('Option ' + (entry.correctOptionIndex + 1));
+            return '' +
+                '<div class="interactive-quiz-item" data-quiz-index="' + idx + '">' +
+                    '<div class="interactive-quiz-item-head">' +
+                        '<div>' +
+                            '<strong>' + escapeHtml(formatSeconds(entry.triggerTimeSec)) + '</strong>' +
+                            '<span class="badge bg-light text-dark ms-2">Correct: ' + escapeHtml(correctText) + '</span>' +
+                        '</div>' +
+                        '<div class="d-flex gap-1">' +
+                            '<button type="button" class="btn btn-sm btn-outline-secondary" data-iq-action="up" data-iq-index="' + idx + '">↑</button>' +
+                            '<button type="button" class="btn btn-sm btn-outline-secondary" data-iq-action="down" data-iq-index="' + idx + '">↓</button>' +
+                            '<button type="button" class="btn btn-sm btn-outline-primary" data-iq-action="edit" data-iq-index="' + idx + '">Edit</button>' +
+                            '<button type="button" class="btn btn-sm btn-outline-danger" data-iq-action="delete" data-iq-index="' + idx + '">Delete</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<p class="mb-1 mt-2"><strong>Q:</strong> ' + escapeHtml(entry.question) + '</p>' +
+                    '<div class="small text-muted">' + escapeHtml(entry.explanation || 'No explanation') + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    function resetInteractiveQuizForm() {
+        const editIndexEl = document.getElementById('interactiveQuizEditIndex');
+        const tsEl = document.getElementById('interactiveQuizTimestamp');
+        const questionEl = document.getElementById('interactiveQuizQuestion');
+        const correctEl = document.getElementById('interactiveQuizCorrectIndex');
+        const explanationEl = document.getElementById('interactiveQuizExplanation');
+        const pauseEl = document.getElementById('interactiveQuizPauseOnShow');
+        const addBtn = document.getElementById('interactiveQuizAddBtn');
+
+        if (editIndexEl) editIndexEl.value = '-1';
+        if (tsEl) tsEl.value = '';
+        if (questionEl) questionEl.value = '';
+        if (correctEl) correctEl.value = '0';
+        if (explanationEl) explanationEl.value = '';
+        if (pauseEl) pauseEl.checked = true;
+        if (addBtn) addBtn.textContent = 'Add Quiz';
+
+        document.querySelectorAll('.interactiveQuizOption').forEach((input) => {
+            input.value = '';
+        });
+    }
+
+    function upsertInteractiveQuizFromForm() {
+        const editIndexEl = document.getElementById('interactiveQuizEditIndex');
+        const tsEl = document.getElementById('interactiveQuizTimestamp');
+        const questionEl = document.getElementById('interactiveQuizQuestion');
+        const correctEl = document.getElementById('interactiveQuizCorrectIndex');
+        const explanationEl = document.getElementById('interactiveQuizExplanation');
+        const pauseEl = document.getElementById('interactiveQuizPauseOnShow');
+
+        const triggerTimeSec = parseTimestampToSeconds(tsEl && tsEl.value);
+        const question = String(questionEl && questionEl.value || '').trim();
+        const correctOptionIndex = Math.min(3, Math.max(0, Number(correctEl && correctEl.value) || 0));
+        const explanation = String(explanationEl && explanationEl.value || '').trim();
+        const pauseOnShow = Boolean(pauseEl && pauseEl.checked);
+        const options = Array.from(document.querySelectorAll('.interactiveQuizOption')).map((input) => String(input.value || '').trim());
+
+        if (!question) {
+            alert('Please enter a question for the timed quiz.');
+            return;
+        }
+
+        if (options.filter(Boolean).length < 4) {
+            alert('Please fill all 4 answer options.');
+            return;
+        }
+
+        const editIndex = Number(editIndexEl && editIndexEl.value);
+        const entry = {
+            _id: editIndex >= 0 && interactiveQuizDraft[editIndex]
+                ? interactiveQuizDraft[editIndex]._id
+                : ('draft-' + Date.now()),
+            triggerTimeSec,
+            question,
+            options: options.slice(0, 4),
+            correctOptionIndex,
+            explanation,
+            pauseOnShow,
+            order: editIndex >= 0 ? editIndex : interactiveQuizDraft.length
+        };
+
+        if (editIndex >= 0 && interactiveQuizDraft[editIndex]) {
+            interactiveQuizDraft[editIndex] = entry;
+        } else {
+            interactiveQuizDraft.push(entry);
+        }
+
+        renderInteractiveQuizList();
+        resetInteractiveQuizForm();
+    }
+
+    function loadInteractiveQuizIntoForm(index) {
+        const entry = interactiveQuizDraft[index];
+        if (!entry) return;
+
+        const editIndexEl = document.getElementById('interactiveQuizEditIndex');
+        const tsEl = document.getElementById('interactiveQuizTimestamp');
+        const questionEl = document.getElementById('interactiveQuizQuestion');
+        const correctEl = document.getElementById('interactiveQuizCorrectIndex');
+        const explanationEl = document.getElementById('interactiveQuizExplanation');
+        const pauseEl = document.getElementById('interactiveQuizPauseOnShow');
+        const addBtn = document.getElementById('interactiveQuizAddBtn');
+
+        if (editIndexEl) editIndexEl.value = String(index);
+        if (tsEl) tsEl.value = formatSeconds(entry.triggerTimeSec);
+        if (questionEl) questionEl.value = entry.question;
+        if (correctEl) correctEl.value = String(entry.correctOptionIndex);
+        if (explanationEl) explanationEl.value = entry.explanation || '';
+        if (pauseEl) pauseEl.checked = entry.pauseOnShow !== false;
+        if (addBtn) addBtn.textContent = 'Update Quiz';
+
+        document.querySelectorAll('.interactiveQuizOption').forEach((input, idx) => {
+            input.value = entry.options[idx] || '';
+        });
+    }
+
+    function handleInteractiveQuizListAction(e) {
+        const actionBtn = e.target.closest('[data-iq-action]');
+        if (!actionBtn) return;
+
+        const action = actionBtn.dataset.iqAction;
+        const index = Number(actionBtn.dataset.iqIndex);
+        if (!Number.isFinite(index) || !interactiveQuizDraft[index]) return;
+
+        if (action === 'edit') {
+            loadInteractiveQuizIntoForm(index);
+            return;
+        }
+
+        if (action === 'delete') {
+            interactiveQuizDraft.splice(index, 1);
+            renderInteractiveQuizList();
+            resetInteractiveQuizForm();
+            return;
+        }
+
+        if (action === 'up' && index > 0) {
+            const moved = interactiveQuizDraft.splice(index, 1)[0];
+            interactiveQuizDraft.splice(index - 1, 0, moved);
+            renderInteractiveQuizList();
+            return;
+        }
+
+        if (action === 'down' && index < interactiveQuizDraft.length - 1) {
+            const moved = interactiveQuizDraft.splice(index, 1)[0];
+            interactiveQuizDraft.splice(index + 1, 0, moved);
+            renderInteractiveQuizList();
+        }
     }
 
     async function fetchVideoData(sectionIndex, lessonIndex) {
         try {
             const res = await fetch(`/admin/course/${courseId}/lesson/${sectionIndex}/${lessonIndex}`);
             const data = await res.json();
-            
-            if (data.video && data.video.preview) {
-                const urlInput = document.getElementById('lesson-url');
-                if (urlInput) {
-                    urlInput.value = data.video.preview;
-                }
+
+            const lesson = data && (data.lesson || data.video) ? (data.lesson || data.video) : null;
+            const resolvedUrl = lesson
+                ? String(
+                    lesson.preview ||
+                    (lesson.content && lesson.content.videoUrl) ||
+                    lesson.videoUrl ||
+                    lesson.refId ||
+                    ''
+                )
+                : '';
+
+            const urlInput = document.getElementById('lesson-url');
+            if (urlInput) {
+                urlInput.value = resolvedUrl;
             }
+
+            const lessonForInteractive = data.lesson || data.video || {};
+            const contentInteractive = Array.isArray(lessonForInteractive && lessonForInteractive.content && lessonForInteractive.content.interactiveQuizzes)
+                ? lessonForInteractive.content.interactiveQuizzes
+                : [];
+            const rootInteractive = Array.isArray(lessonForInteractive && lessonForInteractive.interactiveQuizzes)
+                ? lessonForInteractive.interactiveQuizzes
+                : [];
+
+            interactiveQuizDraft = normalizeInteractiveQuizDraft(contentInteractive.length ? contentInteractive : rootInteractive);
+            renderInteractiveQuizList();
+            resetInteractiveQuizForm();
         } catch (err) {
             // Silently fail - user can still enter URL manually
+            interactiveQuizDraft = [];
+            renderInteractiveQuizList();
+            resetInteractiveQuizForm();
         }
     }
 
@@ -1203,7 +1468,8 @@
                     sectionIndex: parseInt(sectionIndex),
                     lessonIndex: parseInt(lessonIndex),
                     name: name,
-                    url: url
+                    url: url,
+                    interactiveQuizzes: normalizeInteractiveQuizDraft(interactiveQuizDraft)
                 })
             });
             

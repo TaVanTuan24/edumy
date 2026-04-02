@@ -80,6 +80,45 @@ const quizQuestionSchema = new Schema({
     }
 }, { _id: true })
 
+const interactiveVideoQuizSchema = new Schema({
+    triggerTimeSec: {
+        type: Number,
+        required: true,
+        min: 0,
+        default: 0
+    },
+    question: {
+        type: String,
+        required: true,
+        trim: true,
+        default: ''
+    },
+    options: {
+        type: [String],
+        default: []
+    },
+    correctOptionIndex: {
+        type: Number,
+        required: true,
+        min: 0,
+        max: 3,
+        default: 0
+    },
+    explanation: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    pauseOnShow: {
+        type: Boolean,
+        default: true
+    },
+    order: {
+        type: Number,
+        default: 0
+    }
+}, { _id: true })
+
 // Legacy driveStructure item schema used by current course editor.
 const driveItemSchema = new Schema({
     type: {
@@ -107,6 +146,10 @@ const driveItemSchema = new Schema({
     },
     questions: {
         type: [Schema.Types.Mixed],
+        default: []
+    },
+    interactiveQuizzes: {
+        type: [interactiveVideoQuizSchema],
         default: []
     },
     order: {
@@ -148,6 +191,10 @@ const lessonSchema = new Schema({
         default: {}
     },
     quiz: [quizQuestionSchema],
+    interactiveQuizzes: {
+        type: [interactiveVideoQuizSchema],
+        default: []
+    },
     order: {
         type: Number,
         default: 0
@@ -251,6 +298,48 @@ function inferLessonType(lesson) {
     return 'video'
 }
 
+function normalizeInteractiveQuizzes(rawQuizzes) {
+    const source = Array.isArray(rawQuizzes) ? rawQuizzes : []
+
+    return source
+        .map((entry, index) => {
+            const rawOptions = Array.isArray(entry && entry.options) ? entry.options : []
+            const normalizedOptions = rawOptions
+                .map((opt) => String(opt || '').trim())
+                .filter(Boolean)
+                .slice(0, 4)
+
+            while (normalizedOptions.length < 4) {
+                normalizedOptions.push('')
+            }
+
+            const parsedTime = Number(entry && entry.triggerTimeSec)
+            const parsedCorrect = Number(entry && entry.correctOptionIndex)
+
+            const normalized = {
+                triggerTimeSec: Number.isFinite(parsedTime) && parsedTime >= 0 ? parsedTime : 0,
+                question: String(entry && entry.question || '').trim(),
+                options: normalizedOptions,
+                correctOptionIndex: Number.isFinite(parsedCorrect) && parsedCorrect >= 0 && parsedCorrect <= 3 ? parsedCorrect : 0,
+                explanation: String(entry && entry.explanation || '').trim(),
+                pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
+                order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index
+            }
+
+            if (entry && entry._id && mongoose.isValidObjectId(entry._id)) {
+                normalized._id = entry._id
+            }
+
+            return normalized
+        })
+        .sort((a, b) => {
+            const timeDiff = a.triggerTimeSec - b.triggerTimeSec
+            if (timeDiff !== 0) return timeDiff
+            return a.order - b.order
+        })
+        .map((entry, index) => ({ ...entry, order: index }))
+}
+
 CourseSchema.pre('validate', function(next) {
     if (Array.isArray(this.driveStructure)) {
         this.driveStructure.forEach((section) => {
@@ -288,6 +377,21 @@ CourseSchema.pre('validate', function(next) {
                         slides: normalizedSlides
                     }
                 }
+
+                if (item.type === 'video') {
+                    const contentObj = (item.content && typeof item.content === 'object' && !Array.isArray(item.content))
+                        ? item.content
+                        : {}
+                    const fromContent = Array.isArray(contentObj.interactiveQuizzes) ? contentObj.interactiveQuizzes : []
+                    const fromRoot = Array.isArray(item.interactiveQuizzes) ? item.interactiveQuizzes : []
+                    const normalizedInteractive = normalizeInteractiveQuizzes(fromContent.length ? fromContent : fromRoot)
+
+                    item.interactiveQuizzes = normalizedInteractive
+                    item.content = {
+                        ...contentObj,
+                        interactiveQuizzes: normalizedInteractive
+                    }
+                }
             })
         })
     }
@@ -305,6 +409,15 @@ CourseSchema.pre('validate', function(next) {
 
                 if (lesson.type === 'slide' && !Array.isArray(lesson.content.slides)) {
                     lesson.content.slides = []
+                }
+
+                if (lesson.type === 'video') {
+                    const fromContent = Array.isArray(lesson.content.interactiveQuizzes) ? lesson.content.interactiveQuizzes : []
+                    const fromRoot = Array.isArray(lesson.interactiveQuizzes) ? lesson.interactiveQuizzes : []
+                    const normalizedInteractive = normalizeInteractiveQuizzes(fromContent.length ? fromContent : fromRoot)
+
+                    lesson.interactiveQuizzes = normalizedInteractive
+                    lesson.content.interactiveQuizzes = normalizedInteractive
                 }
             })
         })

@@ -17,7 +17,132 @@
   let youtubePlayer = null;
   let youtubePollId = null;
   let lastYoutubeTime = 0;
+  let youtubeZeroPollCount = 0;
+  let youtubeFallbackTimerId = null;
+  let youtubeFallbackElapsed = 0;
+  let youtubeApiWatchdogId = null;
+  let youtubeFallbackInteractionBound = false;
   let youtubeReadyPromise = null;
+  let html5VideoPlayer = null;
+  let html5TimeHandler = null;
+  let html5PlayHandler = null;
+  let html5PauseHandler = null;
+  let html5EndedHandler = null;
+  let driveTimerId = null;
+  let driveElapsedSeconds = 0;
+  let driveLastTickAt = 0;
+  let playbackTimeBadge = null;
+  let interactiveDebugPanel = null;
+  let interactiveDebugSnapshot = {
+    provider: '',
+    lessonId: '',
+    quizzesTotal: 0,
+    shownCount: 0,
+    activeQuizId: '',
+    activeQuizTime: '',
+    currentTime: 0,
+    nextTrigger: '',
+    status: 'idle',
+    updatedAt: ''
+  };
+  let interactiveState = {
+    lessonId: '',
+    quizzes: [],
+    shownQuizIds: new Set(),
+    activeQuiz: null,
+    provider: null,
+    providerType: '',
+    wasPlayingBeforeModal: false
+  };
+
+  function isInteractiveDebugEnabled() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const fromQuery = params.get('debugQuiz');
+      if (fromQuery === '1' || fromQuery === 'true') return true;
+      if (fromQuery === '0' || fromQuery === 'false') return false;
+
+      const fromStorage = localStorage.getItem('learning:interactiveQuizDebug');
+      if (fromStorage === '1') return true;
+      if (fromStorage === '0') return false;
+    } catch (err) {
+      // Ignore URL/localStorage errors and use host fallback.
+    }
+
+    return /^(localhost|127\.0\.0\.1)$/i.test(String(window.location.hostname || ''));
+  }
+
+  function ensureInteractiveDebugPanel() {
+    if (!isInteractiveDebugEnabled()) return null;
+    if (interactiveDebugPanel && document.body && document.body.contains(interactiveDebugPanel)) {
+      return interactiveDebugPanel;
+    }
+
+    const panel = document.createElement('div');
+    panel.id = 'interactiveQuizDebugPanel';
+    panel.style.position = 'fixed';
+    panel.style.right = '12px';
+    panel.style.bottom = '12px';
+    panel.style.zIndex = '13000';
+    panel.style.width = '320px';
+    panel.style.maxWidth = 'calc(100vw - 24px)';
+    panel.style.background = 'rgba(15, 23, 42, 0.94)';
+    panel.style.color = '#e2e8f0';
+    panel.style.border = '1px solid rgba(148, 163, 184, 0.35)';
+    panel.style.borderRadius = '10px';
+    panel.style.padding = '10px 12px';
+    panel.style.font = '12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+    panel.style.boxShadow = '0 14px 30px rgba(2, 6, 23, 0.45)';
+    panel.innerHTML = '<div style="font-weight:700; margin-bottom:6px; color:#93c5fd;">Interactive Quiz Debug</div><div data-iq-debug-body>Initializing...</div>';
+
+    document.body.appendChild(panel);
+    interactiveDebugPanel = panel;
+    return panel;
+  }
+
+  function formatDebugValue(value) {
+    if (value === undefined || value === null || value === '') return '-';
+    return String(value);
+  }
+
+  function updateInteractiveDebug(patch) {
+    if (!isInteractiveDebugEnabled()) return;
+
+    interactiveDebugSnapshot = Object.assign({}, interactiveDebugSnapshot, patch || {}, {
+      updatedAt: new Date().toLocaleTimeString()
+    });
+
+    const panel = ensureInteractiveDebugPanel();
+    if (!panel) return;
+
+    const body = panel.querySelector('[data-iq-debug-body]');
+    if (!body) return;
+
+    const lines = [
+      'provider: ' + formatDebugValue(interactiveDebugSnapshot.provider),
+      'lessonId: ' + formatDebugValue(interactiveDebugSnapshot.lessonId),
+      'quizzes: ' + formatDebugValue(interactiveDebugSnapshot.quizzesTotal),
+      'shown: ' + formatDebugValue(interactiveDebugSnapshot.shownCount),
+      'currentTime: ' + formatDebugValue(interactiveDebugSnapshot.currentTime),
+      'nextTrigger: ' + formatDebugValue(interactiveDebugSnapshot.nextTrigger),
+      'activeQuizId: ' + formatDebugValue(interactiveDebugSnapshot.activeQuizId),
+      'activeQuizTime: ' + formatDebugValue(interactiveDebugSnapshot.activeQuizTime),
+      'status: ' + formatDebugValue(interactiveDebugSnapshot.status),
+      'updatedAt: ' + formatDebugValue(interactiveDebugSnapshot.updatedAt),
+      'Tip: localStorage["learning:interactiveQuizDebug"]="0" to hide'
+    ];
+
+    body.textContent = lines.join('\n');
+  }
+
+  function setPlaybackState(isPlaying) {
+    if (typeof window.__setVideoPlaybackState === 'function') {
+      window.__setVideoPlaybackState(isPlaying);
+      return;
+    }
+    window.__videoPlayback = window.__videoPlayback || {};
+    window.__videoPlayback.isPlaying = Boolean(isPlaying);
+  }
 
   function getDeps() {
     const deps = window.LearningStore;
@@ -170,26 +295,77 @@
     const imageContainer = document.getElementById('imageContainer');
     const player = document.getElementById('videoPlayerContainer');
     const iframe = document.getElementById('videoIframe');
+    const html5 = document.getElementById('html5VideoPlayer');
     const panel = document.getElementById('lessonFallbackPanel');
 
     if (imageContainer) imageContainer.style.display = 'none';
     if (panel) panel.style.display = 'none';
 
-    const url = lesson.content.videoUrl || lesson.preview || '';
+    const rawUrl = lesson.content.videoUrl || lesson.preview || '';
+    const url = normalizeVideoEmbedUrl(rawUrl);
+    const interactiveQuizzes = normalizeInteractiveQuizzes(lesson && lesson.content && lesson.content.interactiveQuizzes);
+    setPlaybackTimeBadgeVisible(false);
     if (!url) {
       renderPanel('Lecture', lesson.title, '<p class="text-muted mb-0">No video source found.</p>', false);
       return;
     }
 
     if (isYouTubeUrl(url)) {
+      if (html5) html5.style.display = 'none';
+      if (iframe) iframe.style.display = 'block';
+      stopDriveTimer();
+      teardownHtml5Player();
       const videoId = getYouTubeId(url);
       if (!videoId) {
-        if (iframe) iframe.src = url;
-        if (player) player.style.display = 'block';
+        renderPanel(
+          'Lecture',
+          lesson.title,
+          '<p class="text-danger mb-2">Invalid YouTube video URL.</p><p class="text-muted mb-0">Use links like https://www.youtube.com/watch?v=VIDEO_ID, https://youtu.be/VIDEO_ID, or https://www.youtube.com/shorts/VIDEO_ID.</p>',
+          false
+        );
+        setProviderNotice('Invalid YouTube URL. Please use a direct video link, not a channel/home URL.', 'warning');
         return;
       }
 
+      // Convert watch/share/shorts links to a stable embeddable URL format.
+      const embedUrl = buildYouTubeEmbedUrl(videoId);
+      if (iframe) iframe.src = embedUrl;
+
       setupYouTubePlayer(videoId, lesson);
+      startYouTubeApiWatchdog();
+      startInteractiveQuizzes(lesson, interactiveQuizzes, createYouTubeProvider(), 'youtube');
+      bindYouTubeFallbackInteraction();
+      // Start fallback timer immediately; API polling will take over/override when available.
+      startYouTubeFallbackTimer();
+      setPlaybackTimeBadgeVisible(true);
+      updatePlaybackTimeBadge(0, null, 'yt');
+      setProviderNotice('Timed quizzes are running in precise mode (YouTube API).', 'success');
+      setPlaybackState(false);
+      if (player) player.style.display = 'block';
+      if (typeof window.__updateContext === 'function') {
+        window.__updateContext({
+          lessonId: String(lesson._id || ''),
+          type: 'video',
+          slideIndex: null
+        });
+      }
+      return;
+    }
+
+    if (isDirectVideoFileUrl(url)) {
+      stopDriveTimer();
+      teardownYouTubePlayer();
+      if (iframe) {
+        iframe.style.display = 'none';
+        iframe.src = '';
+      }
+      if (html5) html5.style.display = 'block';
+      setupHtml5Player(url, lesson);
+      startInteractiveQuizzes(lesson, interactiveQuizzes, createHtml5Provider(), 'html5');
+      setPlaybackTimeBadgeVisible(true);
+      updatePlaybackTimeBadge(0, null, 'html5');
+      setProviderNotice('Timed quizzes are running in precise mode (HTML5 video).', 'success');
+
       if (player) player.style.display = 'block';
       if (typeof window.__updateContext === 'function') {
         window.__updateContext({
@@ -202,8 +378,16 @@
     }
 
     teardownYouTubePlayer();
-    if (iframe) iframe.src = url;
+    teardownHtml5Player();
+    if (html5) html5.style.display = 'none';
+    if (iframe) iframe.style.display = 'block';
+    setVideoIframeSourceWithFallback(iframe, url, rawUrl);
     if (player) player.style.display = 'block';
+    startInteractiveQuizzes(lesson, interactiveQuizzes, createFallbackProvider(), 'drive-iframe');
+    startDriveTimer();
+    setPlaybackTimeBadgeVisible(true);
+    updatePlaybackTimeBadge(0, null, 'drive');
+    setProviderNotice('Google Drive iframe does not provide exact currentTime API. Timed quizzes run in approximate mode. For precision, use YouTube or direct MP4.', 'warning');
 
     if (typeof window.__updateContext === 'function') {
       window.__updateContext({
@@ -213,11 +397,15 @@
       });
     }
 
-    window.__videoPlayback = window.__videoPlayback || {};
-    window.__videoPlayback.isPlaying = true;
+    setPlaybackState(true);
   }
 
   function renderSlide(lesson) {
+    resetInteractiveVideoQuizState();
+    setPlaybackTimeBadgeVisible(false);
+    teardownYouTubePlayer();
+    teardownHtml5Player();
+    setProviderNotice('', '');
     console.log('SLIDE LESSON:', lesson);
     console.log('Slides:', lesson && lesson.content);
 
@@ -388,6 +576,11 @@
   }
 
   function renderQuiz(lesson) {
+    resetInteractiveVideoQuizState();
+    setPlaybackTimeBadgeVisible(false);
+    teardownYouTubePlayer();
+    teardownHtml5Player();
+    setProviderNotice('', '');
     const questions = Array.isArray(lesson.content.questions) ? lesson.content.questions : [];
     if (!questions.length) {
       renderPanel('Quiz', lesson.title, '<p class="text-muted mb-0">No quiz data.</p>', true);
@@ -619,15 +812,461 @@
     return String(optionText) === String(correctAnswer || '');
   }
 
+  function normalizeInteractiveQuizzes(quizzes) {
+    const source = Array.isArray(quizzes) ? quizzes : [];
+    return source
+      .map(function(entry, index) {
+        const options = Array.isArray(entry && entry.options)
+          ? entry.options.map(function(opt) { return String(opt || '').trim(); }).slice(0, 4)
+          : [];
+
+        while (options.length < 4) options.push('');
+
+        const trigger = Number(entry && entry.triggerTimeSec);
+        const correct = Number(entry && entry.correctOptionIndex);
+
+        return {
+          _id: String((entry && entry._id) || ('quiz-' + index + '-' + Math.floor(trigger || 0))),
+          triggerTimeSec: Number.isFinite(trigger) && trigger >= 0 ? trigger : 0,
+          question: String(entry && entry.question || '').trim(),
+          options: options,
+          correctOptionIndex: Number.isFinite(correct) && correct >= 0 && correct <= 3 ? correct : 0,
+          explanation: String(entry && entry.explanation || '').trim(),
+          pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
+          order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index
+        };
+      })
+      .filter(function(entry) { return entry.question; })
+      .sort(function(a, b) {
+        if (a.triggerTimeSec !== b.triggerTimeSec) return a.triggerTimeSec - b.triggerTimeSec;
+        return a.order - b.order;
+      });
+  }
+
+  function getInteractiveStorageMap() {
+    const deps = getDeps();
+    const key = deps.storageKey('interactiveSeen');
+    return deps.readJson(key, {});
+  }
+
+  function setInteractiveStorageMap(map) {
+    const deps = getDeps();
+    const key = deps.storageKey('interactiveSeen');
+    deps.writeJson(key, map || {});
+  }
+
+  function getSeenQuizSet(lessonId) {
+    const map = getInteractiveStorageMap();
+    const raw = Array.isArray(map && map[lessonId]) ? map[lessonId] : [];
+    return new Set(raw.map(function(id) { return String(id); }));
+  }
+
+  function markQuizSeen(lessonId, quizId) {
+    const map = getInteractiveStorageMap();
+    const key = String(lessonId || '');
+    const current = new Set(Array.isArray(map[key]) ? map[key].map(function(id) { return String(id); }) : []);
+    current.add(String(quizId));
+    map[key] = Array.from(current);
+    setInteractiveStorageMap(map);
+  }
+
+  function startInteractiveQuizzes(lesson, quizzes, provider, providerType) {
+    const lessonId = String(lesson && lesson._id || '');
+    interactiveState.lessonId = lessonId;
+    interactiveState.quizzes = Array.isArray(quizzes) ? quizzes : [];
+    interactiveState.provider = provider || createFallbackProvider();
+    interactiveState.providerType = String(providerType || 'fallback');
+    // Trigger quizzes fresh on each lesson open so authors/students can retest immediately.
+    interactiveState.shownQuizIds = new Set();
+    interactiveState.activeQuiz = null;
+    interactiveState.wasPlayingBeforeModal = false;
+    hideInteractiveQuizModal();
+
+    const next = interactiveState.quizzes.length ? Number(interactiveState.quizzes[0].triggerTimeSec || 0) : '';
+    updateInteractiveDebug({
+      provider: interactiveState.providerType,
+      lessonId: lessonId,
+      quizzesTotal: interactiveState.quizzes.length,
+      shownCount: 0,
+      currentTime: 0,
+      nextTrigger: next,
+      activeQuizId: '',
+      activeQuizTime: '',
+      status: interactiveState.quizzes.length ? 'armed' : 'no-quizzes'
+    });
+  }
+
+  function resetInteractiveVideoQuizState() {
+    stopDriveTimer();
+    interactiveState.lessonId = '';
+    interactiveState.quizzes = [];
+    interactiveState.shownQuizIds = new Set();
+    interactiveState.activeQuiz = null;
+    interactiveState.provider = null;
+    interactiveState.providerType = '';
+    interactiveState.wasPlayingBeforeModal = false;
+    hideInteractiveQuizModal();
+
+    updateInteractiveDebug({
+      provider: '',
+      lessonId: '',
+      quizzesTotal: 0,
+      shownCount: 0,
+      currentTime: 0,
+      nextTrigger: '',
+      activeQuizId: '',
+      activeQuizTime: '',
+      status: 'reset'
+    });
+  }
+
+  function checkInteractiveQuizTriggers(currentTimeSec) {
+    if (!interactiveState || !interactiveState.lessonId || !interactiveState.quizzes.length) return;
+    if (interactiveState.activeQuiz) return;
+
+    const currentTime = Number(currentTimeSec);
+    if (!Number.isFinite(currentTime) || currentTime < 0) return;
+
+    const nextPending = interactiveState.quizzes.find(function(entry) {
+      if (!entry || !entry._id) return false;
+      return !interactiveState.shownQuizIds.has(String(entry._id));
+    });
+
+    updateInteractiveDebug({
+      currentTime: currentTime.toFixed(1),
+      shownCount: interactiveState.shownQuizIds.size,
+      nextTrigger: nextPending ? Number(nextPending.triggerTimeSec || 0) : 'none',
+      status: 'checking'
+    });
+
+    const trigger = interactiveState.quizzes.find(function(entry) {
+      if (!entry || !entry._id) return false;
+      if (interactiveState.shownQuizIds.has(String(entry._id))) return false;
+      return currentTime >= Number(entry.triggerTimeSec || 0);
+    });
+
+    if (!trigger) return;
+
+    interactiveState.activeQuiz = trigger;
+    interactiveState.shownQuizIds.add(String(trigger._id));
+
+    updateInteractiveDebug({
+      shownCount: interactiveState.shownQuizIds.size,
+      activeQuizId: String(trigger._id),
+      activeQuizTime: Number(trigger.triggerTimeSec || 0),
+      status: 'triggered'
+    });
+
+    const provider = interactiveState.provider || createFallbackProvider();
+    interactiveState.wasPlayingBeforeModal = provider.isPlaying();
+
+    if (trigger.pauseOnShow && interactiveState.wasPlayingBeforeModal && typeof provider.pause === 'function') {
+      provider.pause();
+    }
+
+    showInteractiveQuizModal(trigger);
+  }
+
+  function formatQuizTime(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return mins + ':' + String(secs).padStart(2, '0');
+  }
+
+  function showInteractiveQuizModal(quiz) {
+    const modal = document.getElementById('interactiveQuizModal');
+    if (!modal) return;
+
+    const questionEl = modal.querySelector('[data-iq-question]');
+    const optionsEl = modal.querySelector('[data-iq-options]');
+    const feedbackEl = modal.querySelector('[data-iq-feedback]');
+    const closeBtn = modal.querySelector('[data-iq-close]');
+    const submitBtn = modal.querySelector('[data-iq-submit]');
+    const stampEl = modal.querySelector('[data-iq-stamp]');
+
+    if (questionEl) questionEl.textContent = quiz.question;
+    if (stampEl) stampEl.textContent = 'Checkpoint at ' + formatQuizTime(quiz.triggerTimeSec);
+    if (feedbackEl) {
+      feedbackEl.className = 'interactive-quiz-feedback';
+      feedbackEl.textContent = '';
+    }
+
+    let selectedIndex = -1;
+    let answered = false;
+
+    if (optionsEl) {
+      optionsEl.innerHTML = quiz.options.map(function(option, idx) {
+        return '' +
+          '<button class="interactive-quiz-option" type="button" data-iq-option="' + idx + '">' +
+            getDeps().escapeHtml(option || ('Option ' + (idx + 1))) +
+          '</button>';
+      }).join('');
+
+      optionsEl.querySelectorAll('[data-iq-option]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          if (answered) return;
+          selectedIndex = Number(btn.dataset.iqOption);
+
+          optionsEl.querySelectorAll('[data-iq-option]').forEach(function(other) {
+            other.classList.remove('is-selected');
+          });
+          btn.classList.add('is-selected');
+
+          if (submitBtn) submitBtn.disabled = false;
+        });
+      });
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.onclick = function() {
+        if (selectedIndex < 0 || answered) return;
+
+        answered = true;
+        const isCorrect = selectedIndex === Number(quiz.correctOptionIndex);
+
+        if (optionsEl) {
+          optionsEl.querySelectorAll('[data-iq-option]').forEach(function(btn) {
+            const idx = Number(btn.dataset.iqOption);
+            btn.disabled = true;
+            if (idx === Number(quiz.correctOptionIndex)) {
+              btn.classList.add('is-correct');
+            } else if (idx === selectedIndex && !isCorrect) {
+              btn.classList.add('is-wrong');
+            }
+          });
+        }
+
+        if (feedbackEl) {
+          feedbackEl.classList.add(isCorrect ? 'is-correct' : 'is-wrong');
+          feedbackEl.textContent = isCorrect
+            ? 'Correct. Great job.'
+            : 'Incorrect. ' + (quiz.explanation || 'Review this part and continue learning.');
+        }
+
+        if (closeBtn) closeBtn.disabled = false;
+        submitBtn.disabled = true;
+      };
+    }
+
+    if (closeBtn) {
+      closeBtn.disabled = true;
+      closeBtn.onclick = function() {
+        hideInteractiveQuizModal();
+        const provider = interactiveState.provider || createFallbackProvider();
+        if (interactiveState.wasPlayingBeforeModal && typeof provider.play === 'function') {
+          provider.play();
+        }
+        interactiveState.activeQuiz = null;
+        updateInteractiveDebug({
+          activeQuizId: '',
+          activeQuizTime: '',
+          status: 'modal-closed'
+        });
+      };
+    }
+
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+    updateInteractiveDebug({
+      activeQuizId: String(quiz && quiz._id || ''),
+      activeQuizTime: Number(quiz && quiz.triggerTimeSec || 0),
+      status: 'modal-open'
+    });
+  }
+
+  function hideInteractiveQuizModal() {
+    const modal = document.getElementById('interactiveQuizModal');
+    if (!modal) return;
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function createYouTubeProvider() {
+    return {
+      pause: function() {
+        if (youtubePlayer && typeof youtubePlayer.pauseVideo === 'function') {
+          youtubePlayer.pauseVideo();
+        }
+      },
+      play: function() {
+        if (youtubePlayer && typeof youtubePlayer.playVideo === 'function') {
+          youtubePlayer.playVideo();
+        }
+      },
+      isPlaying: function() {
+        if (!window.YT || !window.YT.PlayerState || !youtubePlayer || typeof youtubePlayer.getPlayerState !== 'function') {
+          return false;
+        }
+        return youtubePlayer.getPlayerState() === window.YT.PlayerState.PLAYING;
+      }
+    };
+  }
+
+  function createHtml5Provider() {
+    return {
+      pause: function() {
+        if (html5VideoPlayer && typeof html5VideoPlayer.pause === 'function') {
+          html5VideoPlayer.pause();
+        }
+      },
+      play: function() {
+        if (html5VideoPlayer && typeof html5VideoPlayer.play === 'function') {
+          html5VideoPlayer.play().catch(function() {
+            // Ignore autoplay restrictions.
+          });
+        }
+      },
+      isPlaying: function() {
+        return Boolean(html5VideoPlayer && !html5VideoPlayer.paused && !html5VideoPlayer.ended);
+      }
+    };
+  }
+
+  function setupHtml5Player(url, lesson) {
+    const player = ensureHtml5VideoPlayer();
+    if (!player) return;
+
+    teardownHtml5PlayerListeners();
+
+    html5VideoPlayer = player;
+    html5VideoPlayer.src = String(url || '');
+
+    html5PlayHandler = function() {
+      setPlaybackState(true);
+      if (typeof window.__trackVideoEvent === 'function') {
+        window.__trackVideoEvent('play', html5VideoPlayer.currentTime || 0);
+      }
+    };
+
+    html5PauseHandler = function() {
+      setPlaybackState(false);
+      if (typeof window.__trackVideoEvent === 'function') {
+        window.__trackVideoEvent('pause', html5VideoPlayer.currentTime || 0);
+      }
+    };
+
+    html5EndedHandler = function() {
+      setPlaybackState(false);
+      if (typeof window.__trackVideoEvent === 'function') {
+        window.__trackVideoEvent('ended', html5VideoPlayer.currentTime || 0);
+      }
+    };
+
+    html5TimeHandler = function() {
+      updatePlaybackTimeBadge(Number(html5VideoPlayer.currentTime || 0), Number(html5VideoPlayer.duration || 0), 'html5');
+      updateInteractiveDebug({
+        provider: interactiveState.providerType || 'html5',
+        currentTime: Number(html5VideoPlayer.currentTime || 0).toFixed(1),
+        status: 'html5-timeupdate'
+      });
+      checkInteractiveQuizTriggers(Number(html5VideoPlayer.currentTime || 0));
+    };
+
+    html5VideoPlayer.addEventListener('play', html5PlayHandler);
+    html5VideoPlayer.addEventListener('pause', html5PauseHandler);
+    html5VideoPlayer.addEventListener('ended', html5EndedHandler);
+    html5VideoPlayer.addEventListener('timeupdate', html5TimeHandler);
+
+    html5VideoPlayer.load();
+    setPlaybackState(true);
+  }
+
+  function teardownHtml5PlayerListeners() {
+    if (!html5VideoPlayer) return;
+    if (html5PlayHandler) html5VideoPlayer.removeEventListener('play', html5PlayHandler);
+    if (html5PauseHandler) html5VideoPlayer.removeEventListener('pause', html5PauseHandler);
+    if (html5EndedHandler) html5VideoPlayer.removeEventListener('ended', html5EndedHandler);
+    if (html5TimeHandler) html5VideoPlayer.removeEventListener('timeupdate', html5TimeHandler);
+    html5PlayHandler = null;
+    html5PauseHandler = null;
+    html5EndedHandler = null;
+    html5TimeHandler = null;
+  }
+
+  function teardownHtml5Player() {
+    teardownHtml5PlayerListeners();
+    if (!html5VideoPlayer) {
+      html5VideoPlayer = document.getElementById('html5VideoPlayer');
+    }
+    if (html5VideoPlayer) {
+      html5VideoPlayer.pause();
+      html5VideoPlayer.removeAttribute('src');
+      html5VideoPlayer.load();
+      html5VideoPlayer.style.display = 'none';
+    }
+    html5VideoPlayer = null;
+    setPlaybackTimeBadgeVisible(false);
+  }
+
+  function createFallbackProvider() {
+    return {
+      pause: function() {
+        setPlaybackState(false);
+      },
+      play: function() {
+        setPlaybackState(true);
+      },
+      isPlaying: function() {
+        const playback = window.__videoPlayback || {};
+        return playback.isPlaying !== false;
+      }
+    };
+  }
+
+  function startDriveTimer() {
+    stopDriveTimer();
+    driveElapsedSeconds = 0;
+    driveLastTickAt = Date.now();
+    driveTimerId = setInterval(function() {
+      if (!interactiveState.lessonId || interactiveState.providerType === 'youtube' || interactiveState.providerType === 'html5') return;
+
+      const playback = window.__videoPlayback || {};
+      const isVisible = document.visibilityState === 'visible';
+      const now = Date.now();
+      const deltaSec = Math.max(0, (now - driveLastTickAt) / 1000);
+      driveLastTickAt = now;
+
+      if (!isVisible || playback.isPlaying === false) return;
+
+      driveElapsedSeconds += deltaSec;
+      updatePlaybackTimeBadge(driveElapsedSeconds, null, 'drive');
+      updateInteractiveDebug({
+        provider: interactiveState.providerType || 'drive-iframe',
+        currentTime: driveElapsedSeconds.toFixed(1),
+        status: 'drive-tick'
+      });
+      checkInteractiveQuizTriggers(driveElapsedSeconds);
+    }, 500);
+  }
+
+  function stopDriveTimer() {
+    if (driveTimerId) {
+      clearInterval(driveTimerId);
+      driveTimerId = null;
+    }
+    driveElapsedSeconds = 0;
+    driveLastTickAt = 0;
+  }
+
   function renderPanel(typeLabel, title, htmlBody, showCompleteButton) {
     const deps = getDeps();
     const imageContainer = document.getElementById('imageContainer');
     const player = document.getElementById('videoPlayerContainer');
     const iframe = document.getElementById('videoIframe');
+    const html5 = document.getElementById('html5VideoPlayer');
 
     if (imageContainer) imageContainer.style.display = 'none';
     if (iframe) iframe.src = '';
+    if (html5) {
+      html5.pause();
+      html5.removeAttribute('src');
+      html5.load();
+      html5.style.display = 'none';
+    }
     if (player) player.style.display = 'none';
+    setPlaybackTimeBadgeVisible(false);
 
     let panel = document.getElementById('lessonFallbackPanel');
     if (!panel) {
@@ -655,16 +1294,243 @@
     return /(?:youtube\.com|youtu\.be)/i.test(String(url || ''));
   }
 
+  function buildYouTubeEmbedUrl(videoId) {
+    const id = String(videoId || '').trim();
+    if (!id) return '';
+    return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id);
+  }
+
+  function isDirectVideoFileUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return false;
+    return /\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(raw);
+  }
+
+  function setProviderNotice(message, level) {
+    const el = document.getElementById('videoProviderNotice');
+    if (!el) return;
+
+    const text = String(message || '').trim();
+    if (!text) {
+      el.style.display = 'none';
+      el.textContent = '';
+      el.className = 'small mb-3';
+      return;
+    }
+
+    el.style.display = 'block';
+    el.textContent = text;
+    el.className = 'small mb-3 ' + (level === 'success' ? 'notice-success' : 'notice-warning');
+  }
+
+  function formatPlaybackTime(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const hours = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+
+    if (hours > 0) {
+      return hours + ':' + String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    }
+    return mins + ':' + String(secs).padStart(2, '0');
+  }
+
+  function ensurePlaybackTimeBadge() {
+    if (playbackTimeBadge && document.body && document.body.contains(playbackTimeBadge)) {
+      return playbackTimeBadge;
+    }
+
+    const container = document.getElementById('videoPlayerContainer');
+    if (!container) return null;
+
+    const badge = document.createElement('div');
+    badge.id = 'playbackTimeBadge';
+    badge.style.position = 'absolute';
+    badge.style.right = '16px';
+    badge.style.bottom = '16px';
+    badge.style.transform = 'none';
+    badge.style.width = '56px';
+    badge.style.height = '56px';
+    badge.style.zIndex = '8';
+    badge.style.padding = '0';
+    badge.style.borderRadius = '50%';
+    badge.style.background = 'rgba(2, 6, 23, 0.72)';
+    badge.style.color = 'rgb(248, 250, 252)';
+    badge.style.font = '14px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+    badge.style.display = 'inline-flex';
+    badge.style.alignItems = 'center';
+    badge.style.justifyContent = 'center';
+    badge.style.pointerEvents = 'auto';
+    badge.style.cursor = 'pointer';
+    badge.textContent = '▶';
+    badge.title = 'Click to start/pause quiz timer (YouTube fallback)';
+
+    badge.addEventListener('click', function(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      if (!interactiveState || interactiveState.providerType !== 'youtube') return;
+
+      const playback = window.__videoPlayback || {};
+      const nextPlaying = !Boolean(playback.isPlaying);
+      setPlaybackState(nextPlaying);
+
+      updateInteractiveDebug({
+        provider: interactiveState.providerType || 'youtube',
+        status: nextPlaying ? 'youtube-badge-user-play' : 'youtube-badge-user-pause'
+      });
+    });
+
+    container.appendChild(badge);
+    playbackTimeBadge = badge;
+    return badge;
+  }
+
+  function setPlaybackTimeBadgeVisible(visible) {
+    const badge = ensurePlaybackTimeBadge();
+    if (!badge) return;
+    badge.style.display = visible ? 'inline-flex' : 'none';
+  }
+
+  function updatePlaybackTimeBadge(currentSec, durationSec, provider) {
+    const badge = ensurePlaybackTimeBadge();
+    if (!badge) return;
+
+    const current = formatPlaybackTime(currentSec);
+    const duration = Number(durationSec);
+    const durationText = Number.isFinite(duration) && duration > 0 ? formatPlaybackTime(duration) : '--:--';
+    const playback = window.__videoPlayback || {};
+    const isPlaying = Boolean(playback.isPlaying);
+    badge.textContent = isPlaying ? '❚❚' : '▶';
+    badge.title = current + ' / ' + durationText + ' (click to start/pause quiz timer)';
+  }
+
+  function extractGoogleDriveMeta(inputUrl) {
+    const raw = String(inputUrl || '').trim();
+    if (!raw) return null;
+
+    let parsed;
+    try {
+      parsed = new URL(raw, window.location.origin);
+    } catch (err) {
+      return null;
+    }
+
+    const host = String(parsed.hostname || '').toLowerCase();
+    if (!host.includes('drive.google.com')) return null;
+
+    const path = parsed.pathname || '';
+    let fileId = '';
+
+    const filePathMatch = path.match(/\/file\/d\/([^/]+)/i);
+    if (filePathMatch) fileId = filePathMatch[1];
+
+    if (!fileId) {
+      fileId = parsed.searchParams.get('id') || '';
+    }
+
+    if (!fileId) return null;
+
+    return {
+      fileId,
+      resourceKey: parsed.searchParams.get('resourcekey') || ''
+    };
+  }
+
+  function buildGoogleDriveEmbedUrl(fileId, resourceKey) {
+    const url = new URL('https://drive.google.com/file/d/' + encodeURIComponent(String(fileId || '')) + '/preview');
+    if (resourceKey) {
+      url.searchParams.set('resourcekey', String(resourceKey));
+    }
+    url.searchParams.set('usp', 'drivesdk');
+    return url.toString();
+  }
+
+  function normalizeVideoEmbedUrl(inputUrl) {
+    const raw = String(inputUrl || '').trim();
+    if (!raw) return '';
+
+    if (isYouTubeUrl(raw)) return raw;
+
+    const driveMeta = extractGoogleDriveMeta(raw);
+    if (!driveMeta) return raw;
+
+    // Normalize all Drive link variants to the reliable iframe preview endpoint.
+    return buildGoogleDriveEmbedUrl(driveMeta.fileId, driveMeta.resourceKey);
+  }
+
+  function setVideoIframeSourceWithFallback(iframe, normalizedUrl, originalUrl) {
+    if (!iframe) return;
+
+    const primaryUrl = String(normalizedUrl || '').trim();
+    if (!primaryUrl) {
+      iframe.src = '';
+      return;
+    }
+
+    iframe.src = primaryUrl;
+
+    const meta = extractGoogleDriveMeta(primaryUrl || originalUrl);
+    if (!meta) return;
+
+    // If browser/load policy rejects the keyed URL, retry once without resource key.
+    const fallback = buildGoogleDriveEmbedUrl(meta.fileId, '');
+    if (fallback === primaryUrl) return;
+
+    let switched = false;
+    const timer = window.setTimeout(function() {
+      if (switched) return;
+      switched = true;
+      iframe.src = fallback;
+    }, 7000);
+
+    iframe.addEventListener('load', function onLoad() {
+      window.clearTimeout(timer);
+      iframe.removeEventListener('load', onLoad);
+    }, { once: true });
+  }
+
   function getYouTubeId(url) {
-    const value = String(url || '');
-    const shortMatch = value.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+
+    let parsed;
+    try {
+      parsed = new URL(raw, window.location.origin);
+    } catch (err) {
+      parsed = null;
+    }
+
+    if (parsed) {
+      const host = String(parsed.hostname || '').toLowerCase();
+      const path = String(parsed.pathname || '');
+
+      if (host.includes('youtu.be')) {
+        const token = path.replace(/^\//, '').split('/')[0];
+        return token || '';
+      }
+
+      if (host.includes('youtube.com')) {
+        const fromQuery = parsed.searchParams.get('v') || parsed.searchParams.get('vi');
+        if (fromQuery) return fromQuery;
+
+        const embedMatch = path.match(/^\/embed\/([^/?#]+)/i);
+        if (embedMatch) return embedMatch[1];
+
+        const shortsMatch = path.match(/^\/shorts\/([^/?#]+)/i);
+        if (shortsMatch) return shortsMatch[1];
+
+        const liveMatch = path.match(/^\/live\/([^/?#]+)/i);
+        if (liveMatch) return liveMatch[1];
+      }
+    }
+
+    // Fallback regex extraction for malformed but common pasted links.
+    const shortMatch = raw.match(/youtu\.be\/([a-zA-Z0-9_-]+)/i);
     if (shortMatch) return shortMatch[1];
 
-    const longMatch = value.match(/[?&]v=([a-zA-Z0-9_-]+)/);
-    if (longMatch) return longMatch[1];
-
-    const embedMatch = value.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/);
-    if (embedMatch) return embedMatch[1];
+    const watchMatch = raw.match(/[?&](?:v|vi)=([a-zA-Z0-9_-]+)/i);
+    if (watchMatch) return watchMatch[1];
 
     return '';
   }
@@ -676,6 +1542,7 @@
 
       if (!youtubePlayer) {
         youtubePlayer = new window.YT.Player('videoIframe', {
+          host: 'https://www.youtube-nocookie.com',
           videoId: videoId,
           playerVars: { rel: 0, origin: window.location.origin },
           events: {
@@ -691,6 +1558,14 @@
       startYouTubePolling(lesson);
     }).catch(function(err) {
       console.error('[YouTube API Error]', err);
+      if (!youtubeFallbackTimerId) {
+        startYouTubeFallbackTimer();
+      }
+      setProviderNotice('YouTube API unavailable. Timed quizzes are running in fallback mode.', 'warning');
+      updateInteractiveDebug({
+        provider: interactiveState.providerType || 'youtube',
+        status: 'youtube-api-error-fallback'
+      });
     });
   }
 
@@ -704,6 +1579,7 @@
       : 0;
 
     if (state === window.YT.PlayerState.PLAYING) {
+      setPlaybackState(true);
       lastYoutubeTime = position;
       if (typeof window.__trackVideoEvent === 'function') {
         window.__trackVideoEvent('play', position);
@@ -711,12 +1587,14 @@
     }
 
     if (state === window.YT.PlayerState.PAUSED) {
+      setPlaybackState(false);
       if (typeof window.__trackVideoEvent === 'function') {
         window.__trackVideoEvent('pause', position);
       }
     }
 
     if (state === window.YT.PlayerState.ENDED) {
+      setPlaybackState(false);
       if (typeof window.__trackVideoEvent === 'function') {
         window.__trackVideoEvent('ended', position);
       }
@@ -725,9 +1603,21 @@
 
   function startYouTubePolling(lesson) {
     if (youtubePollId) clearInterval(youtubePollId);
+    stopYouTubeApiWatchdog();
+    youtubeZeroPollCount = 0;
+
     youtubePollId = setInterval(function() {
       if (!youtubePlayer || typeof youtubePlayer.getCurrentTime !== 'function') return;
-      const current = youtubePlayer.getCurrentTime();
+      let current = 0;
+      try {
+        current = Number(youtubePlayer.getCurrentTime() || 0);
+      } catch (err) {
+        updateInteractiveDebug({
+          provider: interactiveState.providerType || 'youtube',
+          status: 'youtube-poll-gettime-error'
+        });
+        current = Number(youtubeFallbackElapsed || 0);
+      }
       const delta = Math.abs(current - lastYoutubeTime);
 
       if (lastYoutubeTime && delta > 4) {
@@ -736,15 +1626,127 @@
         }
       }
 
+      if (current > 0.2) {
+        youtubeZeroPollCount = 0;
+        youtubeFallbackElapsed = current;
+        stopYouTubeFallbackTimer();
+      } else {
+        youtubeZeroPollCount += 1;
+      }
+
+      // If API time stays at 0 for ~10s while video is likely playing, switch to approximate wall-clock fallback.
+      if (youtubeZeroPollCount >= 5 && !youtubeFallbackTimerId) {
+        startYouTubeFallbackTimer();
+        setProviderNotice('YouTube API timing unavailable. Timed quizzes are running in approximate fallback mode.', 'warning');
+      }
+
       lastYoutubeTime = current;
+      let duration = 0;
+      if (youtubePlayer && typeof youtubePlayer.getDuration === 'function') {
+        try {
+          duration = Number(youtubePlayer.getDuration() || 0);
+        } catch (err) {
+          duration = 0;
+        }
+      }
+      updatePlaybackTimeBadge(current, duration, 'yt');
+      updateInteractiveDebug({
+        provider: interactiveState.providerType || 'youtube',
+        currentTime: Number(current || 0).toFixed(1),
+        status: youtubeFallbackTimerId ? 'youtube-poll-fallback' : 'youtube-poll'
+      });
+      checkInteractiveQuizTriggers(current);
     }, 2000);
   }
 
+  function startYouTubeApiWatchdog() {
+    stopYouTubeApiWatchdog();
+    youtubeApiWatchdogId = setTimeout(function() {
+      if (youtubePollId) return;
+
+      // API did not become ready in time; keep interactive quizzes functional via fallback timing.
+      if (!youtubeFallbackTimerId) {
+        startYouTubeFallbackTimer();
+      }
+      setProviderNotice('YouTube API did not initialize. Timed quizzes are running in fallback mode.', 'warning');
+      updateInteractiveDebug({
+        provider: interactiveState.providerType || 'youtube',
+        status: 'youtube-api-timeout-fallback'
+      });
+    }, 6000);
+  }
+
+  function stopYouTubeApiWatchdog() {
+    if (youtubeApiWatchdogId) {
+      clearTimeout(youtubeApiWatchdogId);
+      youtubeApiWatchdogId = null;
+    }
+  }
+
+  function startYouTubeFallbackTimer() {
+    if (youtubeFallbackTimerId) return;
+
+    let lastTick = Date.now();
+    updateInteractiveDebug({
+      provider: interactiveState.providerType || 'youtube',
+      status: 'youtube-fallback-started'
+    });
+
+    youtubeFallbackTimerId = setInterval(function() {
+      const now = Date.now();
+      const delta = Math.max(0, (now - lastTick) / 1000);
+      lastTick = now;
+
+      if (!interactiveState.lessonId || interactiveState.providerType !== 'youtube') return;
+
+      const playback = window.__videoPlayback || {};
+      if (!playback.isPlaying) {
+        updateInteractiveDebug({
+          provider: interactiveState.providerType || 'youtube',
+          status: 'youtube-fallback-waiting-play'
+        });
+        return;
+      }
+
+      youtubeFallbackElapsed += delta;
+      let duration = 0;
+      if (youtubePlayer && typeof youtubePlayer.getDuration === 'function') {
+        try {
+          duration = Number(youtubePlayer.getDuration() || 0);
+        } catch (err) {
+          duration = 0;
+        }
+      }
+      updatePlaybackTimeBadge(youtubeFallbackElapsed, duration, 'yt');
+      updateInteractiveDebug({
+        provider: interactiveState.providerType || 'youtube',
+        currentTime: youtubeFallbackElapsed.toFixed(1),
+        status: 'youtube-fallback-tick'
+      });
+      checkInteractiveQuizTriggers(youtubeFallbackElapsed);
+    }, 500);
+  }
+
+  function bindYouTubeFallbackInteraction() {
+    if (youtubeFallbackInteractionBound) return;
+    ensurePlaybackTimeBadge();
+    youtubeFallbackInteractionBound = true;
+  }
+
+  function stopYouTubeFallbackTimer() {
+    if (youtubeFallbackTimerId) {
+      clearInterval(youtubeFallbackTimerId);
+      youtubeFallbackTimerId = null;
+    }
+  }
+
   function teardownYouTubePlayer() {
+    stopYouTubeApiWatchdog();
     if (youtubePollId) {
       clearInterval(youtubePollId);
       youtubePollId = null;
     }
+    stopYouTubeFallbackTimer();
 
     if (youtubePlayer && typeof youtubePlayer.destroy === 'function') {
       youtubePlayer.destroy();
@@ -752,6 +1754,9 @@
 
     youtubePlayer = null;
     lastYoutubeTime = 0;
+    youtubeZeroPollCount = 0;
+    youtubeFallbackElapsed = 0;
+    setPlaybackTimeBadgeVisible(false);
 
     ensureVideoIframe();
   }
@@ -766,22 +1771,66 @@
     iframe = document.createElement('iframe');
     iframe.id = 'videoIframe';
     iframe.src = '';
-    iframe.allow = 'autoplay';
+    iframe.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
     iframe.allowFullscreen = true;
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
     container.appendChild(iframe);
     return iframe;
+  }
+
+  function ensureHtml5VideoPlayer() {
+    let video = document.getElementById('html5VideoPlayer');
+    if (video) return video;
+
+    const container = document.getElementById('videoPlayerContainer');
+    if (!container) return null;
+
+    video = document.createElement('video');
+    video.id = 'html5VideoPlayer';
+    video.controls = true;
+    video.playsInline = true;
+    video.style.width = '100%';
+    video.style.height = '100%';
+    video.style.background = '#000';
+    video.style.display = 'none';
+    container.appendChild(video);
+    return video;
   }
 
   function ensureYouTubeApi() {
     if (window.YT && window.YT.Player) return Promise.resolve();
 
     if (!youtubeReadyPromise) {
-      youtubeReadyPromise = new Promise(function(resolve) {
+      youtubeReadyPromise = new Promise(function(resolve, reject) {
+        const timeoutId = setTimeout(function() {
+          reject(new Error('YouTube iframe API timed out'));
+        }, 5000);
+
         const previous = window.onYouTubeIframeAPIReady;
         window.onYouTubeIframeAPIReady = function() {
           if (typeof previous === 'function') previous();
+          clearTimeout(timeoutId);
           resolve();
         };
+
+        // If YT object is already present but callback was missed earlier, resolve immediately.
+        if (window.YT && window.YT.Player) {
+          clearTimeout(timeoutId);
+          resolve();
+          return;
+        }
+
+        const existingApiScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+        if (!existingApiScript) {
+          const tag = document.createElement('script');
+          tag.src = 'https://www.youtube.com/iframe_api';
+          tag.async = true;
+          tag.onerror = function() {
+            clearTimeout(timeoutId);
+            reject(new Error('Failed to load YouTube iframe API script'));
+          };
+          document.head.appendChild(tag);
+        }
       });
     }
 

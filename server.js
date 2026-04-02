@@ -101,7 +101,11 @@ const styleSrcUrls = [
   "https://use.fontawesome.com/",
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
 ];
-const connectSrcUrls = [];
+const connectSrcUrls = [
+  "https://cdn.jsdelivr.net",
+  "https://www.youtube.com",
+  "https://www.youtube-nocookie.com"
+];
 const fontSrcUrls = [];
 app.use(helmet.contentSecurityPolicy({
   directives: {
@@ -124,6 +128,8 @@ app.use(helmet.contentSecurityPolicy({
       "data:",
       "https://res.cloudinary.com/dwxy9oepm/",
       "https://images.unsplash.com/",
+      "https://i.ytimg.com",
+      "https://*.ytimg.com",
     ],
     fontSrc: ["'self'", ...fontSrcUrls],
   },

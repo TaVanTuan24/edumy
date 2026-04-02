@@ -17,6 +17,13 @@
     slideIndex: null
   };
 
+  window.__videoPlayback = window.__videoPlayback || { isPlaying: false };
+
+  function setVideoPlaybackState(isPlaying) {
+    window.__videoPlayback = window.__videoPlayback || {};
+    window.__videoPlayback.isPlaying = Boolean(isPlaying);
+  }
+
   function init() {
     if (!window.LearningStore || !window.LearningRender) {
       console.error('Learning modules are not loaded');
@@ -34,6 +41,8 @@
     bindTrackingFlush();
     bindActivityTracking();
     startHeartbeat();
+
+    window.__setVideoPlaybackState = setVideoPlaybackState;
   }
 
   function bindEvents() {
@@ -151,13 +160,13 @@
     });
     window.__videoPlayback = window.__videoPlayback || {};
     if (activeLessonType !== 'lecture') {
-      window.__videoPlayback.isPlaying = true;
+      setVideoPlaybackState(true);
     }
     if (activeLessonType === 'lecture') {
       const url = (lesson.preview || (lesson.content && lesson.content.videoUrl)) || '';
       if (!isYouTubeUrl(url)) {
         trackEvent('play', lesson, null);
-        window.__videoPlayback.isPlaying = true;
+        setVideoPlaybackState(true);
       }
     }
 
@@ -268,7 +277,6 @@
       position: Number.isFinite(Number(position)) ? Number(position) : undefined
     };
 
-    console.log('[Track Event]', payload);
     postTrack('/track/event', payload);
   }
 
@@ -283,7 +291,6 @@
       watchTime: Math.max(0, Math.round(watchTimeMs))
     };
 
-    console.log('[Track WatchTime]', payload);
     postTrack('/track/watch-time', payload);
   }
 
@@ -302,7 +309,6 @@
       slideIndex: Number.isFinite(Number(slideIndex)) ? Number(slideIndex) : 0
     };
 
-    console.log('[Track Slide]', payload);
     postTrack('/track/slide', payload);
   }
 
@@ -319,7 +325,6 @@
       attempts: Number(attempts) || 1
     };
 
-    console.log('[Track Quiz]', payload);
     postTrack('/track/quiz', payload, true);
   }
 

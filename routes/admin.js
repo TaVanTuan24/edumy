@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Course = require('../models/course');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
@@ -66,6 +67,69 @@ function normalizeSlidesPayload(slides) {
             elements: normalizedElements
         }
     })
+}
+
+function parseTimestampToSeconds(rawValue) {
+    const value = String(rawValue || '').trim()
+    if (!value) return 0
+
+    if (/^\d+$/.test(value)) {
+        return Math.max(0, parseInt(value, 10))
+    }
+
+    const parts = value.split(':').map((part) => part.trim())
+    if (parts.length === 2) {
+        const minutes = parseInt(parts[0], 10)
+        const seconds = parseInt(parts[1], 10)
+        if (!Number.isNaN(minutes) && !Number.isNaN(seconds)) {
+            return Math.max(0, (minutes * 60) + seconds)
+        }
+    }
+
+    return 0
+}
+
+function normalizeInteractiveQuizPayload(quizzes) {
+    const source = Array.isArray(quizzes) ? quizzes : []
+
+    return source
+        .map((entry, index) => {
+            const options = (Array.isArray(entry && entry.options) ? entry.options : [])
+                .map((opt) => String(opt || '').trim())
+                .filter(Boolean)
+                .slice(0, 4)
+
+            while (options.length < 4) {
+                options.push('')
+            }
+
+            const rawTime = entry && (entry.triggerTimeSec ?? entry.timestamp ?? entry.time)
+            const triggerTimeSec = parseTimestampToSeconds(rawTime)
+            const parsedCorrect = Number(entry && entry.correctOptionIndex)
+
+            const normalized = {
+                triggerTimeSec,
+                question: String(entry && entry.question || '').trim(),
+                options,
+                correctOptionIndex: Number.isFinite(parsedCorrect) && parsedCorrect >= 0 && parsedCorrect <= 3 ? parsedCorrect : 0,
+                explanation: String(entry && entry.explanation || '').trim(),
+                pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
+                order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index
+            }
+
+            if (entry && entry._id && mongoose.isValidObjectId(entry._id)) {
+                normalized._id = entry._id
+            }
+
+            return normalized
+        })
+        .filter((entry) => entry.question)
+        .sort((a, b) => {
+            const byTime = a.triggerTimeSec - b.triggerTimeSec
+            if (byTime !== 0) return byTime
+            return a.order - b.order
+        })
+        .map((entry, index) => ({ ...entry, order: index }))
 }
 
 function countTotalLessons(course) {
@@ -145,6 +209,48 @@ router.get('/courses/:id/editor', async (req, res) => {
 
     res.render('admin/courseEditor', { course })
 
+})
+
+router.get('/courses/:id/video-settings', async (req, res) => {
+    const course = await Course.findById(req.params.id)
+    if (!course) {
+        return res.status(404).send('Course not found')
+    }
+
+    const sectionIndex = parseInt(req.query.section, 10)
+    const lessonIndex = parseInt(req.query.lesson, 10)
+
+    if (Number.isNaN(sectionIndex) || Number.isNaN(lessonIndex)) {
+        return res.status(400).send('Missing section or lesson index')
+    }
+
+    const lesson = course.driveStructure?.[sectionIndex]?.videos?.[lessonIndex]
+    if (!lesson) {
+        return res.status(404).send('Lesson not found')
+    }
+
+    const normalizedType = normalizeItemType(lesson.type, 'video')
+    if (normalizedType !== 'video') {
+        return res.status(400).send('Advanced video settings are only available for video lessons')
+    }
+
+    const interactiveQuizzesRaw = Array.isArray(lesson?.content?.interactiveQuizzes)
+        ? lesson.content.interactiveQuizzes
+        : Array.isArray(lesson?.interactiveQuizzes)
+            ? lesson.interactiveQuizzes
+            : []
+
+    const interactiveQuizzes = normalizeInteractiveQuizPayload(interactiveQuizzesRaw)
+    const videoUrl = String(lesson.preview || (lesson.content && lesson.content.videoUrl) || lesson.refId || '')
+
+    res.render('admin/videoSettings', {
+        course,
+        lesson,
+        sectionIndex,
+        lessonIndex,
+        videoUrl,
+        interactiveQuizzes
+    })
 })
 
 router.get('/courses/:id/analytics', async (req, res) => {
@@ -402,14 +508,20 @@ router.get('/courses/:id/editor-new', async (req, res) => {
 })
 router.put('/course/:id/lesson/edit', async (req,res)=>{
 
-const {sectionIndex,lessonIndex,name,url} = req.body
+const {sectionIndex,lessonIndex,name,url,interactiveQuizzes} = req.body
+
+const parsedSectionIndex = parseInt(sectionIndex, 10)
+const parsedLessonIndex = parseInt(lessonIndex, 10)
+const normalizedInteractiveQuizzes = normalizeInteractiveQuizPayload(interactiveQuizzes)
 
 await Course.updateOne(
 {_id:req.params.id},
 {
 $set:{
-[`driveStructure.${sectionIndex}.videos.${lessonIndex}.name`]:name,
-[`driveStructure.${sectionIndex}.videos.${lessonIndex}.preview`]:url
+[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.name`]:name,
+[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.preview`]:url,
+[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.interactiveQuizzes`]:normalizedInteractiveQuizzes,
+[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.content.interactiveQuizzes`]:normalizedInteractiveQuizzes
 }
 }
 )
@@ -685,6 +797,168 @@ router.get('/course/:id/lesson/:sectionIndex/:lessonIndex', async (req, res) => 
         res.json({ success: true, lesson })
     } catch (err) {
         res.json({ success: false, error: err.message })
+    }
+})
+
+router.get('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes', async (req, res) => {
+    try {
+        const { sectionIndex, lessonIndex } = req.params
+        const course = await Course.findById(req.params.id).lean()
+
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' })
+        }
+
+        const lesson = course.driveStructure?.[sectionIndex]?.videos?.[lessonIndex]
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found' })
+        }
+
+        const fromContent = Array.isArray(lesson?.content?.interactiveQuizzes) ? lesson.content.interactiveQuizzes : []
+        const fromRoot = Array.isArray(lesson?.interactiveQuizzes) ? lesson.interactiveQuizzes : []
+        const interactiveQuizzes = normalizeInteractiveQuizPayload(fromContent.length ? fromContent : fromRoot)
+
+        return res.json({ success: true, interactiveQuizzes })
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+router.put('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes', async (req, res) => {
+    try {
+        const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
+        const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
+        const interactiveQuizzes = normalizeInteractiveQuizPayload(req.body && req.body.interactiveQuizzes)
+
+        await Course.updateOne(
+            { _id: req.params.id },
+            {
+                $set: {
+                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.interactiveQuizzes`]: interactiveQuizzes,
+                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.content.interactiveQuizzes`]: interactiveQuizzes
+                }
+            }
+        )
+
+        return res.json({ success: true, interactiveQuizzes })
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+router.post('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes', async (req, res) => {
+    try {
+        const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
+        const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
+        const course = await Course.findById(req.params.id)
+
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' })
+        }
+
+        const lesson = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedLessonIndex]
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found' })
+        }
+
+        const existing = Array.isArray(lesson.content?.interactiveQuizzes)
+            ? lesson.content.interactiveQuizzes
+            : Array.isArray(lesson.interactiveQuizzes)
+                ? lesson.interactiveQuizzes
+                : []
+
+        const appended = normalizeInteractiveQuizPayload([...(existing || []), req.body || {}])
+        lesson.interactiveQuizzes = appended
+        lesson.content = lesson.content || {}
+        lesson.content.interactiveQuizzes = appended
+
+        await course.save()
+        return res.json({ success: true, interactiveQuizzes: appended })
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+router.patch('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes/reorder', async (req, res) => {
+    try {
+        const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
+        const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
+        const orderedIds = Array.isArray(req.body && req.body.orderedIds)
+            ? req.body.orderedIds.map((id) => String(id))
+            : []
+
+        const course = await Course.findById(req.params.id)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' })
+        }
+
+        const lesson = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedLessonIndex]
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found' })
+        }
+
+        const current = Array.isArray(lesson.content?.interactiveQuizzes)
+            ? lesson.content.interactiveQuizzes
+            : Array.isArray(lesson.interactiveQuizzes)
+                ? lesson.interactiveQuizzes
+                : []
+
+        const byId = new Map((current || []).map((entry) => [String(entry && entry._id), entry]))
+        const reordered = []
+
+        orderedIds.forEach((id) => {
+            if (byId.has(id)) reordered.push(byId.get(id))
+        })
+
+        current.forEach((entry) => {
+            if (!reordered.includes(entry)) reordered.push(entry)
+        })
+
+        const normalized = normalizeInteractiveQuizPayload(reordered)
+        lesson.interactiveQuizzes = normalized
+        lesson.content = lesson.content || {}
+        lesson.content.interactiveQuizzes = normalized
+
+        await course.save()
+        return res.json({ success: true, interactiveQuizzes: normalized })
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+router.delete('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes/:quizId', async (req, res) => {
+    try {
+        const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
+        const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
+        const quizId = String(req.params.quizId)
+
+        const course = await Course.findById(req.params.id)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' })
+        }
+
+        const lesson = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedLessonIndex]
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found' })
+        }
+
+        const current = Array.isArray(lesson.content?.interactiveQuizzes)
+            ? lesson.content.interactiveQuizzes
+            : Array.isArray(lesson.interactiveQuizzes)
+                ? lesson.interactiveQuizzes
+                : []
+
+        const filtered = current.filter((entry) => String(entry && entry._id) !== quizId)
+        const normalized = normalizeInteractiveQuizPayload(filtered)
+
+        lesson.interactiveQuizzes = normalized
+        lesson.content = lesson.content || {}
+        lesson.content.interactiveQuizzes = normalized
+
+        await course.save()
+        return res.json({ success: true, interactiveQuizzes: normalized })
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message })
     }
 })
 

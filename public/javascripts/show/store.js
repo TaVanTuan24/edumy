@@ -72,7 +72,12 @@
       content: {
         videoUrl: content.videoUrl || (item && (item.videoUrl || item.preview)) || '',
         slides: Array.isArray(content.slides) ? content.slides : [],
-        questions: Array.isArray(content.questions) ? content.questions : Array.isArray(item && item.questions) ? item.questions : Array.isArray(item && item.quiz) ? item.quiz : []
+        questions: Array.isArray(content.questions) ? content.questions : Array.isArray(item && item.questions) ? item.questions : Array.isArray(item && item.quiz) ? item.quiz : [],
+        interactiveQuizzes: Array.isArray(content.interactiveQuizzes)
+          ? content.interactiveQuizzes
+          : Array.isArray(item && item.interactiveQuizzes)
+            ? item.interactiveQuizzes
+            : []
       }
     };
   }

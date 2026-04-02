@@ -27,8 +27,10 @@
     </div>
 
     <div id="videoPlayerContainer" class="ratio ratio-16x9 mb-3" style="display: none;">
-      <iframe id="videoIframe" src="" allow="autoplay" allowfullscreen></iframe>
+      <iframe id="videoIframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      <video id="html5VideoPlayer" controls playsinline style="display:none; width:100%; height:100%; background:#000;"></video>
     </div>
+    <div id="videoProviderNotice" class="small mb-3" style="display:none;"></div>
 
     <div class="course-tabs-wrap">
       <div class="course-tabs">
@@ -213,6 +215,30 @@
     <% } %>
     </div>
   </aside>
+  </div>
+</div>
+
+<div id="interactiveQuizModal" class="interactive-quiz-modal" aria-hidden="true">
+  <div class="interactive-quiz-backdrop"></div>
+  <div class="interactive-quiz-dialog" role="dialog" aria-modal="true" aria-labelledby="interactiveQuizTitle">
+    <div class="interactive-quiz-head">
+      <div>
+        <h5 id="interactiveQuizTitle" class="mb-1">Interactive Checkpoint</h5>
+        <p class="mb-0 small text-muted" data-iq-stamp></p>
+      </div>
+      <span class="badge bg-primary">Video Quiz</span>
+    </div>
+
+    <div class="interactive-quiz-body">
+      <p class="interactive-quiz-question" data-iq-question></p>
+      <div class="interactive-quiz-options" data-iq-options></div>
+      <div class="interactive-quiz-feedback" data-iq-feedback></div>
+    </div>
+
+    <div class="interactive-quiz-actions">
+      <button type="button" class="btn btn-outline-secondary" data-iq-close disabled>Continue Video</button>
+      <button type="button" class="btn btn-primary" data-iq-submit disabled>Submit Answer</button>
+    </div>
   </div>
 </div>
 

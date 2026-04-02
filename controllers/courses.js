@@ -119,8 +119,43 @@ function normalizeLessonContent(item) {
       slides: slidesFromContent
     };
   } else {
+    const contentInteractiveQuizzes = Array.isArray(item.content && item.content.interactiveQuizzes)
+      ? item.content.interactiveQuizzes
+      : [];
+    const rootInteractiveQuizzes = Array.isArray(item.interactiveQuizzes)
+      ? item.interactiveQuizzes
+      : [];
+    const interactiveQuizzes = (contentInteractiveQuizzes.length ? contentInteractiveQuizzes : rootInteractiveQuizzes)
+      .map((entry, index) => {
+        const rawOptions = Array.isArray(entry && entry.options) ? entry.options : [];
+        const options = rawOptions.map((opt) => String(opt || '').trim()).slice(0, 4);
+        while (options.length < 4) options.push('');
+
+        const triggerTimeSec = Number(entry && entry.triggerTimeSec);
+        const correctOptionIndex = Number(entry && entry.correctOptionIndex);
+
+        return {
+          _id: entry && entry._id,
+          triggerTimeSec: Number.isFinite(triggerTimeSec) && triggerTimeSec >= 0 ? triggerTimeSec : 0,
+          question: String(entry && entry.question || '').trim(),
+          options,
+          correctOptionIndex: Number.isFinite(correctOptionIndex) && correctOptionIndex >= 0 && correctOptionIndex <= 3 ? correctOptionIndex : 0,
+          explanation: String(entry && entry.explanation || '').trim(),
+          pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
+          order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index
+        };
+      })
+      .filter((entry) => entry.question)
+      .sort((a, b) => {
+        const byTime = a.triggerTimeSec - b.triggerTimeSec;
+        if (byTime !== 0) return byTime;
+        return a.order - b.order;
+      })
+      .map((entry, index) => ({ ...entry, order: index }));
+
     normalizedContent = {
-      videoUrl: item.preview || item.videoUrl || ''
+      videoUrl: item.preview || item.videoUrl || '',
+      interactiveQuizzes
     };
   }
 
