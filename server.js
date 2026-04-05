@@ -4,6 +4,7 @@ if (process.env.NODE_ENV !== "production") {
 
 const express = require('express');
 const path = require('path');
+const os = require('os');
 const ejsMate = require('ejs-mate');
 const session = require('express-session');
 const flash = require('connect-flash');
@@ -31,6 +32,8 @@ const aiRoutes = require('./routes/ai');
 const videoModelsRoutes = require('./routes/videoModels');
 const trackRoutes = require('./routes/track');
 const discussionRoutes = require('./routes/discussions');
+const vrRoutes = require('./routes/vr');
+const { attachJwtUser } = require('./middleware/jwt');
 
 // Connect DB
 connectDB();
@@ -51,9 +54,22 @@ app.use(morgan('combined'));
 app.use(compression());
 
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? 'https://yourdomain.com' : true,
+  origin: process.env.NODE_ENV === 'production'
+    ? (process.env.CORS_ORIGIN || process.env.BASE_URL || false)
+    : true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+const vrCorsOptions = {
+  origin: process.env.NODE_ENV === 'production'
+    ? (process.env.VR_CORS_ORIGIN || process.env.VR_BASE_URL || process.env.BASE_URL || false)
+    : true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false
+};
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -103,12 +119,14 @@ const styleSrcUrls = [
 ];
 const connectSrcUrls = [
   "https://cdn.jsdelivr.net",
+  "https://stackpath.bootstrapcdn.com",
   "https://www.youtube.com",
   "https://www.youtube-nocookie.com"
 ];
 const fontSrcUrls = [];
 app.use(helmet.contentSecurityPolicy({
   directives: {
+    upgradeInsecureRequests: null,
     defaultSrc: ["'self'", "https://drive.google.com/"],
     connectSrc: ["'self'", ...connectSrcUrls],
     scriptSrc: ["'self'", "'unsafe-inline'", ...scriptSrcUrls],
@@ -227,6 +245,11 @@ app.use('/ai', aiRoutes);
 app.use('/video-models', videoModelsRoutes);
 app.use('/track', trackRoutes);
 app.use('/courses/:courseId/discussions', discussionRoutes);
+app.use('/api/vr', cors(vrCorsOptions), attachJwtUser, vrRoutes);
+
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'images', 'picture.png'));
+});
 
 app.get('/', (req, res) => {
   res.render('home');
@@ -244,12 +267,40 @@ app.use((err, req, res, next) => {
   res.status(statusCode).render('error', { err });
 });
 
-// Start server
-const port = process.env.PORT || 3000;
-const server = app.listen(port, () => {
-  console.log(`Serving on port ${port}`);
-});
+function getLanAddresses() {
+  const interfaces = os.networkInterfaces();
+  const addresses = [];
 
+  for (const interfaceName of Object.keys(interfaces)) {
+    const iface = interfaces[interfaceName] || [];
+    for (const net of iface) {
+      if (net && net.family === 'IPv4' && !net.internal) {
+        addresses.push(net.address);
+      }
+    }
+  }
+
+  return Array.from(new Set(addresses));
+}
+
+// Start server
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+
+  const lanAddresses = getLanAddresses();
+  if (lanAddresses.length > 0) {
+    lanAddresses.forEach((ip) => {
+      console.log(`LAN URL: http://${ip}:${PORT}`);
+    });
+  } else {
+    console.log('LAN URL: Unable to detect LAN IP automatically.');
+  }
+
+  console.log('You can now access Edumy from phone, Unity VR, or other devices on the same network.');
+});
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
