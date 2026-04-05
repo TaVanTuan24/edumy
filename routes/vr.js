@@ -3,13 +3,10 @@ const router = express.Router();
 const catchAsync = require('../utils/catchAsync');
 const vrController = require('../controllers/vrController');
 const ExpressError = require('../utils/ExpressError');
+const { isVRAuthenticated, createVRToken } = require('../middleware/isVRAuthenticated');
 
-function requireApiAuth(req, res, next) {
-  if (req.user && req.user._id) {
-    return next();
-  }
-
-  if (req.isAuthenticated && req.isAuthenticated()) {
+function requireSessionForToken(req, res, next) {
+  if (req.isAuthenticated && req.isAuthenticated() && req.user && req.user._id) {
     return next();
   }
 
@@ -19,8 +16,26 @@ function requireApiAuth(req, res, next) {
   });
 }
 
-router.get('/courses', requireApiAuth, catchAsync(vrController.getVrCourses));
-router.get('/courses/:courseId/lessons', requireApiAuth, catchAsync(vrController.getVrCourseLessons));
+router.get('/get-token', requireSessionForToken, catchAsync(async (req, res) => {
+  if (!req.user || !req.user._id) {
+    throw new ExpressError('Unauthorized', 401);
+  }
+
+  const token = createVRToken(req.user);
+
+  return res.json({
+    success: true,
+    data: {
+      token,
+      tokenType: 'Bearer',
+      expiresIn: '30d',
+      userId: String(req.user._id)
+    }
+  });
+}));
+
+router.get('/courses', isVRAuthenticated, catchAsync(vrController.getVrCourses));
+router.get('/courses/:courseId/lessons', isVRAuthenticated, catchAsync(vrController.getVrCourseLessons));
 
 router.use((err, req, res, next) => {
   const statusCode = err instanceof ExpressError

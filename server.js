@@ -33,7 +33,6 @@ const videoModelsRoutes = require('./routes/videoModels');
 const trackRoutes = require('./routes/track');
 const discussionRoutes = require('./routes/discussions');
 const vrRoutes = require('./routes/vr');
-const { attachJwtUser } = require('./middleware/jwt');
 
 // Connect DB
 connectDB();
@@ -245,7 +244,7 @@ app.use('/ai', aiRoutes);
 app.use('/video-models', videoModelsRoutes);
 app.use('/track', trackRoutes);
 app.use('/courses/:courseId/discussions', discussionRoutes);
-app.use('/api/vr', cors(vrCorsOptions), attachJwtUser, vrRoutes);
+app.use('/api/vr', cors(vrCorsOptions), vrRoutes);
 
 app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'images', 'picture.png'));
