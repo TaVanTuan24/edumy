@@ -503,6 +503,8 @@ body {
     overflow-y: auto;
     background: #f8fafc;
     display: grid;
+    align-content: start;
+    grid-auto-rows: max-content;
     gap: 10px;
 }
 
@@ -512,6 +514,10 @@ body {
     line-height: 1.5;
     font-size: 14px;
     white-space: pre-wrap;
+    width: fit-content;
+    max-width: 88%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .ai-msg.user {

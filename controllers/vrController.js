@@ -49,9 +49,25 @@ function getOrderedLessonsFromSections(sections) {
 
   const lessons = [];
   for (const section of sortedSections) {
+    const sectionTitle = String(
+      (section && (section.sectionTitle || section.sectionName || section.title || section.name))
+      || 'Nội dung khóa học'
+    );
+
+    const sectionOrder = Number.isFinite(Number(section && section.order))
+      ? Number(section.order)
+      : null;
+
     const sectionLessons = Array.isArray(section && section.lessons) ? section.lessons.slice() : [];
     sectionLessons.sort((a, b) => Number(a && a.order) - Number(b && b.order));
-    lessons.push(...sectionLessons);
+
+    for (const lesson of sectionLessons) {
+      lessons.push({
+        ...lesson,
+        sectionTitle,
+        sectionOrder
+      });
+    }
   }
 
   return lessons;
@@ -62,9 +78,25 @@ function getOrderedLessonsFromDriveStructure(driveStructure) {
   const lessons = [];
 
   for (const section of safeSections) {
+    const sectionTitle = String(
+      (section && (section.sectionTitle || section.sectionName || section.section || section.title || section.name))
+      || 'Nội dung khóa học'
+    );
+
+    const sectionOrder = Number.isFinite(Number(section && section.order))
+      ? Number(section.order)
+      : null;
+
     const sectionItems = Array.isArray(section && section.videos) ? section.videos.slice() : [];
     sectionItems.sort((a, b) => Number(a && a.order) - Number(b && b.order));
-    lessons.push(...sectionItems);
+
+    for (const item of sectionItems) {
+      lessons.push({
+        ...item,
+        sectionTitle,
+        sectionOrder
+      });
+    }
   }
 
   return lessons;
@@ -78,6 +110,8 @@ function getCourseLessons(courseDoc) {
       title: String((lesson && lesson.title) || 'Untitled Lesson'),
       duration: lesson && lesson.duration ? lesson.duration : null,
       order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : null,
+      sectionTitle: String((lesson && lesson.sectionTitle) || 'Nội dung khóa học'),
+      sectionOrder: Number.isFinite(Number(lesson && lesson.sectionOrder)) ? Number(lesson.sectionOrder) : null,
       content: lesson && lesson.content ? lesson.content : null,
       videoUrl: lesson && lesson.videoUrl ? lesson.videoUrl : ''
     }));
@@ -89,6 +123,8 @@ function getCourseLessons(courseDoc) {
     title: String((item && (item.title || item.name)) || 'Untitled Lesson'),
     duration: (item && item.duration) || (item && item.content && item.content.duration) || null,
     order: Number.isFinite(Number(item && item.order)) ? Number(item.order) : idx + 1,
+    sectionTitle: String((item && item.sectionTitle) || 'Nội dung khóa học'),
+    sectionOrder: Number.isFinite(Number(item && item.sectionOrder)) ? Number(item.sectionOrder) : null,
     content: item && item.content ? item.content : null,
     videoUrl: item && item.preview ? item.preview : ''
   }));
@@ -222,8 +258,12 @@ module.exports.getVrCourseLessons = async (req, res) => {
   const lessons = getCourseLessons(course).map((lesson, idx) => ({
     id: String(lesson.id),
     title: String(lesson.title || ''),
+    type: String(lesson.type || (lesson.videoUrl ? 'lecture' : '')),
+    videoUrl: lesson.videoUrl || '',
     duration: lesson.duration || null,
     order: Number.isFinite(Number(lesson.order)) ? Number(lesson.order) : idx + 1,
+    sectionTitle: String(lesson.sectionTitle || ''),
+    sectionOrder: Number.isFinite(Number(lesson.sectionOrder)) ? Number(lesson.sectionOrder) : null,
     isCompleted: completedSet.has(String(lesson.id))
   }));
 

@@ -35,6 +35,7 @@
   let driveElapsedSeconds = 0;
   let driveLastTickAt = 0;
   let playbackTimeBadge = null;
+  const SHOW_PLAYBACK_TIME_BADGE = false;
   let interactiveDebugPanel = null;
   let interactiveDebugSnapshot = {
     provider: '',
@@ -1117,7 +1118,8 @@
         if (closeBtn) closeBtn.disabled = false;
         submitBtn.disabled = true;
 
-        // Keep playback uninterrupted and close overlay shortly after submit.
+        // Give learners more time to read explanation when they answer incorrectly.
+        const autoCloseDelayMs = isCorrect ? 850 : 5000;
         setTimeout(function() {
           hideInteractiveQuizModal();
           interactiveState.activeQuiz = null;
@@ -1126,7 +1128,7 @@
             activeQuizTime: '',
             status: 'answered-auto-closed'
           });
-        }, 850);
+        }, autoCloseDelayMs);
       };
     }
 
@@ -1413,6 +1415,9 @@
     url.searchParams.set('origin', window.location.origin);
     url.searchParams.set('rel', '0');
     url.searchParams.set('playsinline', '1');
+    url.searchParams.set('modestbranding', '1');
+    url.searchParams.set('iv_load_policy', '3');
+    url.searchParams.set('showinfo', '0');
     return url.toString();
   }
 
@@ -1452,6 +1457,7 @@
   }
 
   function ensurePlaybackTimeBadge() {
+    if (!SHOW_PLAYBACK_TIME_BADGE) return null;
     if (playbackTimeBadge && document.body && document.body.contains(playbackTimeBadge)) {
       return playbackTimeBadge;
     }
@@ -1486,12 +1492,14 @@
   }
 
   function setPlaybackTimeBadgeVisible(visible) {
+    if (!SHOW_PLAYBACK_TIME_BADGE) return;
     const badge = ensurePlaybackTimeBadge();
     if (!badge) return;
     badge.style.display = visible ? 'inline-flex' : 'none';
   }
 
   function updatePlaybackTimeBadge(currentSec, durationSec, provider) {
+    if (!SHOW_PLAYBACK_TIME_BADGE) return;
     const badge = ensurePlaybackTimeBadge();
     if (!badge) return;
 
@@ -1642,7 +1650,14 @@
         youtubePlayer = new window.YT.Player('videoIframe', {
           host: 'https://www.youtube-nocookie.com',
           videoId: videoId,
-          playerVars: { rel: 0, origin: window.location.origin, modestbranding: 1 },
+          playerVars: {
+            rel: 0,
+            origin: window.location.origin,
+            modestbranding: 1,
+            iv_load_policy: 3,
+            showinfo: 0,
+            playsinline: 1
+          },
           events: {
             onReady: function() {
               syncYouTubeTime('youtube-ready');

@@ -4,6 +4,41 @@ const mongoose = require('mongoose');
 const Course = require('../models/course');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
+const Video = require('../models/video');
+
+function extractYouTubeId(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+
+    const idPattern = /^[a-zA-Z0-9_-]{11}$/;
+    if (idPattern.test(raw)) return raw;
+
+    try {
+        const parsed = new URL(raw);
+        const host = String(parsed.hostname || '').toLowerCase();
+        const path = String(parsed.pathname || '');
+
+        if (host.includes('youtu.be')) {
+            const token = path.replace(/^\//, '').split('/')[0];
+            return token || '';
+        }
+
+        if (host.includes('youtube.com')) {
+            const fromQuery = parsed.searchParams.get('v') || parsed.searchParams.get('vi');
+            if (fromQuery) return fromQuery;
+
+            const embedMatch = path.match(/^\/embed\/([^/?#]+)/i);
+            if (embedMatch) return embedMatch[1];
+
+            const shortsMatch = path.match(/^\/shorts\/([^/?#]+)/i);
+            if (shortsMatch) return shortsMatch[1];
+        }
+    } catch (err) {
+        return '';
+    }
+
+    return '';
+}
 
 function normalizeItemType(rawType, fallbackType) {
     if (typeof rawType === 'string') {
@@ -242,6 +277,31 @@ router.get('/courses/:id/video-settings', async (req, res) => {
 
     const interactiveQuizzes = normalizeInteractiveQuizPayload(interactiveQuizzesRaw)
     const videoUrl = String(lesson.preview || (lesson.content && lesson.content.videoUrl) || lesson.refId || '')
+    const youtubeVideoId = extractYouTubeId(videoUrl)
+
+    const videoDoc = await Video.findOneAndUpdate(
+        {
+            courseId: course._id,
+            sectionIndex,
+            lessonIndex
+        },
+        {
+            $set: {
+                title: String(lesson.name || lesson.title || ''),
+                url: videoUrl,
+                source: youtubeVideoId ? 'youtube' : 'other',
+                youtubeVideoId
+            },
+            $setOnInsert: {
+                transcripts: []
+            }
+        },
+        {
+            new: true,
+            upsert: true,
+            setDefaultsOnInsert: true
+        }
+    )
 
     res.render('admin/videoSettings', {
         course,
@@ -249,7 +309,8 @@ router.get('/courses/:id/video-settings', async (req, res) => {
         sectionIndex,
         lessonIndex,
         videoUrl,
-        interactiveQuizzes
+        interactiveQuizzes,
+        videoId: videoDoc ? String(videoDoc._id) : ''
     })
 })
 

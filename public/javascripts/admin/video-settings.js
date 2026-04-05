@@ -1,8 +1,12 @@
 (function() {
   'use strict';
 
+  const DEFAULT_ICON_X_PERCENT = 93;
+  const DEFAULT_ICON_Y_PERCENT = 12;
+
   const state = {
     courseId: '',
+    videoId: '',
     sectionIndex: 0,
     lessonIndex: 0,
     videoUrl: '',
@@ -16,8 +20,8 @@
     markerDragging: false,
     markerStartClientX: 0,
     markerStartClientY: 0,
-    markerStartX: 86,
-    markerStartY: 82,
+    markerStartX: DEFAULT_ICON_X_PERCENT,
+    markerStartY: DEFAULT_ICON_Y_PERCENT,
     dragging: false,
     dragMoved: false,
     dragStartX: 0,
@@ -37,6 +41,7 @@
       }
     }
     state.courseId = String(payload.courseId || '');
+    state.videoId = String(payload.videoId || '');
     state.sectionIndex = Number(payload.sectionIndex || 0);
     state.lessonIndex = Number(payload.lessonIndex || 0);
     state.videoUrl = String(payload.videoUrl || '');
@@ -51,8 +56,148 @@
     bindPositionInputs();
     bindOverlayMarker();
     bindPreviewHotspot();
+    bindAiAutoQuiz();
     syncMarkerFromInputs();
     renderQuizList();
+  }
+
+  function bindAiAutoQuiz() {
+    const aiBtn = document.getElementById('aiAutoQuizBtn');
+    if (!aiBtn) return;
+
+    aiBtn.addEventListener('click', async function() {
+      if (!state.videoId) {
+        setAiStatus('Không tìm thấy videoId cho bài học này.', true);
+        return;
+      }
+
+      const countInput = document.getElementById('aiAutoQuizCount');
+      const count = Math.min(Math.max(parseInt(countInput && countInput.value, 10) || 5, 1), 15);
+      const strictModeEl = document.getElementById('aiAutoQuizStrictMode');
+      const strictMode = Boolean(strictModeEl && strictModeEl.checked);
+
+      aiBtn.disabled = true;
+
+      try {
+        setAiStatus('Đang lấy transcript từ YouTube...');
+
+        const transcriptRes = await fetch(`/videos/${encodeURIComponent(state.videoId)}/transcript`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        const transcriptData = await parseApiResponse(transcriptRes);
+        if (!transcriptRes.ok || !transcriptData || !transcriptData.success) {
+          throw new Error(transcriptData && transcriptData.message ? transcriptData.message : 'Không thể tạo transcript.');
+        }
+
+        setAiStatus('Transcript đã lưu. Đang tạo quiz bằng AI...');
+
+        const quizRes = await fetch(`/videos/${encodeURIComponent(state.videoId)}/ai-quiz`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ numberOfQuestions: count, strictMode: strictMode })
+        });
+
+        const quizData = await parseApiResponse(quizRes);
+        if (!quizRes.ok || !quizData || !quizData.success) {
+          throw new Error(quizData && quizData.message ? quizData.message : 'Không thể tạo quiz bằng AI.');
+        }
+
+        const generated = Array.isArray(quizData.quiz) ? quizData.quiz : [];
+        if (!generated.length) {
+          throw new Error('AI không trả về câu hỏi hợp lệ.');
+        }
+
+        console.log('[AI Quiz Generated]', generated);
+
+        state.quizzes = normalizeQuizzes(generated.map(function(entry, index) {
+          const letter = String(entry && entry.correctAnswer || 'A').trim().toUpperCase();
+          const letterMap = { A: 0, B: 1, C: 2, D: 3 };
+
+          return {
+            triggerTimeSec: parseSuggestedTimestamp(entry && entry.suggestedTimestamp),
+            question: String(entry && entry.question || '').trim(),
+            options: Array.isArray(entry && entry.options)
+              ? entry.options.map(function(opt) { return String(opt || '').trim(); }).slice(0, 4)
+              : ['', '', '', ''],
+            correctOptionIndex: Number.isFinite(letterMap[letter]) ? letterMap[letter] : 0,
+            explanation: String(entry && entry.explanation || '').trim(),
+            pauseOnShow: false,
+            order: index,
+            position: { xPercent: DEFAULT_ICON_X_PERCENT, yPercent: DEFAULT_ICON_Y_PERCENT }
+          };
+        }));
+
+        setAiStatus(`Đã tạo ${generated.length} câu hỏi${strictMode ? ' (strict mode)' : ''}. Đang lưu vào video settings...`);
+        persistQuizzes();
+      } catch (err) {
+        console.error('[AI Auto Quiz Error]', err);
+        setAiStatus(err && err.message ? err.message : 'Đã có lỗi khi tạo quiz AI.', true);
+      } finally {
+        aiBtn.disabled = false;
+      }
+    });
+  }
+
+  async function parseApiResponse(response) {
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+
+    const text = await response.text();
+    const looksLikeHtml = /^\s*<!doctype html/i.test(text) || /^\s*<html/i.test(text);
+
+    if (response.redirected || looksLikeHtml) {
+      const loginHint = response.url && response.url.includes('/users/login')
+        ? 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.'
+        : 'Server trả về HTML thay vì JSON. Vui lòng kiểm tra đăng nhập/quyền truy cập.';
+
+      return { success: false, message: loginHint };
+    }
+
+    return { success: false, message: text || 'Phản hồi không hợp lệ từ server.' };
+  }
+
+  function parseSuggestedTimestamp(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return 0;
+
+    if (/^\d+$/.test(value)) {
+      return Math.max(0, parseInt(value, 10));
+    }
+
+    const hhmmss = value.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+    if (hhmmss) {
+      const h = parseInt(hhmmss[1], 10);
+      const m = parseInt(hhmmss[2], 10);
+      const s = parseInt(hhmmss[3], 10);
+      return (h * 3600) + (m * 60) + s;
+    }
+
+    const mmss = value.match(/^(\d{1,3}):(\d{2})$/);
+    if (mmss) {
+      const m = parseInt(mmss[1], 10);
+      const s = parseInt(mmss[2], 10);
+      return (m * 60) + s;
+    }
+
+    return 0;
+  }
+
+  function setAiStatus(message, isError) {
+    const statusEl = document.getElementById('aiAutoQuizStatus');
+    if (!statusEl) return;
+
+    statusEl.textContent = String(message || '');
+    statusEl.classList.toggle('text-danger', Boolean(isError));
   }
 
   function ensureYouTubeApi() {
@@ -219,11 +364,11 @@
           options: options,
           correctOptionIndex: Math.min(3, Math.max(0, Number(entry && entry.correctOptionIndex) || 0)),
           explanation: String(entry && entry.explanation || '').trim(),
-          pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
+          pauseOnShow: Boolean(entry && entry.pauseOnShow),
           order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index,
           position: {
-            xPercent: normalizePercent(entry && entry.position && entry.position.xPercent, 86),
-            yPercent: normalizePercent(entry && entry.position && entry.position.yPercent, 82)
+            xPercent: normalizePercent(entry && entry.position && entry.position.xPercent, DEFAULT_ICON_X_PERCENT),
+            yPercent: normalizePercent(entry && entry.position && entry.position.yPercent, DEFAULT_ICON_Y_PERCENT)
           }
         };
       })
@@ -266,50 +411,9 @@
     const fab = document.getElementById('timedQuizFab');
     if (!fab) return;
 
-    fab.addEventListener('mousedown', function(e) {
-      state.dragging = true;
-      state.dragMoved = false;
-      state.dragStartX = e.clientX;
-      state.dragStartY = e.clientY;
-
-      const rect = fab.getBoundingClientRect();
-      state.iconStartX = rect.left;
-      state.iconStartY = rect.top;
-
-      e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', function(e) {
-      if (!state.dragging) return;
-
-      const dx = e.clientX - state.dragStartX;
-      const dy = e.clientY - state.dragStartY;
-
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-        state.dragMoved = true;
-      }
-
-      const fabRect = fab.getBoundingClientRect();
-      const maxX = window.innerWidth - fabRect.width - 8;
-      const maxY = window.innerHeight - fabRect.height - 8;
-
-      const nextX = Math.min(maxX, Math.max(8, state.iconStartX + dx));
-      const nextY = Math.min(maxY, Math.max(8, state.iconStartY + dy));
-
-      fab.style.left = nextX + 'px';
-      fab.style.top = nextY + 'px';
-      fab.style.right = 'auto';
-      fab.style.bottom = 'auto';
-    });
-
-    document.addEventListener('mouseup', function() {
-      if (!state.dragging) return;
-      const moved = state.dragMoved;
-      state.dragging = false;
-
-      if (!moved) {
-        togglePopoverNearFab();
-      }
+    // Keep the FAB fixed and use click only.
+    fab.addEventListener('click', function() {
+      togglePopoverNearFab();
     });
 
     window.addEventListener('resize', positionPopoverNearFab);
@@ -328,9 +432,10 @@
       return;
     }
 
-    positionPopoverNearFab();
     popover.classList.add('show');
     popover.setAttribute('aria-hidden', 'false');
+    positionPopoverNearFab();
+    window.requestAnimationFrame(positionPopoverNearFab);
   }
 
   function closePopover() {
@@ -348,15 +453,27 @@
 
     const fabRect = fab.getBoundingClientRect();
     const width = popover.offsetWidth || 360;
-    const height = popover.offsetHeight || 460;
+    const height = popover.offsetHeight || 520;
+    const margin = 8;
+    const gap = 14;
+    const viewportBottomPadding = 24;
 
-    let left = fabRect.left - width - 14;
-    let top = fabRect.top;
+    let left = fabRect.left - width - gap;
 
-    if (left < 8) left = fabRect.right + 14;
-    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-    if (top + height > window.innerHeight - 8) top = window.innerHeight - height - 8;
-    if (top < 8) top = 8;
+    // Prefer opening upward so the full form is easier to see.
+    let top = fabRect.bottom - height;
+    const minTop = margin;
+    const maxTop = window.innerHeight - height - viewportBottomPadding;
+
+    if (top < minTop) {
+      // Fallback when there is not enough space above.
+      top = Math.min(maxTop, fabRect.bottom + gap);
+    }
+
+    if (left < margin) left = fabRect.right + gap;
+    if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
+    if (top + height > window.innerHeight - viewportBottomPadding) top = window.innerHeight - height - viewportBottomPadding;
+    if (top < margin) top = margin;
 
     popover.style.left = left + 'px';
     popover.style.top = top + 'px';
@@ -391,8 +508,8 @@
     if (!xInput || !yInput) return;
 
     function onInput() {
-      xInput.value = String(normalizePercent(xInput.value, 86));
-      yInput.value = String(normalizePercent(yInput.value, 82));
+      xInput.value = String(normalizePercent(xInput.value, DEFAULT_ICON_X_PERCENT));
+      yInput.value = String(normalizePercent(yInput.value, DEFAULT_ICON_Y_PERCENT));
       syncMarkerFromInputs();
     }
 
@@ -409,8 +526,8 @@
       state.markerDragging = true;
       state.markerStartClientX = e.clientX;
       state.markerStartClientY = e.clientY;
-      state.markerStartX = normalizePercent(getFormValue('timedQuizPosX'), 86);
-      state.markerStartY = normalizePercent(getFormValue('timedQuizPosY'), 82);
+      state.markerStartX = normalizePercent(getFormValue('timedQuizPosX'), DEFAULT_ICON_X_PERCENT);
+      state.markerStartY = normalizePercent(getFormValue('timedQuizPosY'), DEFAULT_ICON_Y_PERCENT);
       e.preventDefault();
     });
 
@@ -425,8 +542,8 @@
       const nextX = state.markerStartX + ((dx / rect.width) * 100);
       const nextY = state.markerStartY + ((dy / rect.height) * 100);
 
-      setFormValue('timedQuizPosX', String(normalizePercent(nextX, 86).toFixed(1)));
-      setFormValue('timedQuizPosY', String(normalizePercent(nextY, 82).toFixed(1)));
+      setFormValue('timedQuizPosX', String(normalizePercent(nextX, DEFAULT_ICON_X_PERCENT).toFixed(1)));
+      setFormValue('timedQuizPosY', String(normalizePercent(nextY, DEFAULT_ICON_Y_PERCENT).toFixed(1)));
       syncMarkerFromInputs();
     });
 
@@ -439,8 +556,8 @@
     const marker = document.getElementById('videoSettingsMarker');
     if (!marker) return;
 
-    const x = normalizePercent(getFormValue('timedQuizPosX'), 86);
-    const y = normalizePercent(getFormValue('timedQuizPosY'), 82);
+    const x = normalizePercent(getFormValue('timedQuizPosX'), DEFAULT_ICON_X_PERCENT);
+    const y = normalizePercent(getFormValue('timedQuizPosY'), DEFAULT_ICON_Y_PERCENT);
     marker.style.left = 'calc(' + x + '% - 18px)';
     marker.style.top = 'calc(' + y + '% - 18px)';
   }
@@ -502,8 +619,8 @@
     if (!overlay || !hotspot || !quiz) return;
 
     const rect = overlay.getBoundingClientRect();
-    const xPercent = normalizePercent(quiz && quiz.position && quiz.position.xPercent, 86);
-    const yPercent = normalizePercent(quiz && quiz.position && quiz.position.yPercent, 82);
+    const xPercent = normalizePercent(quiz && quiz.position && quiz.position.xPercent, DEFAULT_ICON_X_PERCENT);
+    const yPercent = normalizePercent(quiz && quiz.position && quiz.position.yPercent, DEFAULT_ICON_Y_PERCENT);
     const size = 34;
 
     const left = Math.max(0, Math.min(rect.width - size, (rect.width * (xPercent / 100)) - (size / 2)));
@@ -581,8 +698,8 @@
     const question = String(getFormValue('timedQuizQuestion') || '').trim();
     const timestamp = parseTimestampToSeconds(getFormValue('timedQuizTimestamp'));
     const explanation = String(getFormValue('timedQuizExplanation') || '').trim();
-    const posX = normalizePercent(getFormValue('timedQuizPosX'), 86);
-    const posY = normalizePercent(getFormValue('timedQuizPosY'), 82);
+    const posX = normalizePercent(getFormValue('timedQuizPosX'), DEFAULT_ICON_X_PERCENT);
+    const posY = normalizePercent(getFormValue('timedQuizPosY'), DEFAULT_ICON_Y_PERCENT);
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
     const pauseOnShow = Boolean(pauseOnShowEl && pauseOnShowEl.checked);
 
@@ -663,9 +780,11 @@
         renderQuizList();
         resetForm();
         closePopover();
+        setAiStatus(`Đã lưu ${state.quizzes.length} câu hỏi vào video thành công.`);
       })
       .catch(function(err) {
         console.error('[Timed Quiz Save Error]', err);
+        setAiStatus(err && err.message ? err.message : 'Failed to save timed quizzes.', true);
         window.alert(err && err.message ? err.message : 'Failed to save timed quizzes.');
       });
   }
@@ -680,11 +799,12 @@
 
     if (action === 'edit') {
       loadQuizIntoForm(index);
-      positionPopoverNearFab();
       const popover = getPopover();
       if (popover) {
         popover.classList.add('show');
         popover.setAttribute('aria-hidden', 'false');
+        positionPopoverNearFab();
+        window.requestAnimationFrame(positionPopoverNearFab);
       }
       return;
     }
@@ -704,11 +824,11 @@
     setFormValue('timedQuizTimestamp', formatSeconds(quiz.triggerTimeSec));
     setFormValue('timedQuizQuestion', quiz.question || '');
     setFormValue('timedQuizExplanation', quiz.explanation || '');
-    setFormValue('timedQuizPosX', String(normalizePercent(quiz && quiz.position && quiz.position.xPercent, 86)));
-    setFormValue('timedQuizPosY', String(normalizePercent(quiz && quiz.position && quiz.position.yPercent, 82)));
+    setFormValue('timedQuizPosX', String(normalizePercent(quiz && quiz.position && quiz.position.xPercent, DEFAULT_ICON_X_PERCENT)));
+    setFormValue('timedQuizPosY', String(normalizePercent(quiz && quiz.position && quiz.position.yPercent, DEFAULT_ICON_Y_PERCENT)));
 
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
-    if (pauseOnShowEl) pauseOnShowEl.checked = quiz.pauseOnShow !== false;
+    if (pauseOnShowEl) pauseOnShowEl.checked = Boolean(quiz.pauseOnShow);
 
     document.querySelectorAll('.timedQuizOptionInput').forEach(function(input, i) {
       input.value = quiz.options[i] || '';
@@ -728,11 +848,11 @@
     setFormValue('timedQuizTimestamp', '');
     setFormValue('timedQuizQuestion', '');
     setFormValue('timedQuizExplanation', '');
-    setFormValue('timedQuizPosX', '86');
-    setFormValue('timedQuizPosY', '82');
+    setFormValue('timedQuizPosX', String(DEFAULT_ICON_X_PERCENT));
+    setFormValue('timedQuizPosY', String(DEFAULT_ICON_Y_PERCENT));
 
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
-    if (pauseOnShowEl) pauseOnShowEl.checked = true;
+    if (pauseOnShowEl) pauseOnShowEl.checked = false;
 
     document.querySelectorAll('.timedQuizOptionInput').forEach(function(input) {
       input.value = '';
