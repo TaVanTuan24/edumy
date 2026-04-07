@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "jest",
+    "test:vr-stream": "node scripts/test-vr-stream.js",
     "migrate:slides:dry": "node scripts/migrate-slide-content.js",
     "migrate:slides:apply": "node scripts/migrate-slide-content.js --apply",
     "migrate:drive-urls:dry": "node scripts/migrate-drive-video-urls.js",

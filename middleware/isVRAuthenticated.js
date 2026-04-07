@@ -17,6 +17,28 @@ function getJwtSecret() {
   return process.env.JWT_SECRET || process.env.SESSION_SECRET || 'mysceret';
 }
 
+function isStreamApiRequest(req) {
+  const url = String((req && (req.originalUrl || req.url)) || '');
+  return url.includes('/api/vr/stream/');
+}
+
+function sendUnauthorized(req, res) {
+  if (isStreamApiRequest(req)) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized'
+      }
+    });
+  }
+
+  return res.status(401).json({
+    success: false,
+    message: 'Unauthorized'
+  });
+}
+
 function createVRToken(user) {
   const secret = getJwtSecret();
   if (!secret) {
@@ -42,10 +64,7 @@ async function isVRAuthenticated(req, res, next) {
 
   const token = getBearerToken(req);
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Unauthorized'
-    });
+    return sendUnauthorized(req, res);
   }
 
   const secret = getJwtSecret();
@@ -65,10 +84,7 @@ async function isVRAuthenticated(req, res, next) {
       .select('_id username email enrolledCourses enrolledCourseIds');
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized'
-      });
+      return sendUnauthorized(req, res);
     }
 
     req.user = user;
@@ -76,10 +92,7 @@ async function isVRAuthenticated(req, res, next) {
     req.authMethod = 'jwt';
     return next();
   } catch (err) {
-    return res.status(401).json({
-      success: false,
-      message: 'Unauthorized'
-    });
+    return sendUnauthorized(req, res);
   }
 }
 

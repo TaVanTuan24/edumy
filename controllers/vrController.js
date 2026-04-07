@@ -1,8 +1,12 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
+const axios = require('axios');
 const Course = require('../models/course');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const ExpressError = require('../utils/ExpressError');
+const { resolveStream, safeUrlParse } = require('../services/streamResolver');
+const { createStreamProxyToken, verifyStreamProxyToken } = require('../utils/signStreamToken');
 
 function getEnrolledCourseIdStrings(userDoc) {
   const ids = [];
@@ -268,4 +272,377 @@ module.exports.getVrCourseLessons = async (req, res) => {
   }));
 
   return res.json({ success: true, data: lessons });
+};
+
+function parseCompletedFlag(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return null;
+}
+
+module.exports.updateVrCourseProgress = async (req, res) => {
+  const { courseId } = req.params;
+  const { lessonId, video, completed, watchTime } = req.body || {};
+
+  if (!mongoose.isValidObjectId(courseId)) {
+    return res.status(404).json({
+      success: false,
+      message: 'Course not found'
+    });
+  }
+
+  if (typeof lessonId !== 'string' || !lessonId.trim()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid payload: lessonId is required'
+    });
+  }
+
+  const completedValue = parseCompletedFlag(completed);
+  if (completedValue === null) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid payload: completed must be a boolean'
+    });
+  }
+
+  if (typeof video !== 'undefined' && typeof video !== 'string') {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid payload: video must be a string'
+    });
+  }
+
+  if (typeof watchTime !== 'undefined') {
+    const parsedWatchTime = Number(watchTime);
+    if (!Number.isFinite(parsedWatchTime) || parsedWatchTime < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payload: watchTime must be a non-negative number'
+      });
+    }
+  }
+
+  const [user, course] = await Promise.all([
+    User.findById(req.user && req.user._id)
+      .select('enrolledCourses enrolledCourseIds')
+      .lean(),
+    Course.findById(courseId)
+      .select('sections driveStructure')
+      .lean()
+  ]);
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized'
+    });
+  }
+
+  if (!course || !isUserEnrolledInCourse(user, courseId)) {
+    return res.status(404).json({
+      success: false,
+      message: 'Course not found or user not enrolled'
+    });
+  }
+
+  const lessonKey = lessonId.trim();
+  const courseLessons = getCourseLessons(course);
+  const lessonExists = courseLessons.some((lesson) => String(lesson.id) === lessonKey);
+  if (!lessonExists) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid payload: lessonId does not exist in course'
+    });
+  }
+
+  try {
+    const progressDoc = await UserCourseProgress.findOneAndUpdate(
+      { user: req.user._id, course: courseId },
+      { $setOnInsert: { user: req.user._id, course: courseId } },
+      { new: true, upsert: true }
+    );
+
+    const hasLesson = Array.isArray(progressDoc.completedLessons)
+      && progressDoc.completedLessons.includes(lessonKey);
+
+    if (completedValue) {
+      if (!hasLesson) progressDoc.completedLessons.push(lessonKey);
+    } else if (hasLesson) {
+      progressDoc.completedLessons = progressDoc.completedLessons.filter((id) => id !== lessonKey);
+    }
+
+    if (progressDoc.lessonViews && typeof progressDoc.lessonViews.get === 'function') {
+      const current = Number(progressDoc.lessonViews.get(lessonKey) || 0);
+      progressDoc.lessonViews.set(lessonKey, current + 1);
+    } else {
+      progressDoc.lessonViews = progressDoc.lessonViews || {};
+      const current = Number(progressDoc.lessonViews[lessonKey] || 0);
+      progressDoc.lessonViews[lessonKey] = current + 1;
+    }
+
+    const watchDelta = Number(watchTime);
+    if (Number.isFinite(watchDelta) && watchDelta > 0) {
+      progressDoc.watchTime = Number(progressDoc.watchTime || 0) + watchDelta;
+    }
+
+    progressDoc.lastAccessed = new Date();
+
+    const totalLessons = courseLessons.length;
+    progressDoc.completionRate = totalLessons
+      ? Math.round((progressDoc.completedLessons.length / totalLessons) * 100)
+      : 0;
+
+    await progressDoc.save();
+
+    return res.json({
+      success: true,
+      data: {
+        completedLessons: progressDoc.completedLessons,
+        totalLessons,
+        completionRate: progressDoc.completionRate,
+        courseId: String(courseId),
+        lessonId: lessonKey,
+        completed: completedValue
+      }
+    });
+  } catch (err) {
+    console.error('[VR progress update error]', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server Error'
+    });
+  }
+};
+
+function buildStreamError(code, message, details) {
+  return {
+    success: false,
+    error: {
+      code,
+      message,
+      ...(details ? { details } : {})
+    }
+  };
+}
+
+function statusCodeForStreamError(code) {
+  if (code === 'INVALID_INPUT') return 400;
+  if (code === 'UNAUTHORIZED') return 401;
+  if (code === 'RATE_LIMITED') return 429;
+  if (code === 'UNSUPPORTED_SOURCE') return 400;
+  if (code === 'RESOLVE_FAILED') return 502;
+  return 500;
+}
+
+function getProxyAllowedHostPatterns() {
+  const raw = process.env.VR_STREAM_PROXY_ALLOWED_HOSTS
+    || '*.googlevideo.com,*.youtube.com,youtu.be,*.googleusercontent.com,*.cloudinary.com';
+
+  return raw
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isHostAllowed(hostname, patterns) {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+
+  return patterns.some((pattern) => {
+    if (!pattern) return false;
+    if (pattern.startsWith('*.')) {
+      const suffix = pattern.slice(1);
+      return host.endsWith(suffix);
+    }
+    return host === pattern;
+  });
+}
+
+function logStreamEvent(payload) {
+  try {
+    console.log(JSON.stringify({
+      domain: 'vr.stream',
+      ts: new Date().toISOString(),
+      ...payload
+    }));
+  } catch (_) {
+    console.log('[vr.stream]', payload);
+  }
+}
+
+module.exports.resolveVrStream = async (req, res) => {
+  const requestId = crypto.randomUUID();
+  const userId = String(req.user && req.user._id || '');
+  const {
+    sourceUrl,
+    preferredFormat,
+    courseId,
+    lessonId
+  } = req.streamResolveInput || {};
+
+  try {
+    const result = await resolveStream({ sourceUrl, preferredFormat });
+    if (!result.success) {
+      const code = result.error && result.error.code ? result.error.code : 'RESOLVE_FAILED';
+      const message = result.error && result.error.message
+        ? result.error.message
+        : 'Failed to resolve stream';
+      const details = result.error && result.error.details ? result.error.details : '';
+
+      logStreamEvent({
+        requestId,
+        userId,
+        courseId,
+        lessonId,
+        provider: 'unknown',
+        result: 'failed',
+        code
+      });
+
+      return res.status(statusCodeForStreamError(code)).json(buildStreamError(code, message, details));
+    }
+
+    const shouldProxy = process.env.VR_STREAM_USE_PROXY === 'true';
+    const proxyTtlSeconds = Number(process.env.VR_STREAM_PROXY_TTL_SECONDS) || 300;
+
+    let responseData = result.data;
+    if (shouldProxy) {
+      const tokenData = createStreamProxyToken({
+        sourceUrl: result.data.resolvedUrl,
+        format: result.data.format,
+        provider: result.data.provider,
+        headers: result.data.headers || {}
+      }, proxyTtlSeconds);
+
+      responseData = {
+        resolvedUrl: `${req.protocol}://${req.get('host')}/api/vr/stream/proxy?token=${encodeURIComponent(tokenData.token)}`,
+        format: result.data.format,
+        provider: 'proxy',
+        expiresAt: tokenData.expiresAt,
+        headers: result.data.headers || {}
+      };
+    }
+
+    logStreamEvent({
+      requestId,
+      userId,
+      courseId,
+      lessonId,
+      provider: responseData.provider,
+      format: responseData.format,
+      result: 'success'
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        resolvedUrl: responseData.resolvedUrl,
+        format: responseData.format,
+        provider: responseData.provider,
+        expiresAt: responseData.expiresAt,
+        headers: responseData.headers || {}
+      }
+    });
+  } catch (err) {
+    logStreamEvent({
+      requestId,
+      userId,
+      courseId,
+      lessonId,
+      provider: 'unknown',
+      result: 'failed',
+      code: 'RESOLVE_FAILED'
+    });
+
+    return res.status(502).json(buildStreamError(
+      'RESOLVE_FAILED',
+      'Failed to resolve stream URL',
+      err && err.message ? err.message : ''
+    ));
+  }
+};
+
+module.exports.proxyVrStream = async (req, res) => {
+  const requestId = crypto.randomUUID();
+  const token = String(req.query && req.query.token || '');
+
+  const verified = verifyStreamProxyToken(token);
+  if (!verified.valid) {
+    return res
+      .status(statusCodeForStreamError(verified.code || 'UNAUTHORIZED'))
+      .json(buildStreamError(verified.code || 'UNAUTHORIZED', verified.message || 'Unauthorized'));
+  }
+
+  const payload = verified.payload || {};
+  const sourceUrl = String(payload.sourceUrl || '').trim();
+  const parsedSource = safeUrlParse(sourceUrl);
+  if (!parsedSource) {
+    return res.status(400).json(buildStreamError('INVALID_INPUT', 'Invalid source URL in proxy token'));
+  }
+
+  const allowedPatterns = getProxyAllowedHostPatterns();
+  if (!isHostAllowed(parsedSource.hostname, allowedPatterns)) {
+    return res.status(401).json(buildStreamError('UNAUTHORIZED', 'Proxy host is not allowed'));
+  }
+
+  const upstreamHeaders = {
+    ...(req.headers.range ? { Range: req.headers.range } : {}),
+    ...(payload.headers && payload.headers['User-Agent']
+      ? { 'User-Agent': String(payload.headers['User-Agent']) }
+      : {})
+  };
+
+  const timeoutMs = Math.max(1000, Number(process.env.VR_STREAM_PROXY_TIMEOUT_MS) || 12000);
+
+  try {
+    const upstream = await axios.get(sourceUrl, {
+      responseType: 'stream',
+      timeout: timeoutMs,
+      headers: upstreamHeaders,
+      validateStatus: (status) => status >= 200 && status < 400
+    });
+
+    const passHeaders = ['content-type', 'content-length', 'accept-ranges', 'content-range', 'cache-control'];
+    for (const headerName of passHeaders) {
+      const headerValue = upstream.headers[headerName];
+      if (typeof headerValue !== 'undefined') {
+        res.setHeader(headerName, headerValue);
+      }
+    }
+
+    res.status(upstream.status);
+    logStreamEvent({
+      requestId,
+      userId: 'proxy-token',
+      provider: payload.provider || 'proxy',
+      result: 'success',
+      status: upstream.status
+    });
+
+    upstream.data.on('error', () => {
+      if (!res.headersSent) {
+        res.status(502).json(buildStreamError('RESOLVE_FAILED', 'Upstream stream error'));
+      } else {
+        res.end();
+      }
+    });
+
+    return upstream.data.pipe(res);
+  } catch (err) {
+    logStreamEvent({
+      requestId,
+      userId: 'proxy-token',
+      provider: payload.provider || 'proxy',
+      result: 'failed',
+      code: 'RESOLVE_FAILED'
+    });
+
+    return res.status(502).json(buildStreamError(
+      'RESOLVE_FAILED',
+      'Failed to proxy stream',
+      err && err.message ? err.message : ''
+    ));
+  }
 };
