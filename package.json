@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "jest",
+    "test:vr-stream:unit": "jest __tests__/streamResolver.test.js",
     "test:vr-stream": "node scripts/test-vr-stream.js",
     "migrate:slides:dry": "node scripts/migrate-slide-content.js",
     "migrate:slides:apply": "node scripts/migrate-slide-content.js --apply",
@@ -19,6 +20,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@maptiler/client": "^1.8.1",
     "axios": "^1.13.6",
     "cloudinary": "^1.41.3",
@@ -46,7 +48,9 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "passport-local-mongoose": "^8.0.0",
-    "youtube-transcript": "^1.3.0"
+    "youtube-transcript": "^1.3.0",
+    "yt-dlp-wrap": "^2.3.12",
+    "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
