@@ -112,11 +112,14 @@ function getCourseLessons(courseDoc) {
     return sectionLessons.map((lesson) => ({
       id: String(lesson && lesson._id),
       title: String((lesson && lesson.title) || 'Untitled Lesson'),
+      type: String((lesson && lesson.type) || ''),
       duration: lesson && lesson.duration ? lesson.duration : null,
       order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : null,
       sectionTitle: String((lesson && lesson.sectionTitle) || 'Nội dung khóa học'),
       sectionOrder: Number.isFinite(Number(lesson && lesson.sectionOrder)) ? Number(lesson.sectionOrder) : null,
       content: lesson && lesson.content ? lesson.content : null,
+      quiz: Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [],
+      questions: Array.isArray(lesson && lesson.questions) ? lesson.questions : [],
       videoUrl: lesson && lesson.videoUrl ? lesson.videoUrl : ''
     }));
   }
@@ -125,13 +128,149 @@ function getCourseLessons(courseDoc) {
   return legacyLessons.map((item, idx) => ({
     id: String((item && (item._id || item.refId)) || `legacy_lesson_${idx + 1}`),
     title: String((item && (item.title || item.name)) || 'Untitled Lesson'),
+    type: String((item && item.type) || ''),
     duration: (item && item.duration) || (item && item.content && item.content.duration) || null,
     order: Number.isFinite(Number(item && item.order)) ? Number(item.order) : idx + 1,
     sectionTitle: String((item && item.sectionTitle) || 'Nội dung khóa học'),
     sectionOrder: Number.isFinite(Number(item && item.sectionOrder)) ? Number(item.sectionOrder) : null,
     content: item && item.content ? item.content : null,
+    quiz: Array.isArray(item && item.quiz) ? item.quiz : [],
+    questions: Array.isArray(item && item.questions) ? item.questions : [],
     videoUrl: item && item.preview ? item.preview : ''
   }));
+}
+
+function normalizeLessonType(lesson) {
+  const raw = String((lesson && lesson.type) || '').trim().toLowerCase();
+  if (raw === 'lecture') return 'video';
+  if (raw === 'video' || raw === 'slide' || raw === 'quiz') return raw;
+
+  const slidePages = Array.isArray(lesson && lesson.content && lesson.content.slides)
+    ? lesson.content.slides
+    : [];
+  if (slidePages.length > 0) return 'slide';
+
+  const quizRows = Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [];
+  const questionRows = Array.isArray(lesson && lesson.questions) ? lesson.questions : [];
+  if (quizRows.length > 0 || questionRows.length > 0) return 'quiz';
+
+  if (!String((lesson && lesson.videoUrl) || '').trim()) {
+    return '';
+  }
+
+  return 'video';
+}
+
+function extractSlidePages(lesson) {
+  const pages = [];
+  const rawSlides = Array.isArray(lesson && lesson.content && lesson.content.slides)
+    ? lesson.content.slides
+    : [];
+
+  for (const slide of rawSlides) {
+    if (!slide) continue;
+
+    if (typeof slide === 'string') {
+      const txt = slide.trim();
+      if (txt) pages.push(txt);
+      continue;
+    }
+
+    const elements = Array.isArray(slide.elements) ? slide.elements : [];
+    const textParts = elements
+      .filter((el) => el && el.type === 'text' && typeof el.text === 'string' && el.text.trim())
+      .map((el) => el.text.trim());
+
+    if (textParts.length > 0) {
+      pages.push(textParts.join('\n\n'));
+    }
+  }
+
+  return pages;
+}
+
+function normalizeQuizQuestions(lesson) {
+  const sourceRows = [];
+
+  const appendRows = (rows) => {
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) {
+      if (row) sourceRows.push(row);
+    }
+  };
+
+  appendRows(lesson && lesson.quiz);
+  appendRows(lesson && lesson.questions);
+  appendRows(lesson && lesson.interactiveQuizzes);
+  appendRows(lesson && lesson.content && lesson.content.quiz);
+  appendRows(lesson && lesson.content && lesson.content.questions);
+  appendRows(lesson && lesson.content && lesson.content.interactiveQuizzes);
+
+  const normalized = [];
+  for (const row of sourceRows) {
+    if (!row) continue;
+
+    const question = String(
+      row.question || row.content || row.prompt || row.title || row.text || ''
+    ).trim();
+
+    let rawOptions = [];
+    if (Array.isArray(row.options)) rawOptions = row.options;
+    else if (Array.isArray(row.answers)) rawOptions = row.answers;
+    else if (Array.isArray(row.choices)) rawOptions = row.choices;
+    else if (row.options && typeof row.options === 'object') rawOptions = Object.values(row.options);
+
+    const options = rawOptions
+      .map((opt) => {
+        if (opt == null) return '';
+        if (typeof opt === 'string') return opt.trim();
+        if (typeof opt === 'object') {
+          return String(opt.text || opt.label || opt.value || '').trim();
+        }
+        return String(opt).trim();
+      })
+      .filter(Boolean);
+
+    const correctIndexRaw = Number(
+      row.correctIndex
+      ?? row.correctAnswerIndex
+      ?? row.correctOptionIndex
+      ?? row.answerIndex
+      ?? row.correct_answer_index
+      ?? row.correct
+      ?? row.correctAnswer
+      ?? 0
+    );
+
+    if (!question || options.length === 0) continue;
+
+    let computedCorrectIndex = Number.isFinite(correctIndexRaw)
+      ? Math.round(correctIndexRaw)
+      : 0;
+
+    // Handle one-based index style payloads.
+    if (computedCorrectIndex >= 1 && computedCorrectIndex <= options.length) {
+      computedCorrectIndex -= 1;
+    }
+
+    // Handle correct answer represented as option text.
+    if (typeof row.correctAnswer === 'string') {
+      const byText = options.findIndex((opt) => opt.toLowerCase() === row.correctAnswer.trim().toLowerCase());
+      if (byText >= 0) {
+        computedCorrectIndex = byText;
+      }
+    }
+
+    computedCorrectIndex = Math.max(0, Math.min(options.length - 1, computedCorrectIndex));
+
+    normalized.push({
+      question,
+      options,
+      correctIndex: computedCorrectIndex
+    });
+  }
+
+  return normalized;
 }
 
 function getThumbnailUrl(courseDoc) {
@@ -260,10 +399,13 @@ module.exports.getVrCourseLessons = async (req, res) => {
   );
 
   const lessons = getCourseLessons(course).map((lesson, idx) => ({
+    type: normalizeLessonType(lesson),
     id: String(lesson.id),
     title: String(lesson.title || ''),
-    type: String(lesson.type || (lesson.videoUrl ? 'lecture' : '')),
     videoUrl: lesson.videoUrl || '',
+    slideText: String((lesson && lesson.content && lesson.content.text) || ''),
+    slides: extractSlidePages(lesson),
+    quizQuestions: normalizeQuizQuestions(lesson),
     duration: lesson.duration || null,
     order: Number.isFinite(Number(lesson.order)) ? Number(lesson.order) : idx + 1,
     sectionTitle: String(lesson.sectionTitle || ''),
