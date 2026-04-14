@@ -1,20 +1,21 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
-  try {
-    const connStr = process.env.MONGODB_URL || 'mongodb://localhost:27017/edumy';
-    await mongoose.connect(connStr, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log('MongoDB connected');
-  } catch (err) {
-    console.error('DB connection error:', err);
-    process.exit(1);
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
   }
+
+  const connStr = process.env.MONGODB_URL || 'mongodb://localhost:27017/edumy';
+  const connection = await mongoose.connect(connStr);
+  console.log('MongoDB connected');
+  return connection;
 };
 
 const closeDB = async () => {
+  if (mongoose.connection.readyState === 0) {
+    return;
+  }
+
   await mongoose.connection.close();
   console.log('MongoDB disconnected');
 };

@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const { isLoggedIn, isAdmin } = require('../middleware');
 const Course = require('../models/course');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const Video = require('../models/video');
+
+router.use(isLoggedIn, isAdmin);
 
 function extractYouTubeId(input) {
     const raw = String(input || '').trim();
@@ -33,7 +36,7 @@ function extractYouTubeId(input) {
             const shortsMatch = path.match(/^\/shorts\/([^/?#]+)/i);
             if (shortsMatch) return shortsMatch[1];
         }
-    } catch (err) {
+    } catch {
         return '';
     }
 

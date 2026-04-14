@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { isLoggedIn, isAdmin } = require('../../middleware');
 const Course = require('../../models/course');
 const ContentLibrary = require('../../models/contentLibrary');
 
@@ -64,15 +65,7 @@ function normalizeDriveStructure(input) {
     });
 }
 
-// Middleware to check if user is authenticated
-const isAuthenticated = (req, res, next) => {
-    if (!req.user) {
-        return res.status(401).json({ error: 'Unauthorized. Please login.' });
-    }
-    next();
-};
-
-router.use(isAuthenticated);
+router.use(isLoggedIn, isAdmin);
 
 // Legacy course editor uses driveStructure and saves the whole array.
 router.post('/course/reorder', async (req, res) => {
@@ -527,7 +520,7 @@ router.post('/course/add-item', async (req, res) => {
 // Save lesson to library
 router.post('/lesson/to-library', async (req, res) => {
     try {
-        const { courseId, sectionId, lessonId, title, type } = req.body;
+        const { courseId, sectionId, lessonId, title } = req.body;
 
         const course = await Course.findById(courseId);
         if (!course) {

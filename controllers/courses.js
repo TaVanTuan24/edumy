@@ -1,6 +1,5 @@
 const Course = require('../models/course');
 const scanDriveStructure = require('../utils/driveScanner');
-const { cloudinary } = require('../config/cloudinary');
 const Progress = require('../models/progress');
 const Note = require('../models/note');
 const User = require('../models/user');
@@ -224,12 +223,13 @@ module.exports.renderNewForm = (req, res) => {
   res.render('courses/new');
 };
 
-module.exports.createCourse = async (req, res, next) => {
+module.exports.createCourse = async (req, res) => {
   const course = new Course(req.body.course);
   course.images = req.files ? req.files.map(f => ({ url: f.path, filename: f.filename })) : [];
   course.author = req.user._id;
 
-  const match = course.driveLink.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  const driveLink = String(course.driveLink || '');
+  const match = driveLink.match(/\/folders\/([a-zA-Z0-9_-]+)/);
   if (match) {
     const folderId = match[1];
     try {
@@ -261,7 +261,6 @@ module.exports.showCourses = async (req, res) => {
   const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
 
   normalizeCourseContent(course);
-  console.log(JSON.stringify(course.sections, null, 2));
 
   let completedVideos = [];
   let gamification = null;

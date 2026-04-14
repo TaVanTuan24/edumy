@@ -238,7 +238,7 @@ router.post("/generate-slide", async (req, res) => {
             return res.status(400).json({ error: 'Prompt is required' });
         }
 
-        const safeStyle = ['professional', 'minimal'].includes(style) ? style : 'professional';
+        const _safeStyle = ['professional', 'minimal'].includes(style) ? style : 'professional';
         const trimmedPrompt = userPrompt.slice(0, 1000);
 
         const prompt = `You are a professional presentation designer (like Canva / PowerPoint AI).\n\nYour job is NOT to generate text.\nYour job is to DESIGN slides visually.\n\nGOAL:\nGenerate ${count} BEAUTIFUL slides.\nTopic: ${trimmedPrompt}\n\nEach slide must:\n- Have layout\n- Have spacing\n- Have hierarchy\n- Use full canvas (1003x563)\n\nDESIGN SYSTEM:\nEach slide MUST choose ONE layout:\n1) left-text\n2) center-title\n3) two-columns\nDo NOT use the same layout for all slides.\n\nCANVAS:\nWidth: 1003\nHeight: 563\n\nELEMENT RULES:\nEach slide MUST have:\n- 1 Title\n- 2-4 content elements\n- Text elements ONLY (no images)\n\nCONTENT RULES:\n- Keep text SHORT (max 8 words per line)\n- Use bullet style: "• something"\n- Avoid long paragraphs\n\nOUTPUT FORMAT (STRICT JSON ONLY):\n{\n  "slides": [\n    {\n      "id": "slide-1",\n      "layout": "left-text",\n      "theme": "light",\n      "title": "Slide Title",\n      "bullets": ["• Bullet 1", "• Bullet 2", "• Bullet 3"]\n    }\n  ]\n}\n\nFORBIDDEN:\n- DO NOT stack elements\n- DO NOT reuse same y\n- DO NOT return 1 element slide\n- DO NOT output markdown\n\nRETURN JSON ONLY`;
@@ -372,7 +372,7 @@ function parseQuizJson(raw) {
         const data = JSON.parse(jsonText)
         if (Array.isArray(data)) parsed = data
         if (!Array.isArray(data) && Array.isArray(data.questions)) parsed = data.questions
-    } catch (err) {
+    } catch {
         return []
     }
 
@@ -421,12 +421,12 @@ function normalizeQuizQuestion(item) {
     return { question, answers }
 }
 
-function parseSlideJson(raw, topic) {
+function parseSlideJson(raw, _topic) {
     const cleaned = cleanAIResponse(raw)
     let parsed = null
     try {
         parsed = safeParseJSON(cleaned)
-    } catch (err) {
+    } catch {
         return []
     }
 
@@ -436,7 +436,7 @@ function parseSlideJson(raw, topic) {
             ? parsed.slides
             : []
 
-    const normalized = slides.map((slide, index) => normalizeSlide(slide, index, topic)).filter(Boolean)
+    const normalized = slides.map((slide, index) => normalizeSlide(slide, index, _topic)).filter(Boolean)
     return smartLayoutEnhance(normalized)
 }
 
@@ -490,11 +490,11 @@ function normalizeSlideElement(el, slideIndex, elementIndex) {
     }
 }
 
-async function generateWithRetry(prompt, retries, topic) {
+async function generateWithRetry(prompt, retries, _topic) {
     for (let attempt = 0; attempt < retries; attempt += 1) {
         try {
             const raw = await callOllama(prompt)
-            const slides = parseSlideJson(raw, topic)
+            const slides = parseSlideJson(raw, _topic)
             if (slides.length) {
                 return slides
             }
@@ -627,10 +627,6 @@ function clampNumber(value, min, max, fallback) {
     return Math.max(min, Math.min(max, numeric))
 }
 
-function enhanceSlides(slides) {
-    return smartLayoutEnhance(slides)
-}
-
 function smartLayoutEnhance(slides) {
     return (Array.isArray(slides) ? slides : []).map((slide, index) => {
         if (!slide || !Array.isArray(slide.elements)) return slide
@@ -701,7 +697,7 @@ function normalizeBullets(bullets) {
         .map((item) => item.startsWith('•') ? item : `• ${item}`)
 }
 
-function applyTemplate(slide, index, topic) {
+function applyTemplate(slide, index, _topic) {
     const layout = normalizeLayout(slide.layout, index)
     const theme = normalizeTheme(slide.theme, index)
     const title = String(slide.title || slide.heading || 'Slide Title').trim() || 'Slide Title'
@@ -1056,7 +1052,7 @@ async function askLlama(prompt) {
     return res.data && res.data.response ? res.data.response : ""
 }
 
-async function answerCourseQuestion({ userId, courseId, question, lessonId, context }) {
+async function answerCourseQuestion({ userId: _userId, courseId, question, lessonId, context }) {
     const trimmedQuestion = stripHtml(question).slice(0, 800)
     if (!trimmedQuestion) return ""
 

@@ -12,7 +12,7 @@ function base64UrlDecode(input) {
 }
 
 function getSigningSecret() {
-  return process.env.VR_STREAM_TOKEN_SECRET || process.env.JWT_SECRET || process.env.SESSION_SECRET || 'mysceret';
+  return process.env.VR_STREAM_TOKEN_SECRET || process.env.JWT_SECRET || process.env.SESSION_SECRET || 'dev-stream-token-secret-change-me';
 }
 
 function signPayload(payloadObj) {
@@ -57,7 +57,7 @@ function verifyStreamProxyToken(token) {
   let payload;
   try {
     payload = JSON.parse(base64UrlDecode(encodedPayload));
-  } catch (_) {
+  } catch {
     return { valid: false, code: 'INVALID_INPUT', message: 'Invalid proxy token payload' };
   }
 

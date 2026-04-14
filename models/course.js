@@ -6,7 +6,7 @@ const opts = { toJSON: { virtuals: true }, timestamps: true }
 
 // ==================== SUBSCHEMA DEFINITIONS ====================
 
-const slideElementSchema = new Schema({
+const _slideElementSchema = new Schema({
     id: {
         type: String,
         required: true,
@@ -49,18 +49,6 @@ const slideElementSchema = new Schema({
     bold: {
         type: Boolean,
         default: false
-    }
-}, { _id: false })
-
-const slideSchema = new Schema({
-    id: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    elements: {
-        type: [slideElementSchema],
-        default: []
     }
 }, { _id: false })
 

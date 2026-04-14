@@ -70,7 +70,7 @@ router.post('/courses/:courseId/progress', isVRAuthenticated, catchAsync(vrContr
 router.post('/stream/resolve', streamResolveLimiter, isVRAuthenticated, validateStreamRequest, catchAsync(vrController.resolveVrStream));
 router.get('/stream/proxy', streamProxyLimiter, catchAsync(vrController.proxyVrStream));
 
-router.use((err, req, res, next) => {
+router.use((err, req, res, _next) => {
   const statusCode = err instanceof ExpressError
     ? err.statusCode
     : (err.statusCode || 500);

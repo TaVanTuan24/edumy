@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 const axios = require('axios');
 const { resolveStream } = require('../services/streamResolver');
 const { createStreamProxyToken } = require('../utils/signStreamToken');

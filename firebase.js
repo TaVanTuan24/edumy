@@ -1,17 +1,17 @@
 const mockDB = {
-  collection: (name) => ({
-    orderBy: (field, direction) => ({
+  collection: (_name) => ({
+    orderBy: (_field, _direction) => ({
       get: async () => ({
         docs: []
       })
     }),
-    doc: (id) => ({
+    doc: (_id) => ({
       delete: async () => {},
       get: async () => ({
         exists: true,
         data: () => ({ targetName: '', scannedAt: null })
       }),
-      update: async (data) => {}
+      update: async (_data) => {}
     })
   })
 };

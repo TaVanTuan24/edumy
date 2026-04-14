@@ -74,7 +74,7 @@
         if (json) {
             try {
                 parsed = JSON.parse(json.textContent || '[]');
-            } catch (error) {
+            } catch {
                 parsed = [];
             }
         }
@@ -277,7 +277,7 @@
         if (typeof elementNode.setPointerCapture === 'function') {
             try {
                 elementNode.setPointerCapture(event.pointerId);
-            } catch (error) {
+            } catch {
                 // Ignore capture errors and continue with document-level listeners.
             }
         }
@@ -1186,14 +1186,6 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;')
             .replace(/\n/g, '<br>');
-    }
-
-    function escapeAttribute(value) {
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
     }
 
     function showToast(message) {

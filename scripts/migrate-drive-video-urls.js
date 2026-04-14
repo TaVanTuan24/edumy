@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config();
 }
@@ -17,7 +16,7 @@ function extractDriveFileMeta(inputUrl) {
   let parsed;
   try {
     parsed = new URL(raw, 'https://drive.google.com');
-  } catch (err) {
+  } catch {
     return null;
   }
 
@@ -179,7 +178,7 @@ run().catch(async (err) => {
   console.error('[migration:drive-urls] failed:', err);
   try {
     await mongoose.disconnect();
-  } catch (disconnectErr) {
+  } catch {
     // ignore disconnect error
   }
   process.exit(1);

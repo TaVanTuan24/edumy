@@ -519,7 +519,7 @@
             });
             const data = await res.json();
             if (data.success) location.reload();
-        } catch(e) {
+        } catch {
             alert('Failed to add section');
         }
     }
@@ -551,7 +551,7 @@
 
             const titleEl = sectionCard?.querySelector('.section-title') || document.getElementById('title-' + sectionId);
             if (titleEl) titleEl.textContent = trimmedTitle;
-        } catch (err) {
+        } catch {
             alert('Failed to update section title');
         }
     }
@@ -610,7 +610,7 @@
             if (data.success) {
                 location.reload();
             }
-        } catch(e) {
+        } catch {
             alert('Failed to save');
         }
     }
@@ -908,7 +908,7 @@
             }
 
             addItemModal.hide();
-        } catch (err) {
+        } catch {
             showAddItemError('Network error while creating item. Please try again.');
         } finally {
             setAddItemLoading(false);
@@ -1445,7 +1445,7 @@
             interactiveQuizDraft = normalizeInteractiveQuizDraft(contentInteractive.length ? contentInteractive : rootInteractive);
             renderInteractiveQuizList();
             resetInteractiveQuizForm();
-        } catch (err) {
+        } catch {
             // Silently fail - user can still enter URL manually
             interactiveQuizDraft = [];
             renderInteractiveQuizList();
@@ -1456,7 +1456,6 @@
     async function saveLesson() {
         const sectionIndex = document.getElementById('lesson-section-index')?.value;
         const lessonIndex = document.getElementById('lesson-index')?.value;
-        const itemId = document.getElementById('lesson-id')?.value;
         const name = document.getElementById('lesson-name')?.value;
         const url = document.getElementById('lesson-url')?.value;
         
@@ -1559,7 +1558,7 @@
                 return;
             }
             location.reload();
-        } catch(e) {
+        } catch {
             alert('Failed to add item');
         }
     }
@@ -1615,7 +1614,7 @@
             }
 
             setReorderStatus('Order saved', 'saved', true);
-        } catch (err) {
+        } catch {
             setReorderStatus('Network error while saving order.', 'error');
             setTimeout(() => location.reload(), 700);
         }
@@ -1740,7 +1739,7 @@
                 });
             });
 
-        } catch(e) {
+        } catch {
             content.innerHTML = '<div class="library-empty"><p>Error loading</p></div>';
         }
     }
@@ -1781,7 +1780,7 @@
             if (itemEl) {
                 itemEl.remove();
             }
-        } catch (error) {
+        } catch {
             alert('Delete failed');
         }
     }

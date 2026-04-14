@@ -91,7 +91,7 @@ async function isVRAuthenticated(req, res, next) {
     req.jwtPayload = payload;
     req.authMethod = 'jwt';
     return next();
-  } catch (err) {
+  } catch {
     return sendUnauthorized(req, res);
   }
 }

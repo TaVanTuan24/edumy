@@ -58,7 +58,7 @@
         let raw = {};
         try {
             raw = JSON.parse(payload.textContent || '{}');
-        } catch (error) {
+        } catch {
             raw = {};
         }
 
@@ -346,7 +346,7 @@
     }
 
     function renderSidebar() {
-        els.sidebarContent.innerHTML = state.sections.map(function(section, index) {
+        els.sidebarContent.innerHTML = state.sections.map(function(section, _index) {
             return '' +
                 '<section class="learn-section" data-section-id="' + section.id + '">' +
                     '<header class="learn-section-header" data-section-toggle="' + section.id + '">' +

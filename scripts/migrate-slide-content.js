@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config();
 }
@@ -116,7 +115,7 @@ run().catch(async (err) => {
   console.error('[migration] failed:', err);
   try {
     await mongoose.disconnect();
-  } catch (disconnectErr) {
+  } catch {
     // ignore
   }
   process.exit(1);

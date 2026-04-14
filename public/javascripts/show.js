@@ -440,7 +440,7 @@ function resumeLastContext() {
   }
 }
 
-function saveNote(index) {
+window.saveNote = function saveNote(index) {
   const courseObj = store.course || {};
   const content = document.getElementById('note-section-' + index).value;
 
@@ -454,13 +454,13 @@ function saveNote(index) {
       if (!data.success) alert('Lưu ghi chú thất bại');
     })
     .catch((err) => console.error('[Lỗi lưu ghi chú]', err));
-}
+};
 
 function readJson(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
-  } catch (error) {
+  } catch {
     return fallback;
   }
 }
@@ -468,7 +468,7 @@ function readJson(key, fallback) {
 function writeJson(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
+  } catch {
     // Ignore storage write errors.
   }
 }

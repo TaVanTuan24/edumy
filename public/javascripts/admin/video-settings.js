@@ -200,7 +200,7 @@
     statusEl.classList.toggle('text-danger', Boolean(isError));
   }
 
-  function ensureYouTubeApi() {
+  function _ensureYouTubeApi() {
     if (window.YT && window.YT.Player) return Promise.resolve();
     if (state.youtubeReadyPromise) return state.youtubeReadyPromise;
 
@@ -234,7 +234,7 @@
     let parsed;
     try {
       parsed = new URL(raw, window.location.origin);
-    } catch (err) {
+    } catch {
       parsed = null;
     }
 
@@ -576,7 +576,7 @@
     });
   }
 
-  function startPreviewPolling() {
+  function _startPreviewPolling() {
     clearPreviewPolling();
     if (!state.previewPlayer || typeof state.previewPlayer.getCurrentTime !== 'function') return;
 
@@ -588,7 +588,7 @@
       let current = 0;
       try {
         current = Number(state.previewPlayer.getCurrentTime() || 0);
-      } catch (err) {
+      } catch {
         current = 0;
       }
 

@@ -89,7 +89,7 @@
       if (!stored) return [];
       const parsed = JSON.parse(stored);
       return Array.isArray(parsed && parsed.slides) ? parsed.slides : [];
-    } catch (error) {
+    } catch {
       return [];
     }
   }

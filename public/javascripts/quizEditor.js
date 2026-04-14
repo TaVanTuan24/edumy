@@ -11,7 +11,7 @@
 
     try {
         quizData = JSON.parse(root.dataset.quiz || '{}');
-    } catch (e) {
+    } catch {
         showAlert('Failed to load quiz data.', 'danger');
     }
 

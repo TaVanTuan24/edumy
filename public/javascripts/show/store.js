@@ -159,7 +159,7 @@
     try {
       const raw = localStorage.getItem(key);
       return raw ? JSON.parse(raw) : fallback;
-    } catch (error) {
+    } catch {
       return fallback;
     }
   }
@@ -167,7 +167,7 @@
   function writeJson(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
+    } catch {
       // Ignore storage write errors.
     }
   }

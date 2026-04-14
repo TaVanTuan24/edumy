@@ -5,8 +5,10 @@ const passportLocalMongoose = require('passport-local-mongoose');
 const UserSchema = new Schema({
     email: {
         type: String,
-        require: true,
-        unique: true
+        required: true,
+        unique: true,
+        trim: true,
+        lowercase: true
     },
     enrolledCourses: {
         type: [Schema.Types.Mixed],

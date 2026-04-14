@@ -46,7 +46,7 @@ function extractYouTubeId(input) {
       const shortsMatch = path.match(/^\/shorts\/([^/?#]+)/i);
       if (shortsMatch) return shortsMatch[1];
     }
-  } catch (err) {
+  } catch {
     return '';
   }
 
@@ -134,7 +134,7 @@ function inferVideoDurationFromTranscript(transcriptSegments) {
   return Math.max(0, Math.floor(maxEnd));
 }
 
-function findNearestTranscriptOffset(transcriptOffsets, targetSeconds) {
+function _findNearestTranscriptOffset(transcriptOffsets, targetSeconds) {
   const offsets = Array.isArray(transcriptOffsets) ? transcriptOffsets : [];
   if (!offsets.length) return Math.max(0, Math.floor(targetSeconds));
 
@@ -384,7 +384,7 @@ function parseQuizJson(rawText) {
       if (parsed && Array.isArray(parsed.quiz)) return parsed.quiz;
       if (parsed && Array.isArray(parsed.questions)) return parsed.questions;
       return [];
-    } catch (err) {
+    } catch {
       return null;
     }
   };
@@ -664,7 +664,7 @@ module.exports.aiGenerateQuiz = async (req, res) => {
     .filter(Boolean)
     .join('\n');
 
-  const prompt = `You are an expert instructional designer for serious learning outcomes.\n\nGiven the transcript below, generate EXACTLY ${numberOfQuestions} multiple-choice quiz questions that support LEARNING, not trivial recall.\n\nPedagogical requirements:\n- Focus on core concepts, mechanisms, trade-offs, mistakes to avoid, and practical application.\n- Use Bloom levels mix: understanding, applying, analyzing (not only remembering).\n- Avoid vague or superficial questions.\n- Include plausible distractors that represent common misconceptions.\n- Explanation must teach: briefly explain why the correct answer is correct and why a typical wrong idea is wrong.\n- Questions should progress from foundational to more advanced ideas.\n\nStrict output requirements:\n- Return ONLY valid JSON (no markdown, no commentary).\n- Output must be a JSON array of objects.\n- Each object must contain these fields exactly:\n  - question: string\n  - options: array of exactly 4 strings\n  - correctAnswer: one of \"A\", \"B\", \"C\", \"D\"\n  - explanation: string\n  - suggestedTimestamp: string in mm:ss or hh:mm:ss format near where the concept appears\n\nTranscript:\n${fullTranscript}`;
+  const prompt = `You are an expert instructional designer for serious learning outcomes.\n\nGiven the transcript below, generate EXACTLY ${numberOfQuestions} multiple-choice quiz questions that support LEARNING, not trivial recall.\n\nPedagogical requirements:\n- Focus on core concepts, mechanisms, trade-offs, mistakes to avoid, and practical application.\n- Use Bloom levels mix: understanding, applying, analyzing (not only remembering).\n- Avoid vague or superficial questions.\n- Include plausible distractors that represent common misconceptions.\n- Explanation must teach: briefly explain why the correct answer is correct and why a typical wrong idea is wrong.\n- Questions should progress from foundational to more advanced ideas.\n\nStrict output requirements:\n- Return ONLY valid JSON (no markdown, no commentary).\n- Output must be a JSON array of objects.\n- Each object must contain these fields exactly:\n  - question: string\n  - options: array of exactly 4 strings\n  - correctAnswer: one of "A", "B", "C", "D"\n  - explanation: string\n  - suggestedTimestamp: string in mm:ss or hh:mm:ss format near where the concept appears\n\nTranscript:\n${fullTranscript}`;
 
   let aiResponse;
   try {
@@ -697,7 +697,7 @@ module.exports.aiGenerateQuiz = async (req, res) => {
       const repairedOutput = await repairQuizFormat(rawOutput, numberOfQuestions);
       const repairedParsed = parseQuizJson(repairedOutput);
       normalizedQuiz = normalizeQuizItems(repairedParsed);
-    } catch (err) {
+    } catch {
       // Keep original failure behavior below if repair step fails.
     }
   }

@@ -27,7 +27,7 @@ function safeUrlParse(rawUrl) {
     const parsed = new URL(rawUrl);
     if (!['http:', 'https:'].includes(parsed.protocol)) return null;
     return parsed;
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -111,14 +111,22 @@ function buildResolverFailureDetail(stage, err) {
 }
 
 function runWithTimeout(promise, timeoutMs) {
-  const timeoutPromise = new Promise((_, reject) => {
+  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       clearTimeout(timer);
       reject(new Error(`Resolver timeout after ${timeoutMs}ms`));
     }, timeoutMs);
-  });
 
-  return Promise.race([promise, timeoutPromise]);
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
 }
 
 async function withRetries(taskFn, retries) {
@@ -225,10 +233,10 @@ function pickBestFormat(formats, preferredFormat) {
 function tryLoadYtdlCore() {
   try {
     return require('@distube/ytdl-core');
-  } catch (_) {
+  } catch {
     try {
       return require('ytdl-core');
-    } catch (_) {
+    } catch {
       return null;
     }
   }
@@ -272,7 +280,7 @@ function tryLoadYtDlpWrap() {
   try {
     ytDlpWrapModule = require('yt-dlp-wrap');
     return ytDlpWrapModule;
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -336,7 +344,7 @@ async function ensureManagedYtDlpBinary(timeoutMs) {
   return ytDlpDownloadPromise;
 }
 
-async function resolveYouTubeViaYtDlpWrap(sourceUrl, preferredFormat, timeoutMs) {
+async function _resolveYouTubeViaYtDlpWrap(sourceUrl, preferredFormat, timeoutMs) {
   const YTDlpWrap = tryLoadYtDlpWrap();
   if (!YTDlpWrap) {
     throw new Error('yt-dlp-wrap not installed');
@@ -426,6 +434,15 @@ async function resolveYouTubeStream(sourceUrl, preferredFormat, timeoutMs, retri
     );
   } catch (err) {
     errors.push(buildResolverFailureDetail('ytdl-core', err));
+  }
+
+  try {
+    return await withRetries(
+      () => _resolveYouTubeViaYtDlpWrap(normalizedSourceUrl, preferredFormat, timeoutMs),
+      retries
+    );
+  } catch (err) {
+    errors.push(buildResolverFailureDetail('yt-dlp-wrap', err));
   }
 
   try {

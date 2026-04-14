@@ -10,7 +10,6 @@
   let currentSlideIndex = 0;
   let slideData = [];
   const SLIDE_BASE_WIDTH = 1003;
-  const SLIDE_BASE_HEIGHT = 563;
   let slideResizeBound = false;
   let lastQuizReportKey = '';
   let quizAttemptCount = 0;
@@ -70,7 +69,7 @@
       const fromStorage = localStorage.getItem('learning:interactiveQuizDebug');
       if (fromStorage === '1') return true;
       if (fromStorage === '0') return false;
-    } catch (err) {
+    } catch {
       // Ignore URL/localStorage errors and use host fallback.
     }
 
@@ -444,7 +443,6 @@
   }
 
   function showSlide(lesson) {
-    const deps = getDeps();
     const slide = slideData[currentSlideIndex];
     if (!slide) {
       renderPanel('Slide', lesson.title, '<p class="text-muted mb-0">Slide not found.</p>', false);
@@ -465,7 +463,7 @@
 
     renderPanel('Slide', lesson.title, html, false);
 
-    renderSlideElements(slide, deps);
+    renderSlideElements(slide);
 
     const panel = document.getElementById('lessonFallbackPanel');
     if (!panel) return;
@@ -512,7 +510,7 @@
     }];
   }
 
-  function renderSlideElements(slide, deps) {
+  function renderSlideElements(slide) {
     const canvas = document.getElementById('slide-canvas');
     if (!canvas) return;
 
@@ -724,7 +722,6 @@
   }
 
   function showResult(lesson) {
-    const deps = getDeps();
     const percent = quizData.length ? Math.round((score / quizData.length) * 100) : 0;
     const html = '' +
       '<div class="quiz-result">' +
@@ -860,13 +857,13 @@
     deps.writeJson(key, map || {});
   }
 
-  function getSeenQuizSet(lessonId) {
+  function _getSeenQuizSet(lessonId) {
     const map = getInteractiveStorageMap();
     const raw = Array.isArray(map && map[lessonId]) ? map[lessonId] : [];
     return new Set(raw.map(function(id) { return String(id); }));
   }
 
-  function markQuizSeen(lessonId, quizId) {
+  function _markQuizSeen(lessonId, quizId) {
     const map = getInteractiveStorageMap();
     const key = String(lessonId || '');
     const current = new Set(Array.isArray(map[key]) ? map[key].map(function(id) { return String(id); }) : []);
@@ -1237,7 +1234,7 @@
     };
   }
 
-  function setupHtml5Player(url, lesson) {
+  function setupHtml5Player(url) {
     const player = ensureHtml5VideoPlayer();
     if (!player) return;
 
@@ -1498,7 +1495,7 @@
     badge.style.display = visible ? 'inline-flex' : 'none';
   }
 
-  function updatePlaybackTimeBadge(currentSec, durationSec, provider) {
+  function updatePlaybackTimeBadge(currentSec, durationSec) {
     if (!SHOW_PLAYBACK_TIME_BADGE) return;
     const badge = ensurePlaybackTimeBadge();
     if (!badge) return;
@@ -1517,7 +1514,7 @@
     let parsed;
     try {
       parsed = new URL(raw, window.location.origin);
-    } catch (err) {
+    } catch {
       return null;
     }
 
@@ -1602,7 +1599,7 @@
     let parsed;
     try {
       parsed = new URL(raw, window.location.origin);
-    } catch (err) {
+    } catch {
       parsed = null;
     }
 
@@ -1705,7 +1702,7 @@
     });
   }
 
-  function handleYouTubeStateChange(event, lesson) {
+  function handleYouTubeStateChange(event) {
     if (!window.YT || !window.YT.PlayerState) return;
 
     const state = event.data;
@@ -1748,7 +1745,7 @@
 
     try {
       current = Number(youtubePlayer.getCurrentTime() || 0);
-    } catch (err) {
+    } catch {
       current = Number(youtubeFallbackElapsed || 0);
     }
 
@@ -1759,7 +1756,7 @@
           youtubeDurationSec = candidate;
           duration = candidate;
         }
-      } catch (err) {
+      } catch {
         duration = youtubeDurationSec;
       }
     }
@@ -1782,7 +1779,7 @@
     lastYoutubeTime = current;
   }
 
-  function startYouTubePolling(lesson) {
+  function startYouTubePolling() {
     if (youtubePollId) clearInterval(youtubePollId);
     stopYouTubeApiWatchdog();
     youtubeZeroPollCount = 0;

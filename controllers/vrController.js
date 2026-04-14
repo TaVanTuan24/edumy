@@ -143,29 +143,64 @@ function getCourseLessons(courseDoc) {
 function normalizeLessonType(lesson) {
   const raw = String((lesson && lesson.type) || '').trim().toLowerCase();
   if (raw === 'lecture') return 'video';
-  if (raw === 'video' || raw === 'slide' || raw === 'quiz') return raw;
+  if (raw === 'video') return 'video';
+  if (raw === 'slide' || raw === 'presentation' || raw === 'ppt' || raw === 'document') return 'slide';
 
-  const slidePages = Array.isArray(lesson && lesson.content && lesson.content.slides)
-    ? lesson.content.slides
-    : [];
+  const hasVideoUrl = !!String((lesson && lesson.videoUrl) || '').trim();
+  if (raw === 'quiz' && hasVideoUrl) return 'video';
+
+  const slidePages = extractSlidePages(lesson);
   if (slidePages.length > 0) return 'slide';
+
+  const slideText = extractSlideText(lesson);
+  if (slideText) return 'slide';
+
+  if (hasVideoUrl) {
+    return 'video';
+  }
 
   const quizRows = Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [];
   const questionRows = Array.isArray(lesson && lesson.questions) ? lesson.questions : [];
   if (quizRows.length > 0 || questionRows.length > 0) return 'quiz';
 
-  if (!String((lesson && lesson.videoUrl) || '').trim()) {
-    return '';
+  return '';
+}
+
+function extractSlideText(lesson) {
+  const direct = lesson && lesson.content && lesson.content.text;
+  if (typeof direct === 'string' && direct.trim()) {
+    return direct.trim();
   }
 
-  return 'video';
+  if (Array.isArray(direct)) {
+    const lines = direct
+      .filter((x) => typeof x === 'string' && x.trim())
+      .map((x) => x.trim());
+    if (lines.length > 0) return lines.join('\n\n');
+  }
+
+  const alt = [
+    lesson && lesson.content && lesson.content.description,
+    lesson && lesson.content && lesson.content.body,
+    lesson && lesson.content && lesson.content.summary
+  ];
+
+  for (const item of alt) {
+    if (typeof item === 'string' && item.trim()) {
+      return item.trim();
+    }
+  }
+
+  return '';
 }
 
 function extractSlidePages(lesson) {
   const pages = [];
   const rawSlides = Array.isArray(lesson && lesson.content && lesson.content.slides)
     ? lesson.content.slides
-    : [];
+    : (Array.isArray(lesson && lesson.slides)
+      ? lesson.slides
+      : (Array.isArray(lesson && lesson.content && lesson.content.pages) ? lesson.content.pages : []));
 
   for (const slide of rawSlides) {
     if (!slide) continue;
@@ -181,8 +216,21 @@ function extractSlidePages(lesson) {
       .filter((el) => el && el.type === 'text' && typeof el.text === 'string' && el.text.trim())
       .map((el) => el.text.trim());
 
-    if (textParts.length > 0) {
-      pages.push(textParts.join('\n\n'));
+    const objectParts = [
+      slide && slide.title,
+      slide && slide.text,
+      slide && slide.content,
+      slide && slide.body,
+      slide && slide.description,
+      slide && slide.note
+    ]
+      .filter((v) => typeof v === 'string' && v.trim())
+      .map((v) => v.trim());
+
+    const merged = [...textParts, ...objectParts];
+
+    if (merged.length > 0) {
+      pages.push(merged.join('\n\n'));
     }
   }
 
@@ -266,7 +314,126 @@ function normalizeQuizQuestions(lesson) {
     normalized.push({
       question,
       options,
+      explanation: String(
+        row.explanation
+        || row.explain
+        || row.reason
+        || row.solution
+        || row.wrongExplanation
+        || row.feedback
+        || row.description
+        || ''
+      ).trim(),
       correctIndex: computedCorrectIndex
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeTimedQuizQuestions(lesson) {
+  const sourceRows = [];
+
+  const appendRows = (rows) => {
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) {
+      if (row) sourceRows.push(row);
+    }
+  };
+
+  appendRows(lesson && lesson.interactiveQuizzes);
+  appendRows(lesson && lesson.timedQuizzes);
+  appendRows(lesson && lesson.popupQuizzes);
+  appendRows(lesson && lesson.videoQuizzes);
+  appendRows(lesson && lesson.content && lesson.content.interactiveQuizzes);
+  appendRows(lesson && lesson.content && lesson.content.timedQuizzes);
+
+  const normalized = [];
+  for (const row of sourceRows) {
+    if (!row) continue;
+
+    const question = String(
+      row.question || row.content || row.prompt || row.title || row.text || ''
+    ).trim();
+
+    let rawOptions = [];
+    if (Array.isArray(row.options)) rawOptions = row.options;
+    else if (Array.isArray(row.answers)) rawOptions = row.answers;
+    else if (Array.isArray(row.choices)) rawOptions = row.choices;
+    else if (row.options && typeof row.options === 'object') rawOptions = Object.values(row.options);
+
+    const options = rawOptions
+      .map((opt) => {
+        if (opt == null) return '';
+        if (typeof opt === 'string') return opt.trim();
+        if (typeof opt === 'object') {
+          return String(opt.text || opt.label || opt.value || '').trim();
+        }
+        return String(opt).trim();
+      })
+      .filter(Boolean);
+
+    const rawTrigger = row.triggerTimeSec
+      ?? row.triggerTime
+      ?? row.time
+      ?? row.timecode
+      ?? row.showAt
+      ?? row.timestamp
+      ?? row.startAt
+      ?? row.at;
+
+    const hasTrigger = !(rawTrigger == null || String(rawTrigger).trim() === '');
+
+    const correctIndexRaw = Number(
+      row.correctIndex
+      ?? row.correctAnswerIndex
+      ?? row.correctOptionIndex
+      ?? row.answerIndex
+      ?? row.correct_answer_index
+      ?? row.correct
+      ?? row.correctAnswer
+      ?? 0
+    );
+
+    if (!question || options.length === 0 || !hasTrigger) continue;
+
+    let computedCorrectIndex = Number.isFinite(correctIndexRaw)
+      ? Math.round(correctIndexRaw)
+      : 0;
+
+    if (computedCorrectIndex >= 1 && computedCorrectIndex <= options.length) {
+      computedCorrectIndex -= 1;
+    }
+
+    if (typeof row.correctAnswer === 'string') {
+      const byText = options.findIndex((opt) => opt.toLowerCase() === row.correctAnswer.trim().toLowerCase());
+      if (byText >= 0) {
+        computedCorrectIndex = byText;
+      }
+    }
+
+    computedCorrectIndex = Math.max(0, Math.min(options.length - 1, computedCorrectIndex));
+
+    const triggerNumber = Number(rawTrigger);
+    const triggerTimeSec = Number.isFinite(triggerNumber) ? Math.max(0, triggerNumber) : undefined;
+
+    normalized.push({
+      id: String(row._id || row.id || ''),
+      question,
+      options,
+      correctIndex: computedCorrectIndex,
+      explanation: String(
+        row.explanation
+        || row.explain
+        || row.reason
+        || row.solution
+        || row.wrongExplanation
+        || row.feedback
+        || row.description
+        || ''
+      ).trim(),
+      ...(typeof triggerTimeSec === 'number' ? { triggerTimeSec } : {}),
+      ...(typeof rawTrigger === 'string' ? { timecode: rawTrigger.trim() } : {})
     });
   }
 
@@ -403,9 +570,11 @@ module.exports.getVrCourseLessons = async (req, res) => {
     id: String(lesson.id),
     title: String(lesson.title || ''),
     videoUrl: lesson.videoUrl || '',
-    slideText: String((lesson && lesson.content && lesson.content.text) || ''),
+    slideText: extractSlideText(lesson),
     slides: extractSlidePages(lesson),
     quizQuestions: normalizeQuizQuestions(lesson),
+    timedQuizzes: normalizeTimedQuizQuestions(lesson),
+    interactiveQuizzes: normalizeTimedQuizQuestions(lesson),
     duration: lesson.duration || null,
     order: Number.isFinite(Number(lesson.order)) ? Number(lesson.order) : idx + 1,
     sectionTitle: String(lesson.sectionTitle || ''),
@@ -609,7 +778,7 @@ function logStreamEvent(payload) {
       ts: new Date().toISOString(),
       ...payload
     }));
-  } catch (_) {
+  } catch {
     console.log('[vr.stream]', payload);
   }
 }

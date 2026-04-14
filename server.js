@@ -18,7 +18,6 @@ const rateLimit = require('express-rate-limit');
 const mongoStore = require('connect-mongo');
 const { connectDB, closeDB } = require('./config/database');
 const passport = require('./config/passport');
-const { cloudinary } = require('./config/cloudinary');
 
 const userRoutes = require('./routes/users');
 const courseRoutes = require('./routes/courses');
@@ -35,8 +34,12 @@ const trackRoutes = require('./routes/track');
 const discussionRoutes = require('./routes/discussions');
 const vrRoutes = require('./routes/vr');
 
-// Connect DB
-connectDB();
+const isProduction = process.env.NODE_ENV === 'production';
+const sessionSecret = String(process.env.SESSION_SECRET || '').trim() || 'dev-session-secret-change-me';
+
+if (isProduction && sessionSecret === 'dev-session-secret-change-me') {
+  throw new Error('SESSION_SECRET must be set in production');
+}
 
 const app = express();
 
@@ -54,7 +57,7 @@ app.use(morgan('combined'));
 app.use(compression());
 
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
+  origin: isProduction
     ? (process.env.CORS_ORIGIN || process.env.BASE_URL || false)
     : true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -63,7 +66,7 @@ app.use(cors({
 }));
 
 const vrCorsOptions = {
-  origin: process.env.NODE_ENV === 'production'
+  origin: isProduction
     ? (process.env.VR_CORS_ORIGIN || process.env.VR_BASE_URL || process.env.BASE_URL || false)
     : true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -80,7 +83,7 @@ app.use(limiter);
 
 const store = mongoStore.create({
   mongoUrl: process.env.MONGODB_URL || 'mongodb://localhost:27017/edumy',
-  secret: process.env.SESSION_SECRET || 'mysceret',
+  secret: sessionSecret,
   touchAfter: 24 * 3600
 });
 store.on("error", function (e) {
@@ -90,12 +93,15 @@ store.on("error", function (e) {
 const sessionConfig = {
   store,
   name: 'session',
-  secret: process.env.SESSION_SECRET || 'mysceret',
+  secret: sessionSecret,
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false,
+  proxy: isProduction,
   cookie: {
     httpOnly: true,
-    expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
+    sameSite: 'lax',
+    secure: isProduction,
+    expires: new Date(Date.now() + (1000 * 60 * 60 * 24 * 7)),
     maxAge: 1000 * 60 * 60 * 24 * 7
   }
 }
@@ -170,7 +176,7 @@ app.use(async (req, res, next) => {
   try {
     const User = require('./models/user');
     const Course = require('./models/course');
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).select('enrolledCourses');
 
     if (!user || !Array.isArray(user.enrolledCourses)) {
       return next();
@@ -262,7 +268,7 @@ app.all('*', (req, res, next) => {
 });
 
 // Production error handler
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   const { statusCode = 500 } = err;
   if (!err.message) err.message = 'Oh No, Something Went Wrong!';
   res.status(statusCode).render('error', { err });
@@ -288,30 +294,48 @@ function getLanAddresses() {
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-const server = app.listen(PORT, HOST, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+let server = null;
 
-  const lanAddresses = getLanAddresses();
-  if (lanAddresses.length > 0) {
-    lanAddresses.forEach((ip) => {
-      console.log(`LAN URL: http://${ip}:${PORT}`);
+async function startServer() {
+  await connectDB();
+
+  server = app.listen(PORT, HOST, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+
+    const lanAddresses = getLanAddresses();
+    if (lanAddresses.length > 0) {
+      lanAddresses.forEach((ip) => {
+        console.log(`LAN URL: http://${ip}:${PORT}`);
+      });
+    } else {
+      console.log('LAN URL: Unable to detect LAN IP automatically.');
+    }
+
+    console.log('You can now access Edumy from phone, Unity VR, or other devices on the same network.');
+  });
+}
+
+async function shutdown(signal) {
+  console.log(`${signal} received, shutting down gracefully`);
+
+  if (server) {
+    await new Promise((resolve) => {
+      server.close(() => resolve());
     });
-  } else {
-    console.log('LAN URL: Unable to detect LAN IP automatically.');
   }
 
-  console.log('You can now access Edumy from phone, Unity VR, or other devices on the same network.');
+  await closeDB();
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
+
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    closeDB();
-  });
+  shutdown('SIGTERM').finally(() => process.exit(0));
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    closeDB();
-  });
+  shutdown('SIGINT').finally(() => process.exit(0));
 });

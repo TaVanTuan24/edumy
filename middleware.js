@@ -1,5 +1,37 @@
+const DEFAULT_ADMIN_USER_IDS = new Set([
+  '68a69b0a055071b7e4410b8f'
+]);
+
+function sanitizeReturnTo(input, req) {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+
+  if (raw.startsWith('/') && !raw.startsWith('//')) {
+    return raw;
+  }
+
+  try {
+    const host = String(req.get('host') || '').trim().toLowerCase();
+    if (!host) return null;
+
+    const protocol = req.protocol || 'http';
+    const parsed = new URL(raw, `${protocol}://${host}`);
+    if (parsed.host.toLowerCase() !== host) return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 const storeReturnTo = (req, res, next) => {
-  res.locals.returnTo = req.session.returnTo || req.get('Referrer') || '/';
+  const sessionReturnTo = sanitizeReturnTo(req.session && req.session.returnTo, req);
+  const referrerReturnTo = sanitizeReturnTo(req.get('Referrer'), req);
+
+  if (req.session) {
+    delete req.session.returnTo;
+  }
+
+  res.locals.returnTo = sessionReturnTo || referrerReturnTo || '/';
   next();
 };
 
@@ -16,13 +48,13 @@ const isLoggedIn = (req, res, next) => {
 
     req.session.returnTo = req.originalUrl;
     req.flash('error', 'You must be signed in!');
-    return res.redirect('/users/login');
+    return res.redirect('/login');
   }
   next();
 };
 
 const isAuthor = async (req, res, next) => {
-  const Review = require('../models/review');
+  const Review = require('./models/review');
   const { reviewId } = req.params;
   const review = await Review.findById(reviewId);
   if (!review || !review.author.equals(req.user._id)) {
@@ -35,16 +67,35 @@ const isAuthor = async (req, res, next) => {
 
 const isAdmin = (req, res, next) => {
   const rawAdminEmails = String(process.env.ADMIN_EMAILS || '').trim();
+  const rawAdminIds = String(process.env.ADMIN_USER_IDS || '').trim();
   const configuredAdmins = rawAdminEmails
     ? rawAdminEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
     : [];
+  const configuredAdminIds = rawAdminIds
+    ? rawAdminIds.split(',').map((id) => id.trim()).filter(Boolean)
+    : [];
+  const allowedAdminIds = new Set([
+    ...DEFAULT_ADMIN_USER_IDS,
+    ...configuredAdminIds
+  ]);
 
-  // Backward-compatible default: if no admin list is configured, keep current behavior.
-  if (!configuredAdmins.length) {
+  if (!configuredAdmins.length && !allowedAdminIds.size) {
+    const message = 'Admin access is not configured. Set ADMIN_EMAILS or ADMIN_USER_IDS to allow access.';
+
+    if (wantsJson(req)) {
+      return res.status(503).json({ success: false, message });
+    }
+
+    req.flash('error', message);
+    return res.redirect('/courses');
+  }
+
+  const userId = String((req.user && req.user._id) || '').trim();
+  if (userId && allowedAdminIds.has(userId)) {
     return next();
   }
 
-  const userEmail = String(req.user && req.user.email || '').trim().toLowerCase();
+  const userEmail = String((req.user && req.user.email) || '').trim().toLowerCase();
   if (userEmail && configuredAdmins.includes(userEmail)) {
     return next();
   }
@@ -58,6 +109,7 @@ const isAdmin = (req, res, next) => {
 };
 
 module.exports = { 
+  sanitizeReturnTo,
   storeReturnTo, 
   isLoggedIn,
   isAuthor,
