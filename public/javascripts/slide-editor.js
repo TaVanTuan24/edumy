@@ -3,6 +3,10 @@
 
     const BASE_WIDTH = 1280;
     const BASE_HEIGHT = 720;
+    const MAX_TEXT_FONT_SIZE = 40;
+    const MIN_TEXT_FONT_SIZE = 10;
+    const IMAGE_MAX_WIDTH = Math.round(BASE_WIDTH * 0.7);
+    const IMAGE_MAX_HEIGHT = Math.round(BASE_HEIGHT * 0.65);
     const pageMeta = document.body && document.body.dataset ? document.body.dataset : {};
     const courseId = pageMeta.courseId || '';
     const sectionIndex = pageMeta.sectionIndex || '';
@@ -56,7 +60,8 @@
         previewCanvas: document.getElementById('previewCanvas'),
         previewModal: document.getElementById('previewModal'),
         guideX: null,
-        guideY: null
+        guideY: null,
+        textMeasure: null
     };
 
     document.addEventListener('DOMContentLoaded', init);
@@ -365,6 +370,9 @@
             item.y = Math.round(nextY);
             item.width = Math.round(nextW);
             item.height = Math.round(nextH);
+            if (item.type === 'text') {
+                fitTextElementToBounds(item);
+            }
 
             syncElementNode(item);
             renderProperties();
@@ -452,22 +460,21 @@
 
         const imageProbe = new Image();
         imageProbe.onload = function() {
-            console.log('[SlideEditor] Image loaded:', candidateSrc);
+            const fitted = fitImageSizeToCanvas(imageProbe.naturalWidth, imageProbe.naturalHeight);
 
             const item = {
                 id: uid('el'),
                 type: 'image',
-                x: 180,
-                y: 150,
-                width: 360,
-                height: 220,
+                x: Math.round((BASE_WIDTH - fitted.width) / 2),
+                y: Math.round((BASE_HEIGHT - fitted.height) / 2),
+                width: fitted.width,
+                height: fitted.height,
                 src: candidateSrc,
                 styles: {}
             };
 
             slide.elements.push(item);
             state.selectedElementId = item.id;
-            console.log('[SlideEditor] Elements:', slide.elements);
             renderAll();
         };
 
@@ -546,8 +553,9 @@
 
         if (selected.type === 'text') {
             selected.content = els.propText.value;
-            selected.styles.fontSize = clamp(toNumber(els.propFontSize.value, 28), 10, 120);
+            selected.styles.fontSize = clamp(toNumber(els.propFontSize.value, 28), MIN_TEXT_FONT_SIZE, MAX_TEXT_FONT_SIZE);
             selected.styles.color = els.propColor.value;
+            fitTextElementToBounds(selected);
         }
 
         if (selected.type === 'image') {
@@ -603,6 +611,7 @@
 
         probe.onload = function() {
             selected.src = nextSrc;
+            applyImageNaturalSize(selected, probe);
             renderCanvas();
             renderLayersList();
             renderProperties();
@@ -721,17 +730,19 @@
                 image.alt = 'Slide image';
                 image.style.width = '100%';
                 image.style.height = '100%';
-                image.style.objectFit = 'cover';
+                image.style.objectFit = 'contain';
                 node.appendChild(image);
                 els.previewCanvas.appendChild(node);
                 return;
             }
 
+            fitTextElementToBounds(element);
             node.style.fontSize = (element.styles.fontSize || 28) + 'px';
             node.style.color = element.styles.color || '#1c1d1f';
             node.style.fontWeight = String(element.styles.fontWeight || 400);
             node.style.textAlign = element.styles.textAlign || 'left';
             node.style.whiteSpace = 'pre-wrap';
+            node.style.overflowWrap = 'anywhere';
             node.style.lineHeight = '1.25';
             node.textContent = element.content || '';
 
@@ -842,15 +853,20 @@
                 image.src = item.src || '';
                 image.alt = 'Slide image';
                 image.loading = 'lazy';
+                image.style.width = '100%';
+                image.style.height = '100%';
+                image.style.objectFit = 'contain';
                 image.addEventListener('error', function() {
                     console.error('[SlideEditor] Invalid image URL:', item.src || '');
                 }, { once: true });
                 node.appendChild(image);
             } else {
+                fitTextElementToBounds(item);
                 node.style.fontSize = (item.styles.fontSize || 28) + 'px';
                 node.style.color = item.styles.color || '#1c1d1f';
                 node.style.fontWeight = String(item.styles.fontWeight || 400);
                 node.style.textAlign = item.styles.textAlign || 'left';
+                node.style.overflowWrap = 'anywhere';
                 node.textContent = item.content || 'Text';
             }
 
@@ -957,11 +973,14 @@
             title: slide.title || ('Slide ' + (index + 1)),
             layout: slide.layout || 'left-text',
             theme: slide.theme || 'light',
+            template: slide.template || '',
+            semantic: slide.semantic && typeof slide.semantic === 'object' ? slide.semantic : null,
+            validation: slide.validation && typeof slide.validation === 'object' ? slide.validation : null,
             elements: Array.isArray(slide.elements) ? slide.elements : []
         };
 
         safeSlide.elements = safeSlide.elements.map(function(item) {
-            return {
+            const normalized = {
                 id: item.id || uid('el'),
                 type: item.type === 'image' ? 'image' : 'text',
                 x: clamp(toNumber(item.x, 40), 0, BASE_WIDTH),
@@ -971,12 +990,22 @@
                 content: item.content || item.text || 'Text',
                 src: item.src || '',
                 styles: {
-                    fontSize: clamp(toNumber(item.styles && item.styles.fontSize, toNumber(item.fontSize, 28)), 10, 120),
+                    fontSize: clamp(toNumber(item.styles && item.styles.fontSize, toNumber(item.fontSize, 28)), MIN_TEXT_FONT_SIZE, MAX_TEXT_FONT_SIZE),
                     color: (item.styles && item.styles.color) || item.color || '#1c1d1f',
                     fontWeight: toNumber(item.styles && item.styles.fontWeight, item.bold ? 700 : 400),
                     textAlign: (item.styles && item.styles.textAlign) || item.align || 'left'
                 }
             };
+            if (normalized.type === 'text') {
+                fitTextElementToBounds(normalized);
+            } else if (normalized.width > IMAGE_MAX_WIDTH || normalized.height > IMAGE_MAX_HEIGHT) {
+                const fitted = fitImageSizeToCanvas(normalized.width, normalized.height);
+                normalized.width = fitted.width;
+                normalized.height = fitted.height;
+                normalized.x = clamp(normalized.x, 0, BASE_WIDTH - normalized.width);
+                normalized.y = clamp(normalized.y, 0, BASE_HEIGHT - normalized.height);
+            }
+            return normalized;
         });
 
         return safeSlide;
@@ -1012,8 +1041,12 @@
         return (Array.isArray(slides) ? slides : []).map(function(slide, slideIndex) {
             return {
                 id: slide.id || ('slide-' + (slideIndex + 1)),
+                title: slide.title || ('Slide ' + (slideIndex + 1)),
                 layout: slide.layout || 'left-text',
                 theme: slide.theme || 'light',
+                template: slide.template || undefined,
+                semantic: slide.semantic || undefined,
+                validation: slide.validation || undefined,
                 elements: (Array.isArray(slide.elements) ? slide.elements : []).map(function(element, elementIndex) {
                     const isImage = element.type === 'image';
                     const textAlign = element.styles && element.styles.textAlign;
@@ -1024,9 +1057,11 @@
                         type: isImage ? 'image' : 'text',
                         x: toNumber(element.x, 0),
                         y: toNumber(element.y, 0),
+                        width: clamp(toNumber(element.width, isImage ? 320 : 280), 40, BASE_WIDTH),
+                        height: clamp(toNumber(element.height, isImage ? 220 : 80), 30, BASE_HEIGHT),
                         text: isImage ? undefined : String(element.content || ''),
                         src: isImage ? String(element.src || '') : undefined,
-                        fontSize: isImage ? undefined : clamp(toNumber(element.styles && element.styles.fontSize, 28), 10, 120),
+                        fontSize: isImage ? undefined : clamp(toNumber(element.styles && element.styles.fontSize, 28), MIN_TEXT_FONT_SIZE, MAX_TEXT_FONT_SIZE),
                         color: isImage ? undefined : String((element.styles && element.styles.color) || '#1c1d1f'),
                         align: isImage ? undefined : normalizedAlign,
                         bold: isImage ? undefined : toNumber(element.styles && element.styles.fontWeight, 400) >= 600
@@ -1078,6 +1113,78 @@
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    function fitImageSizeToCanvas(rawWidth, rawHeight) {
+        const width = Math.max(1, Math.round(Number(rawWidth) || 1));
+        const height = Math.max(1, Math.round(Number(rawHeight) || 1));
+        const ratio = Math.min(
+            1,
+            IMAGE_MAX_WIDTH / width,
+            IMAGE_MAX_HEIGHT / height,
+            BASE_WIDTH / width,
+            BASE_HEIGHT / height
+        );
+
+        return {
+            width: Math.max(40, Math.round(width * ratio)),
+            height: Math.max(40, Math.round(height * ratio))
+        };
+    }
+
+    function applyImageNaturalSize(element, image) {
+        if (!element || element.type !== 'image' || !image) return;
+
+        const fitted = fitImageSizeToCanvas(image.naturalWidth, image.naturalHeight);
+        element.width = fitted.width;
+        element.height = fitted.height;
+        element.x = clamp(element.x, 0, BASE_WIDTH - element.width);
+        element.y = clamp(element.y, 0, BASE_HEIGHT - element.height);
+    }
+
+    function ensureTextMeasureNode() {
+        if (els.textMeasure && document.body.contains(els.textMeasure)) {
+            return els.textMeasure;
+        }
+
+        const node = document.createElement('div');
+        node.style.position = 'absolute';
+        node.style.visibility = 'hidden';
+        node.style.pointerEvents = 'none';
+        node.style.left = '-99999px';
+        node.style.top = '-99999px';
+        node.style.whiteSpace = 'pre-wrap';
+        node.style.overflowWrap = 'anywhere';
+        node.style.wordBreak = 'break-word';
+        node.style.lineHeight = '1.25';
+        document.body.appendChild(node);
+        els.textMeasure = node;
+        return node;
+    }
+
+    function fitTextElementToBounds(element) {
+        if (!element || element.type !== 'text') return;
+
+        const measure = ensureTextMeasureNode();
+        const width = Math.max(24, Number(element.width || 0) - 16);
+        const height = Math.max(24, Number(element.height || 0) - 12);
+        const content = String(element.content || '').trim() || 'Text';
+        let fontSize = clamp(toNumber(element.styles && element.styles.fontSize, 28), MIN_TEXT_FONT_SIZE, MAX_TEXT_FONT_SIZE);
+
+        measure.style.width = width + 'px';
+        measure.style.fontWeight = String(element.styles && element.styles.fontWeight || 400);
+        measure.style.textAlign = element.styles && element.styles.textAlign || 'left';
+        measure.textContent = content;
+
+        while (fontSize > MIN_TEXT_FONT_SIZE) {
+            measure.style.fontSize = fontSize + 'px';
+            if (measure.scrollWidth <= width + 1 && measure.scrollHeight <= height + 1) {
+                break;
+            }
+            fontSize -= 1;
+        }
+
+        element.styles.fontSize = clamp(fontSize, MIN_TEXT_FONT_SIZE, MAX_TEXT_FONT_SIZE);
     }
 
     function ensureGuides() {

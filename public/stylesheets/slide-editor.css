@@ -325,6 +325,16 @@
     padding: 6px 8px;
     white-space: pre-wrap;
     line-height: 1.25;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.slide-element.image-element img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
 }
 
 .se-list-item.drag-over {

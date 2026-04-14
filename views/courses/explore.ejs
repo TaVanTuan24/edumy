@@ -1,52 +1,99 @@
 <% layout('/layouts/boilerplate') %>
-    <div class="mb-5">
-        <div class="position-relative text-white text-center"
-            style="background-image: url('/images/picture.png'); background-size: cover; background-position: center; height: 280px;">
-            <div class="position-absolute top-0 start-0 w-100 h-100" style="background-color: rgba(0,0,0,0.5);"></div>
-            <div class="position-relative py-5">
-                <h1 class="display-5 fw-bold">Kh√°m ph√° Th·∫ø gi·ªõi Tri th·ª©c</h1>
-                <p class="lead">H√†ng ch·ª•c kh√≥a h·ªçc thu·ªôc nhi·ªÅu ch·ªß ƒë·ªÅ kh√°c nhau: C√¥ng ngh·ªá, AI, Ng√¥n ng·ªØ, v√† h∆°n th·∫ø
-                    n·ªØa.</p>
-            </div>
+<link rel="stylesheet" href="/stylesheets/course-pages.css">
+
+<%
+  const topics = Object.keys(groupedCourses || {});
+  const totalCourses = topics.reduce((sum, topic) => sum + groupedCourses[topic].length, 0);
+%>
+
+<div class="course-discovery-page">
+  <div class="discovery-shell">
+    <section class="discovery-hero">
+      <div>
+        <span class="discovery-eyebrow">Explore Learning</span>
+        <h1 class="discovery-title">Kh·m ph· khÛa h?c ph˘ h?p cho m?c tiÍu ti?p theo c?a b?n</h1>
+        <p class="discovery-lead">
+          Duy?t theo t?ng ch? d?, xem nhanh ch?t lu?ng khÛa h?c v‡ tÏm d˙ng n?i dung b?n mu?n h?c m‡ khÙng ph?i d?c qua m?t danh s·ch card don di?u.
+        </p>
+
+        <div class="discovery-stats">
+          <div class="discovery-stat">
+            <span class="discovery-stat-value"><%= totalCourses %></span>
+            <span class="discovery-stat-label">KhÛa h?c dang m?</span>
+          </div>
+          <div class="discovery-stat">
+            <span class="discovery-stat-value"><%= topics.length %></span>
+            <span class="discovery-stat-label">Ch? d? dang cÛ</span>
+          </div>
+          <div class="discovery-stat">
+            <span class="discovery-stat-value">Preview</span>
+            <span class="discovery-stat-label">CÛ th? xem tru?c tru?c khi tham gia</span>
+          </div>
         </div>
-    </div>
+      </div>
 
-    <h3 class="mb-4">Danh m·ª•c kh√≥a h·ªçc</h3>
+      <div class="discovery-hero-card">
+        <h3>B?t d?u t? m?t b‡i h?c nh? hÙm nay</h3>
+        <ul class="discovery-checklist">
+          <li>H?c d?u m?i ng‡y s? t?o ra kh·c bi?t l?n sau v‡i th·ng.</li>
+          <li>M?i khÛa h?c ho‡n th‡nh l‡ m?t k? nang th?c t? b?n th?t s? s? h?u.</li>
+          <li>B?t d?u ngay v?i ch? d? khi?n b?n tÚ mÚ nh?t r?i di ti?p t? dÛ.</li>
+        </ul>
+      </div>
+    </section>
 
-    <% for (let topic in groupedCourses) { %>
-        <h4 class="mt-4">
-            <%= topic %>
-        </h4>
-        <div class="row">
-            <% groupedCourses[topic].forEach(course=> { %>
-                <div class="col-md-4">
-                    <div class="card mb-3 shadow-sm">
-                        <img src="<%= course.images[0]?.url || '/default.png' %>" class="card-img-top"
-                            alt="Course image">
-                        <div class="card-body">
-                            <h5 class="card-title">
-                                <%= course.title %>
-                            </h5>
-                            <p class="card-text">
-                                <%= course.description.slice(0, 100) %>...
-                            </p>
-                            <% if (course.totalReviews> 0) { %>
-                                <p class="mb-1 text-warning fw-semibold">
-                                    <%= course.avgRating %>
-                                        <% for (let i=1; i <=5; i++) { %>
-                                            <% if (i <=Math.floor(course.avgRating)) { %>‚òÖ<% } else { %>‚òÜ<% } %>
-                                                        <% } %>
-                                                            <span class="text-muted small">(<%= course.totalReviews %>
-                                                                    )</span>
-                                </p>
-                                <% } else { %>
-                                    <p class="text-muted small fst-italic">Ch∆∞a c√≥ ƒë√°nh gi√°</p>
-                                    <% } %>
-                                        <a href="/explore/<%= course._id %>/preview" class="btn btn-primary">Xem chi
-                                            ti·∫øt</a>
-                        </div>
-                    </div>
+    <% if (!topics.length) { %>
+      <section class="topic-section">
+        <div class="alert alert-light border">Chua cÛ khÛa h?c n‡o d? hi?n th?.</div>
+      </section>
+    <% } %>
+
+    <% topics.forEach((topic) => { %>
+      <section class="topic-section">
+        <div class="topic-head">
+          <div>
+            <h2 class="topic-title"><%= topic %></h2>
+            <div class="topic-meta"><%= groupedCourses[topic].length %> khÛa h?c trong ch? d? n‡y</div>
+          </div>
+        </div>
+
+        <div class="course-card-grid">
+          <% groupedCourses[topic].forEach((course) => { %>
+            <article class="course-discovery-card">
+              <div class="course-card-media">
+                <img src="<%= course.images[0]?.url || '/default.png' %>" alt="<%= course.title %>">
+                <span class="course-card-badge">Preview available</span>
+              </div>
+
+              <div class="course-card-body">
+                <h3 class="course-card-title"><%= course.title %></h3>
+                <p class="course-card-description">
+                  <%= (course.description || '').slice(0, 140) %><%= course.description && course.description.length > 140 ? '...' : '' %>
+                </p>
+
+                <div class="course-card-rating">
+                  <% if (course.totalReviews > 0) { %>
+                    <strong><%= course.avgRating %></strong>
+                    <span class="course-rating-stars">
+                      <% for (let i = 1; i <= 5; i++) { %>
+                        <%= i <= Math.floor(course.avgRating) ? '?' : '?' %>
+                      <% } %>
+                    </span>
+                    <span class="text-muted small">(<%= course.totalReviews %> reviews)</span>
+                  <% } else { %>
+                    <span class="text-muted small fst-italic">Chua cÛ d·nh gi·</span>
+                  <% } %>
                 </div>
-                <% }) %>
+
+                <div class="course-card-footer">
+                  <span class="course-card-topic"><%= topic %></span>
+                  <a href="/explore/<%= course._id %>/preview" class="btn btn-primary">Xem preview</a>
+                </div>
+              </div>
+            </article>
+          <% }) %>
         </div>
-        <% } %>
+      </section>
+    <% }) %>
+  </div>
+</div>

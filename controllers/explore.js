@@ -1,5 +1,6 @@
 const Course = require('../models/course');
 const User = require('../models/user');
+const { generateCourseDescription } = require('../utils/courseDescriptionGenerator');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -37,7 +38,8 @@ module.exports.previewCourse = async (req, res) => {
             populate: { path: 'author' }
         });
     if (!course) return res.redirect('/explore');
-    res.render('courses/preview', { course });
+    const generatedDescription = await generateCourseDescription(course);
+    res.render('courses/preview-modern', { course, generatedDescription });
 };
 
 module.exports.enrollCourse = async (req, res) => {

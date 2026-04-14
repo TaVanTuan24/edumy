@@ -7,6 +7,12 @@ const User = require("../models/user")
 const Video = require("../models/video")
 const Transcript = require("../models/Transcript")
 const { awardGamification } = require('../utils/gamification')
+const {
+    buildSlidePrompt,
+    parseAiSlideResponse,
+    createFallbackResolvedSlides,
+    resolveDraftSlides
+} = require('../utils/aiSlidePipeline')
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req, res, next) => {
@@ -230,38 +236,154 @@ router.get("/list", async (req, res) => {
 
 router.post("/generate-slide", async (req, res) => {
     try {
-        const userPrompt = String(req.body.prompt || '').trim();
-        const style = String(req.body.style || 'professional').toLowerCase();
-        const count = Math.min(Math.max(parseInt(req.body.count, 10) || 5, 3), 5);
+        const userPrompt = String(req.body.prompt || '').trim()
+        const style = String(req.body.style || 'professional').toLowerCase()
+        const count = Math.min(Math.max(parseInt(req.body.count, 10) || 5, 3), 8)
+        const language = String(req.body.language || 'English').trim()
 
         if (!userPrompt) {
-            return res.status(400).json({ error: 'Prompt is required' });
+            return res.status(400).json({ error: 'Prompt is required' })
         }
 
-        const _safeStyle = ['professional', 'minimal'].includes(style) ? style : 'professional';
-        const trimmedPrompt = userPrompt.slice(0, 1000);
+        const safeStyle = ['professional', 'minimal', 'modern', 'dark'].includes(style) ? style : 'professional'
+        const trimmedPrompt = userPrompt.slice(0, 1000)
+        const prompt = buildSlidePrompt({
+            topic: trimmedPrompt,
+            count,
+            style: safeStyle,
+            language
+        })
 
-        const prompt = `You are a professional presentation designer (like Canva / PowerPoint AI).\n\nYour job is NOT to generate text.\nYour job is to DESIGN slides visually.\n\nGOAL:\nGenerate ${count} BEAUTIFUL slides.\nTopic: ${trimmedPrompt}\n\nEach slide must:\n- Have layout\n- Have spacing\n- Have hierarchy\n- Use full canvas (1003x563)\n\nDESIGN SYSTEM:\nEach slide MUST choose ONE layout:\n1) left-text\n2) center-title\n3) two-columns\nDo NOT use the same layout for all slides.\n\nCANVAS:\nWidth: 1003\nHeight: 563\n\nELEMENT RULES:\nEach slide MUST have:\n- 1 Title\n- 2-4 content elements\n- Text elements ONLY (no images)\n\nCONTENT RULES:\n- Keep text SHORT (max 8 words per line)\n- Use bullet style: "• something"\n- Avoid long paragraphs\n\nOUTPUT FORMAT (STRICT JSON ONLY):\n{\n  "slides": [\n    {\n      "id": "slide-1",\n      "layout": "left-text",\n      "theme": "light",\n      "title": "Slide Title",\n      "bullets": ["• Bullet 1", "• Bullet 2", "• Bullet 3"]\n    }\n  ]\n}\n\nFORBIDDEN:\n- DO NOT stack elements\n- DO NOT reuse same y\n- DO NOT return 1 element slide\n- DO NOT output markdown\n\nRETURN JSON ONLY`;
+        const result = await generateWithRetry(prompt, 3, {
+            topic: trimmedPrompt,
+            requestedCount: count,
+            style: safeStyle,
+            language
+        })
 
-        const slides = await generateWithRetry(prompt, 3, trimmedPrompt);
-
-        const gamificationUser = await User.findById(req.user._id);
+        const gamificationUser = await User.findById(req.user._id)
         if (gamificationUser) {
-            await awardGamification(gamificationUser, { action: 'aiSlideGenerate' });
+            await awardGamification(gamificationUser, { action: 'aiSlideGenerate' })
         }
 
-        res.json({ success: true, slides: slides });
+        res.json({
+            success: true,
+            slides: result.slides,
+            draftSlides: result.semanticSlides,
+            semanticSlides: result.semanticSlides,
+            examples: result.examples
+        })
     } catch (err) {
-        console.error('AI Slide Error:', err.message);
-        const fallback = buildFallbackSlides();
+        console.error('AI Slide Error:', err.message)
+        const fallback = createFallbackResolvedSlides(req.body && req.body.prompt)
         res.status(200).json({
             success: true,
             slides: fallback,
+            draftSlides: [],
+            semanticSlides: [],
+            examples: [],
             fallback: true,
             error: 'Failed to generate slides'
-        });
+        })
     }
-});
+})
+
+router.post("/resolve-slide-draft", async (req, res) => {
+    try {
+        const slides = Array.isArray(req.body && req.body.slides) ? req.body.slides : []
+        const topic = String(req.body && req.body.prompt || '').trim()
+        const style = String(req.body && req.body.style || 'professional').toLowerCase()
+        const language = String(req.body && req.body.language || 'English').trim()
+        const safeStyle = ['professional', 'minimal', 'modern', 'dark'].includes(style) ? style : 'professional'
+
+        if (!slides.length) {
+            return res.status(400).json({ success: false, error: 'Draft slides are required' })
+        }
+
+        const result = resolveDraftSlides(slides, {
+            topic,
+            requestedCount: slides.length,
+            style: safeStyle,
+            language
+        })
+
+        return res.json({
+            success: true,
+            slides: result.slides,
+            draftSlides: result.semanticSlides,
+            semanticSlides: result.semanticSlides,
+            examples: result.examples
+        })
+    } catch (err) {
+        console.error('AI Slide Resolve Error:', err.message)
+        return res.status(500).json({ success: false, error: 'Failed to resolve draft slides' })
+    }
+})
+
+router.post("/generate-slide-refine", async (req, res) => {
+    try {
+        const promptTopic = String(req.body && req.body.prompt || '').trim()
+        const style = String(req.body && req.body.style || 'professional').toLowerCase()
+        const language = String(req.body && req.body.language || 'English').trim()
+        const action = String(req.body && req.body.action || 'regenerate').toLowerCase()
+        const currentSlide = req.body && req.body.slide && typeof req.body.slide === 'object' ? req.body.slide : {}
+        const safeStyle = ['professional', 'minimal', 'modern', 'dark'].includes(style) ? style : 'professional'
+
+        if (!promptTopic) {
+            return res.status(400).json({ success: false, error: 'Prompt is required' })
+        }
+
+        const slideContext = JSON.stringify(currentSlide || {})
+        const refinePrompt = [
+            'You are a professional presentation slide generator.',
+            '',
+            'Your job is to create clean, concise, visually structured slide content.',
+            '',
+            'Rules:',
+            '- Return JSON only',
+            '- Do not include explanations',
+            '- Do not use coordinates',
+            '- Use only structured content',
+            '- Generate exactly 1 slide',
+            '- Use one of these templates when appropriate: ["title-center", "title-content", "bullet-list", "two-column", "section-divider", "title-left-content-right", "summary-slide"]',
+            '- Keep bullet points short (max 10-12 words)',
+            '- Avoid repetition and placeholders like [object Object]',
+            '- Content must be meaningful and educational',
+            '',
+            `Action: ${action === 'improve' ? 'Improve and strengthen this slide draft' : 'Regenerate this slide draft with a fresh angle'}`,
+            `Presentation topic: ${promptTopic}`,
+            `Visual style: ${safeStyle}`,
+            `Language: ${language}`,
+            `Current slide draft: ${slideContext}`,
+            '',
+            'Return format:',
+            '{',
+            '  "slides": [',
+            '    {',
+            '      "template": "bullet-list",',
+            '      "title": "...",',
+            '      "bullets": ["...", "...", "..."]',
+            '    }',
+            '  ]',
+            '}'
+        ].join('\n')
+
+        const result = await generateWithRetry(refinePrompt, 2, {
+            topic: promptTopic,
+            requestedCount: 1,
+            style: safeStyle,
+            language
+        })
+
+        return res.json({
+            success: true,
+            slide: Array.isArray(result.semanticSlides) && result.semanticSlides[0] ? result.semanticSlides[0] : null
+        })
+    } catch (err) {
+        console.error('AI Slide Refine Error:', err.message)
+        return res.status(500).json({ success: false, error: 'Failed to refine slide' })
+    }
+})
 
 // Get a specific chat with all messages
 router.get("/:id", async (req, res) => {
@@ -421,89 +543,37 @@ function normalizeQuizQuestion(item) {
     return { question, answers }
 }
 
-function parseSlideJson(raw, _topic) {
-    const cleaned = cleanAIResponse(raw)
-    let parsed = null
+function parseSlideJson(raw, options) {
     try {
-        parsed = safeParseJSON(cleaned)
-    } catch {
-        return []
-    }
-
-    const slides = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed && parsed.slides)
-            ? parsed.slides
-            : []
-
-    const normalized = slides.map((slide, index) => normalizeSlide(slide, index, _topic)).filter(Boolean)
-    return smartLayoutEnhance(normalized)
-}
-
-function normalizeSlide(slide, index, topic) {
-    if (!slide || typeof slide !== 'object') return null
-
-    const slideId = String(slide.id || `slide-${index + 1}`)
-    const elementsSource = Array.isArray(slide.elements) ? slide.elements : []
-
-    if (!elementsSource.length) {
-        return applyTemplate(slide, index, topic)
-    }
-
-    const elements = elementsSource.map((el, elIndex) => normalizeSlideElement(el, index, elIndex)).filter(Boolean)
-    if (!elements.length) return null
-
-    return {
-        id: slideId,
-        layout: normalizeLayout(slide.layout, index),
-        theme: normalizeTheme(slide.theme, index),
-        elements
+        return parseAiSlideResponse(raw, options)
+    } catch (error) {
+        console.warn('AI Slide Parse Error:', error.message)
+        return {
+            semanticSlides: [],
+            slides: createFallbackResolvedSlides(options && options.topic),
+            examples: []
+        }
     }
 }
 
-function normalizeSlideElement(el, slideIndex, elementIndex) {
-    if (!el || typeof el !== 'object') return null
-
-    const type = 'text'
-    const id = String(el.id || `el-${slideIndex + 1}-${elementIndex + 1}`)
-    const x = Number.isFinite(Number(el.x)) ? Number(el.x) : 100
-    const y = Number.isFinite(Number(el.y)) ? Number(el.y) : 100
-    const fontSize = Number.isFinite(Number(el.fontSize)) ? Number(el.fontSize) : (type === 'text' ? 24 : 20)
-    const color = String(el.color || '#1c1d1f')
-    const align = ['left', 'center', 'right'].includes(String(el.align || 'left')) ? String(el.align) : 'left'
-    const bold = Boolean(el.bold)
-
-    const text = String(el.text || 'Placeholder text').trim()
-    const src = ''
-
-    return {
-        id,
-        type,
-        x,
-        y,
-        text,
-        src,
-        fontSize,
-        color,
-        align,
-        bold
-    }
-}
-
-async function generateWithRetry(prompt, retries, _topic) {
+async function generateWithRetry(prompt, retries, options) {
     for (let attempt = 0; attempt < retries; attempt += 1) {
         try {
             const raw = await callOllama(prompt)
-            const slides = parseSlideJson(raw, _topic)
-            if (slides.length) {
-                return slides
+            const result = parseSlideJson(raw, options)
+            if (Array.isArray(result.slides) && result.slides.length) {
+                return result
             }
         } catch (error) {
             console.warn('AI Slide Retry', attempt + 1, error.message)
         }
     }
 
-    return buildFallbackSlides()
+    return {
+        semanticSlides: [],
+        slides: createFallbackResolvedSlides(options && options.topic),
+        examples: []
+    }
 }
 
 async function callOllama(prompt) {
@@ -518,239 +588,6 @@ async function callOllama(prompt) {
     )
 
     return ai.data && ai.data.response ? String(ai.data.response) : ''
-}
-
-function cleanAIResponse(text) {
-    return String(text || '')
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .replace(/`json/gi, '')
-        .trim()
-}
-
-function safeParseJSON(text) {
-    try {
-        return JSON.parse(text)
-    } catch (err) {
-        const match = String(text || '').match(/{[\s\S]*}/)
-        if (!match) throw err
-        return JSON.parse(match[0])
-    }
-}
-
-function buildFallbackSlides() {
-    return [
-        {
-            id: 'fallback-1',
-            elements: [
-                {
-                    id: 'el-1-1',
-                    type: 'text',
-                    x: 200,
-                    y: 200,
-                    text: 'Failed to generate slide',
-                    fontSize: 32,
-                    color: '#1c1d1f',
-                    align: 'center',
-                    bold: true
-                }
-            ]
-        }
-    ]
-}
-
-function applySlideLayout(elements, layout) {
-    const CANVAS_HEIGHT = 563
-    const textElements = elements.filter((el) => el.type === 'text')
-    const imageElements = elements.filter((el) => el.type === 'image')
-
-    const trimmedText = textElements.slice(0, 6)
-    const keepIds = new Set(trimmedText.map((el) => el.id))
-    const layouted = elements.filter((el) => el.type === 'image' || keepIds.has(el.id))
-
-    if (!trimmedText.length) {
-        return layouted
-    }
-
-    const title = trimmedText[0]
-    const bulletStartY = 200
-    const bulletSpacing = 60
-
-    if (layout === 'center-title') {
-        title.x = clampNumber(title.x, 200, 300, 240)
-        title.y = clampNumber(title.y, 180, 220, 200)
-        title.fontSize = clampNumber(title.fontSize, 44, 54, 48)
-        title.align = 'center'
-    } else if (layout === 'two-columns') {
-        title.x = clampNumber(title.x, 180, 240, 200)
-        title.y = clampNumber(title.y, 50, 80, 60)
-        title.fontSize = clampNumber(title.fontSize, 36, 44, 40)
-        title.align = 'center'
-    } else {
-        title.x = clampNumber(title.x, 120, 300, 160)
-        title.y = clampNumber(title.y, 60, 100, 80)
-        title.fontSize = clampNumber(title.fontSize, 36, 48, 40)
-        title.align = title.align === 'center' ? 'center' : 'left'
-    }
-    title.bold = true
-
-    trimmedText.slice(1).forEach((item, idx) => {
-        if (layout === 'two-columns') {
-            const isRight = idx >= 2
-            item.x = isRight ? 550 : 120
-            item.y = 200 + (idx % 2) * bulletSpacing
-        } else if (layout === 'center-title') {
-            item.x = clampNumber(item.x, 220, 300, 250)
-            item.y = clampNumber(item.y, 280, 340, 300)
-            item.align = 'center'
-        } else {
-            item.x = 140
-            item.y = clampNumber(bulletStartY + idx * bulletSpacing, 200, CANVAS_HEIGHT - 40, bulletStartY)
-        }
-        item.fontSize = clampNumber(item.fontSize, 20, 24, 22)
-        item.align = item.align || 'left'
-        item.bold = Boolean(item.bold)
-    })
-
-    if (imageElements.length) {
-        imageElements.forEach((image) => {
-            image.x = clampNumber(image.x, 620, 720, 650)
-            image.y = clampNumber(image.y, 180, CANVAS_HEIGHT - 260, 200)
-        })
-    }
-
-    return layouted
-}
-
-function clampNumber(value, min, max, fallback) {
-    const numeric = Number.isFinite(Number(value)) ? Number(value) : fallback
-    return Math.max(min, Math.min(max, numeric))
-}
-
-function smartLayoutEnhance(slides) {
-    return (Array.isArray(slides) ? slides : []).map((slide, index) => {
-        if (!slide || !Array.isArray(slide.elements)) return slide
-
-        const elements = slide.elements.slice(0, 6)
-        const textElements = elements.filter((el) => el.type === 'text')
-
-        const hasTitle = textElements.some((el) => Number(el.fontSize) >= 36)
-        if (!hasTitle && elements[0] && elements[0].type === 'text') {
-            elements[0].fontSize = 42
-            elements[0].bold = true
-            elements[0].y = 80
-        }
-
-        if (elements.length < 3) {
-            let y = 220
-            let autoIndex = elements.length
-            for (let i = elements.length; i < 4; i += 1) {
-                elements.push({
-                    id: `auto-${index + 1}-${autoIndex + 1}`,
-                    type: 'text',
-                    x: 150,
-                    y: y,
-                    text: '• Additional content',
-                    fontSize: 22,
-                    color: '#1c1d1f',
-                    align: 'left',
-                    bold: false
-                })
-                y += 60
-                autoIndex += 1
-            }
-        }
-
-        let y = 220
-        elements.forEach((el, i) => {
-            if (i === 0 || el.type !== 'text') return
-            el.y = y
-            y += 60
-        })
-
-        slide.elements = applySlideLayout(elements, slide.layout)
-        return slide
-    })
-}
-
-const SLIDE_LAYOUTS = ['left-text', 'center-title', 'two-columns']
-const SLIDE_THEMES = ['light', 'dark', 'purple', 'blue']
-
-function normalizeLayout(layout, index) {
-    const value = String(layout || '').trim().toLowerCase()
-    if (SLIDE_LAYOUTS.includes(value)) return value
-    return SLIDE_LAYOUTS[index % SLIDE_LAYOUTS.length]
-}
-
-function normalizeTheme(theme, index) {
-    const value = String(theme || '').trim().toLowerCase()
-    if (SLIDE_THEMES.includes(value)) return value
-    return SLIDE_THEMES[index % SLIDE_THEMES.length]
-}
-
-function normalizeBullets(bullets) {
-    const list = Array.isArray(bullets) ? bullets : []
-    return list
-        .map((item) => String(item || '').trim())
-        .filter(Boolean)
-        .slice(0, 4)
-        .map((item) => item.startsWith('•') ? item : `• ${item}`)
-}
-
-function applyTemplate(slide, index, _topic) {
-    const layout = normalizeLayout(slide.layout, index)
-    const theme = normalizeTheme(slide.theme, index)
-    const title = String(slide.title || slide.heading || 'Slide Title').trim() || 'Slide Title'
-    const bullets = normalizeBullets(slide.bullets || slide.points || slide.content)
-    const elements = []
-    const pushText = (id, x, y, text, fontSize, align, bold) => {
-        elements.push({
-            id,
-            type: 'text',
-            x,
-            y,
-            text,
-            fontSize,
-            color: themeTextColor(theme),
-            align: align || 'left',
-            bold: Boolean(bold)
-        })
-    }
-
-    if (layout === 'center-title') {
-        pushText(`el-${index + 1}-1`, 240, 200, title, 48, 'center', true)
-        const subtitle = bullets[0] || 'Subtitle'
-        pushText(`el-${index + 1}-2`, 250, 300, subtitle, 24, 'center', false)
-    } else if (layout === 'two-columns') {
-        pushText(`el-${index + 1}-1`, 200, 60, title, 40, 'center', true)
-        const left = bullets.slice(0, 2)
-        const right = bullets.slice(2, 4)
-        left.forEach((text, i) => {
-            pushText(`el-${index + 1}-${i + 2}`, 120, 200 + i * 60, text, 22, 'left', false)
-        })
-        right.forEach((text, i) => {
-            pushText(`el-${index + 1}-${i + 4}`, 550, 200 + i * 60, text, 22, 'left', false)
-        })
-    } else {
-        pushText(`el-${index + 1}-1`, 160, 70, title, 40, 'left', true)
-        bullets.slice(0, 4).forEach((text, i) => {
-            pushText(`el-${index + 1}-${i + 2}`, 140, 220 + i * 60, text, 22, 'left', false)
-        })
-    }
-
-    return {
-        id: String(slide.id || `slide-${index + 1}`),
-        layout,
-        theme,
-        elements
-    }
-}
-
-function themeTextColor(theme) {
-    if (theme === 'dark') return '#ffffff'
-    if (theme === 'purple') return '#4c1d95'
-    if (theme === 'blue') return '#1d4ed8'
-    return '#1c1d1f'
 }
 
 function buildLessonDocs(course) {

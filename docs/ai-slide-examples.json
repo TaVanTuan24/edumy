@@ -1,0 +1,46 @@
+{
+  "slides": [
+    {
+      "template": "bullet-list",
+      "title": "Applications of Artificial Intelligence",
+      "subtitle": "High-impact use cases",
+      "bullets": [
+        "Healthcare diagnosis support",
+        "Fraud detection in banking",
+        "Personalized learning systems",
+        "Industrial automation"
+      ]
+    },
+    {
+      "template": "two-column",
+      "title": "Supervised vs Unsupervised Learning",
+      "subtitle": "Two common machine learning approaches",
+      "leftColumn": {
+        "heading": "Supervised",
+        "items": [
+          "Uses labeled data",
+          "Predicts known targets",
+          "Evaluates with accuracy metrics"
+        ]
+      },
+      "rightColumn": {
+        "heading": "Unsupervised",
+        "items": [
+          "Uses unlabeled data",
+          "Finds hidden patterns",
+          "Groups similar examples"
+        ]
+      }
+    },
+    {
+      "template": "summary-slide",
+      "title": "Key Takeaways",
+      "summary": "AI is most effective when paired with clear data, measurable goals, and human oversight.",
+      "bullets": [
+        "Choose the right learning approach",
+        "Keep models aligned with real goals",
+        "Monitor quality after deployment"
+      ]
+    }
+  ]
+}

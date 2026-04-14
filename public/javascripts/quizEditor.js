@@ -47,7 +47,7 @@
 
     function init() {
         if (els.quizTitleInput) {
-            els.quizTitleInput.value = quizData.name || 'Untitled Quiz';
+            els.quizTitleInput.value = quizData.name || quizData.title || 'Untitled Quiz';
             els.quizTitleInput.readOnly = true;
         }
 
@@ -397,13 +397,54 @@
     }
 
     function normalizeQuestionOptions(options) {
-        const normalized = (Array.isArray(options) ? options : []).map(function (opt) {
+        const sourceQuestion = quizData.questions[selectedQuestionIndex] || {};
+        const rawOptions = Array.isArray(options) && options.length
+            ? options
+            : Array.isArray(sourceQuestion.answers)
+                ? sourceQuestion.answers
+                : [];
+
+        const normalized = rawOptions.map(function (opt) {
             if (typeof opt === 'string') return { text: opt, correct: false };
             return {
-                text: String((opt && opt.text) || ''),
-                correct: Boolean(opt && opt.correct)
+                text: String((opt && (opt.text || opt.answer || opt.value)) || ''),
+                correct: Boolean(opt && (opt.correct || opt.isCorrect))
             };
         });
+
+        let correctIndex = normalized.findIndex(function (opt) {
+            return opt.correct;
+        });
+
+        if (correctIndex < 0) {
+            const numericCorrectIndex = Number(
+                sourceQuestion.correctIndex
+                ?? sourceQuestion.correctOptionIndex
+                ?? sourceQuestion.correctAnswerIndex
+            );
+
+            if (Number.isInteger(numericCorrectIndex) && numericCorrectIndex >= 0 && numericCorrectIndex < normalized.length) {
+                correctIndex = numericCorrectIndex;
+            }
+        }
+
+        if (correctIndex < 0 && typeof sourceQuestion.correctAnswer === 'string') {
+            const correctAnswerText = sourceQuestion.correctAnswer.trim().toLowerCase();
+            const byLabel = ['a', 'b', 'c', 'd'].indexOf(correctAnswerText);
+            if (byLabel >= 0 && byLabel < normalized.length) {
+                correctIndex = byLabel;
+            } else {
+                correctIndex = normalized.findIndex(function (opt) {
+                    return String(opt.text || '').trim().toLowerCase() === correctAnswerText;
+                });
+            }
+        }
+
+        if (correctIndex >= 0) {
+            normalized.forEach(function (opt, index) {
+                opt.correct = index === correctIndex;
+            });
+        }
 
         if (normalized.length < 2) {
             while (normalized.length < 2) {

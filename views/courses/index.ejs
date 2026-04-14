@@ -1,39 +1,89 @@
 <% layout('/layouts/boilerplate')%>
-<div class="mb-5">
-    <div class="position-relative text-white text-center"
-        style="background-image: url('/images/picture2.png'); background-size: cover; background-position: center; height: 280px;">
-        <div class="position-absolute top-0 start-0 w-100 h-100" style="background-color: rgba(0,0,0,0.5);"></div>
-        <div class="position-relative py-5">
-            <h1 class="display-5 fw-bold">H·ªçc h√¥m nay ‚Äì D·∫´n l·ªëi ng√†y mai!</h1>
-            <p class="lead">M·ªói gi·ªù h·ªçc b·∫°n ƒë·∫ßu t∆∞ h√¥m nay ch√≠nh l√† b∆∞·ªõc ƒëi v·ªØng ch·∫Øc cho t∆∞∆°ng lai.</p>
-        </div>
-    </div>
-</div>
-    <h1>C√°c kh√≥a h·ªçc ƒë√£ ƒëƒÉng k√Ω</h1>
+<link rel="stylesheet" href="/stylesheets/course-pages.css">
 
-    <% for (let course of courses) {%>
-        <div class="card mb-3">
-            <div class="row">
-                <div class="col-md-4">
-                    <% if(course.images.length) {%>
-                        <img src="<%=course.images[0].url%>" alt="" class="img-fluid">
-                        <% } %>
-                </div>
-                <div class="col-md-8">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <%=course.title%>
-                        </h5>
-                        <h5 class="card-title">
-                            <%=course.location%>
-                        </h5>
-                    </div>
-                    <a class="btn btn-primary" href="courses/<%=course._id%>">View <%=course.location%></a>
-                </div>
-            </div>
+<%
+  const totalCourses = Array.isArray(courses) ? courses.length : 0;
+  const topicMap = new Map();
+  (courses || []).forEach((course) => {
+    const topic = course.topic || 'Course';
+    topicMap.set(topic, (topicMap.get(topic) || 0) + 1);
+  });
+  const topTopics = Array.from(topicMap.entries()).slice(0, 5);
+%>
+
+<div class="course-discovery-page">
+  <div class="discovery-shell discovery-shell-compact">
+    <section class="discovery-hero discovery-hero-library">
+      <div>
+        <span class="discovery-eyebrow">My learning</span>
+        <h1 class="discovery-title">Ti?p t?c h?c t? noi b?n d„ d?ng l?i</h1>
+        <p class="discovery-lead">Danh s·ch khÛa h?c du?c trÏnh b‡y g?n hon, t?p trung v‡o thumbnail, title v‡ h‡nh d?ng ti?p t?c h?c gi?ng phong c·ch thu vi?n khÛa h?c th?c d?ng.</p>
+
+        <div class="discovery-stats">
+          <div class="discovery-stat">
+            <span class="discovery-stat-value"><%= totalCourses %></span>
+            <span class="discovery-stat-label">KhÛa h?c d„ dang k˝</span>
+          </div>
+          <div class="discovery-stat">
+            <span class="discovery-stat-value"><%= topTopics.length %></span>
+            <span class="discovery-stat-label">Ch? d? dang theo h?c</span>
+          </div>
+          <div class="discovery-stat">
+            <span class="discovery-stat-value">Now</span>
+            <span class="discovery-stat-label">Ti?p t?c h?c ch? v?i m?t l?n b?m</span>
+          </div>
         </div>
+
+        <% if (topTopics.length) { %>
+          <div class="library-topic-row">
+            <% topTopics.forEach(([topic, count]) => { %>
+              <span class="library-topic-chip"><%= topic %> <strong><%= count %></strong></span>
+            <% }) %>
+          </div>
         <% } %>
+      </div>
+    </section>
 
-            <script>
-                const courses = { features: <%- JSON.stringify(courses) %>};
-            </script>
+    <section class="topic-section">
+      <div class="topic-head">
+        <div>
+          <h2 class="topic-title">KhÛa h?c d„ dang k˝</h2>
+          <div class="topic-meta"><%= totalCourses %> khÛa h?c trong thu vi?n h?c t?p c?a b?n</div>
+        </div>
+      </div>
+
+      <% if (!totalCourses) { %>
+        <div class="alert alert-light border">B?n chua dang k˝ khÛa h?c n‡o.</div>
+      <% } else { %>
+        <div class="course-card-grid course-card-grid-library">
+          <% courses.forEach((course) => { %>
+            <article class="course-discovery-card course-library-card">
+              <div class="course-card-media">
+                <img src="<%= course.images && course.images.length ? course.images[0].url : '/default.png' %>" alt="<%= course.title %>">
+              </div>
+
+              <div class="course-card-body">
+                <h3 class="course-card-title"><%= course.title %></h3>
+                <p class="course-card-description">
+                  <%= (course.description || 'Ti?p t?c h?c khÛa h?c n‡y d? xem n?i dung chi ti?t v‡ ti?n d? hi?n t?i c?a b?n.').slice(0, 140) %><%= course.description && course.description.length > 140 ? '...' : '' %>
+                </p>
+
+                <div class="course-card-rating course-card-rating-compact">
+                  <span class="course-card-topic"><%= course.topic || 'Course' %></span>
+                </div>
+
+                <div class="course-card-footer">
+                  <a class="btn btn-primary" href="/courses/<%= course._id %>">Ti?p t?c h?c</a>
+                </div>
+              </div>
+            </article>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+  </div>
+</div>
+
+<script>
+  const courses = { features: <%- JSON.stringify(courses) %> };
+</script>

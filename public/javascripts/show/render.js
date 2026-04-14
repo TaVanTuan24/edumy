@@ -10,6 +10,7 @@
   let currentSlideIndex = 0;
   let slideData = [];
   const SLIDE_BASE_WIDTH = 1003;
+  const SLIDE_MAX_TEXT_FONT_SIZE = 40;
   let slideResizeBound = false;
   let lastQuizReportKey = '';
   let quizAttemptCount = 0;
@@ -526,11 +527,17 @@
         div.className = 'slide-text';
         div.style.left = (Number(el.x || 0) * scale) + 'px';
         div.style.top = (Number(el.y || 0) * scale) + 'px';
-        div.style.fontSize = (Number(el.fontSize || 28) * scale) + 'px';
+        const width = Math.max(40, Number(el.width || 280));
+        const height = Math.max(30, Number(el.height || 80));
+        div.style.width = (width * scale) + 'px';
+        div.style.height = (height * scale) + 'px';
+        div.style.fontSize = (getFittedSlideTextFontSize(el) * scale) + 'px';
         div.style.color = String(el.color || '#1c1d1f');
         div.style.fontWeight = el.bold ? '700' : '400';
         div.style.textAlign = ['left', 'center', 'right'].includes(el.align) ? el.align : 'left';
         div.style.whiteSpace = 'pre-wrap';
+        div.style.overflowWrap = 'anywhere';
+        div.style.overflow = 'hidden';
         div.textContent = String(el.text || '');
         canvas.appendChild(div);
         return;
@@ -544,12 +551,53 @@
         img.style.left = (Number(el.x || 0) * scale) + 'px';
         img.style.top = (Number(el.y || 0) * scale) + 'px';
         const width = Number(el.width || 200);
+        const height = Number(el.height || 160);
         if (Number.isFinite(width)) {
           img.style.width = (width * scale) + 'px';
+        }
+        if (Number.isFinite(height)) {
+          img.style.height = (height * scale) + 'px';
         }
         canvas.appendChild(img);
       }
     });
+  }
+
+  function getFittedSlideTextFontSize(el) {
+    const width = Math.max(24, Number(el && el.width || 280) - 16);
+    const height = Math.max(24, Number(el && el.height || 80) - 12);
+    const content = String(el && el.text || '').trim() || 'Text';
+    const fontWeight = el && el.bold ? '700' : '400';
+    const textAlign = ['left', 'center', 'right'].includes(el && el.align) ? el.align : 'left';
+    const maxFont = Math.min(SLIDE_MAX_TEXT_FONT_SIZE, Math.max(10, Number(el && el.fontSize || 28)));
+
+    const measure = document.createElement('div');
+    measure.style.position = 'absolute';
+    measure.style.visibility = 'hidden';
+    measure.style.pointerEvents = 'none';
+    measure.style.left = '-99999px';
+    measure.style.top = '-99999px';
+    measure.style.width = width + 'px';
+    measure.style.whiteSpace = 'pre-wrap';
+    measure.style.overflowWrap = 'anywhere';
+    measure.style.wordBreak = 'break-word';
+    measure.style.lineHeight = '1.3';
+    measure.style.fontWeight = fontWeight;
+    measure.style.textAlign = textAlign;
+    measure.textContent = content;
+    document.body.appendChild(measure);
+
+    let fontSize = maxFont;
+    while (fontSize > 10) {
+      measure.style.fontSize = fontSize + 'px';
+      if (measure.scrollWidth <= width + 1 && measure.scrollHeight <= height + 1) {
+        break;
+      }
+      fontSize -= 1;
+    }
+
+    document.body.removeChild(measure);
+    return Math.max(10, fontSize);
   }
 
   function getSlideScale() {
