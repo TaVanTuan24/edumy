@@ -1,21 +1,48 @@
 <% layout('/layouts/boilerplate') %>
 <link rel="stylesheet" href="/stylesheets/profile.css">
 
+<%
+  const avatarUrl = user && user.avatar && user.avatar.url ? user.avatar.url : '';
+  const avatarLetter = (user.username || 'U').charAt(0).toUpperCase();
+  const recentBadges = gamification.earnedBadges.slice(-3).reverse();
+%>
+
 <div class="profile-page container py-4">
   <div class="profile-header-card">
-    <div class="profile-avatar" aria-hidden="true"><%= (profileUser.username || 'U').charAt(0).toUpperCase() %></div>
-    <div>
-      <h1 class="profile-name"><%= profileUser.username %></h1>
-      <p class="profile-email mb-1"><%= profileUser.email %></p>
-      <p class="profile-meta mb-0">Member since <%= new Date(profileUser.createdAt || Date.now()).toLocaleDateString() %></p>
+    <div class="profile-avatar-wrap">
+      <% if (avatarUrl) { %>
+        <img class="profile-avatar-image" src="<%= avatarUrl %>" alt="Ảnh đại diện của <%= user.username %>">
+      <% } else { %>
+        <div class="profile-avatar" aria-hidden="true"><%= avatarLetter %></div>
+      <% } %>
+
+      <form class="profile-avatar-form" action="/profile/avatar" method="POST" enctype="multipart/form-data">
+        <label class="avatar-upload-btn" for="profileAvatarInput">Đổi ảnh đại diện</label>
+        <input id="profileAvatarInput" class="avatar-upload-input" type="file" name="avatar" accept="image/png,image/jpeg,image/jpg">
+        <button id="profileAvatarSubmit" class="btn btn-primary btn-sm" type="submit" disabled>Cập nhật ảnh</button>
+      </form>
+    </div>
+
+    <div class="profile-header-copy">
+      <h1 class="profile-name"><%= user.username %></h1>
+      <p class="profile-email mb-1"><%= user.email %></p>
+      <p class="profile-meta mb-0">Tham gia từ <%= new Date(user.createdAt || Date.now()).toLocaleDateString('vi-VN') %></p>
+
+      <% if (recentBadges.length) { %>
+        <div class="profile-highlight-badges">
+          <% recentBadges.forEach((badge) => { %>
+            <span class="profile-highlight-badge"><i class="fa-solid <%= badge.icon %>"></i> <%= badge.name %></span>
+          <% }) %>
+        </div>
+      <% } %>
     </div>
   </div>
 
   <section class="profile-grid mt-4">
     <article class="profile-card">
-      <h2>Level Progress</h2>
+      <h2>Tiến độ cấp độ</h2>
       <div class="level-row">
-        <span class="level-pill">Level <%= gamification.currentLevel %></span>
+        <span class="level-pill">Cấp <%= gamification.currentLevel %></span>
         <span class="xp-pill"><%= gamification.totalXP %> XP</span>
       </div>
       <div class="xp-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= gamification.levelProgress.progressPercent %>">
@@ -23,48 +50,52 @@
       </div>
       <p class="progress-note mb-0">
         <% if (gamification.levelProgress.nextLevel) { %>
-          <strong><%= gamification.levelProgress.xpToNextLevel %> XP</strong> to Level <%= gamification.levelProgress.nextLevel %>
+          Còn <strong><%= gamification.levelProgress.xpToNextLevel %> XP</strong> để lên cấp <%= gamification.levelProgress.nextLevel %>
         <% } else { %>
-          Max level reached
+          Bạn đã đạt cấp tối đa hiện tại
         <% } %>
       </p>
     </article>
 
     <article class="profile-card">
-      <h2>Daily Streak</h2>
+      <h2>Chuỗi học tập</h2>
       <div class="streak-row">
         <div class="streak-box">
           <i class="fa-solid fa-fire"></i>
           <div>
-            <div class="streak-value"><%= gamification.currentStreak %> days</div>
-            <div class="streak-label">Current streak</div>
+            <div class="streak-value"><%= gamification.currentStreak %> ngày</div>
+            <div class="streak-label">Chuỗi hiện tại</div>
           </div>
         </div>
         <div class="streak-box muted">
           <i class="fa-solid fa-fire-flame-curved"></i>
           <div>
-            <div class="streak-value"><%= gamification.longestStreak %> days</div>
-            <div class="streak-label">Longest streak</div>
+            <div class="streak-value"><%= gamification.longestStreak %> ngày</div>
+            <div class="streak-label">Chuỗi dài nhất</div>
           </div>
         </div>
       </div>
     </article>
 
     <article class="profile-card">
-      <h2>Learning Stats</h2>
+      <h2>Thống kê học tập</h2>
       <ul class="stat-list">
-        <li><span>Total XP</span><strong><%= gamification.totalXP %></strong></li>
-        <li><span>Completed Lessons</span><strong><%= gamification.completedLessonsCount %></strong></li>
-        <li><span>Completed Quizzes</span><strong><%= profileUser.gamification && profileUser.gamification.stats ? profileUser.gamification.stats.quizzesCompleted : 0 %></strong></li>
-        <li><span>AI Interactions</span><strong><%= profileUser.gamification && profileUser.gamification.stats ? profileUser.gamification.stats.aiInteractions : 0 %></strong></li>
+        <li><span>Tổng XP</span><strong><%= gamification.totalXP %></strong></li>
+        <li><span>Bài học đã hoàn thành</span><strong><%= gamification.completedLessonsCount %></strong></li>
+        <li><span>Quiz đã hoàn thành</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.quizzesCompleted : 0 %></strong></li>
+        <li><span>Tương tác AI</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.aiInteractions : 0 %></strong></li>
+        <li><span>Khóa học đã hoàn thành</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.coursesCompleted : 0 %></strong></li>
       </ul>
     </article>
   </section>
 
   <section class="profile-card mt-4">
     <div class="badge-head">
-      <h2 class="mb-0">Badges</h2>
-      <span class="badge-count"><%= gamification.earnedBadges.length %> / <%= gamification.badges.length %> unlocked</span>
+      <div>
+        <h2 class="mb-0">Bộ sưu tập huy hiệu</h2>
+        <p class="badge-subtitle mb-0">Mở khóa thêm huy hiệu bằng cách học đều, làm quiz và dùng các công cụ AI.</p>
+      </div>
+      <span class="badge-count"><%= gamification.earnedBadges.length %> / <%= gamification.badges.length %> đã mở khóa</span>
     </div>
 
     <div class="badge-grid mt-3">
@@ -75,9 +106,9 @@
             <h3><%= badge.name %></h3>
             <p><%= badge.description %></p>
             <% if (badge.earnedAt) { %>
-              <small>Unlocked on <%= new Date(badge.earnedAt).toLocaleDateString() %></small>
+              <small>Mở khóa ngày <%= new Date(badge.earnedAt).toLocaleDateString('vi-VN') %></small>
             <% } else { %>
-              <small>Locked</small>
+              <small>Chưa mở khóa</small>
             <% } %>
           </div>
         </article>
@@ -88,10 +119,10 @@
   <section class="profile-card mt-4">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
-        <h2 class="mb-1">Global Leaderboard</h2>
-        <p class="mb-0 text-muted">See how you rank against all learners.</p>
+        <h2 class="mb-1">Bảng xếp hạng</h2>
+        <p class="mb-0 text-muted">Xem vị trí của bạn so với những học viên khác.</p>
       </div>
-      <a href="/leaderboard" class="btn btn-primary">Open Leaderboard</a>
+      <a href="/leaderboard" class="btn btn-primary">Mở leaderboard</a>
     </div>
 
     <% if (leaderboard && leaderboard.topUsers && leaderboard.topUsers.length > 0) { %>
@@ -99,9 +130,9 @@
         <table class="table table-sm align-middle mb-0">
           <thead>
             <tr>
-              <th>Rank</th>
-              <th>User</th>
-              <th>Level</th>
+              <th>Hạng</th>
+              <th>Học viên</th>
+              <th>Cấp</th>
               <th>XP</th>
             </tr>
           </thead>
@@ -109,7 +140,7 @@
             <% leaderboard.topUsers.forEach((entry) => { %>
               <tr class="<%= entry.isCurrentUser ? 'table-primary' : '' %>">
                 <td>#<%= entry.rank %></td>
-                <td><%= entry.username %> <%= entry.isCurrentUser ? '(You)' : '' %></td>
+                <td><%= entry.username %> <%= entry.isCurrentUser ? '(Bạn)' : '' %></td>
                 <td><%= entry.level %></td>
                 <td><strong><%= entry.totalXP %></strong></td>
               </tr>

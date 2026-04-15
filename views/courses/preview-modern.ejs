@@ -1,4 +1,4 @@
-<% layout('/layouts/boilerplate') %>
+﻿<% layout('/layouts/boilerplate') %>
 <link rel="stylesheet" href="/stylesheets/stars.css">
 <link rel="stylesheet" href="/stylesheets/course-pages.css">
 
@@ -92,41 +92,61 @@
 
               <div class="card show-panel-card">
                 <div class="card-body">
-                  <h3 class="show-section-title mb-3">Curriculum Preview</h3>
+                  <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                    <h3 class="show-section-title mb-0">Curriculum Preview</h3>
+                  </div>
 
                   <% if (!sections.length) { %>
                     <p class="text-muted mb-0">Khóa học này chưa có nội dung preview.</p>
                   <% } %>
 
-                  <% sections.forEach((section, sectionIndex) => { %>
-                    <div class="mb-4 pb-3 border-bottom">
-                      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                        <div>
-                          <div class="small text-uppercase text-muted fw-semibold">Section <%= sectionIndex + 1 %></div>
-                          <h4 class="mb-0"><%= section.section || ('Section ' + (sectionIndex + 1)) %></h4>
-                        </div>
-                        <span class="badge rounded-pill text-bg-light"><%= (section.videos || []).length %> lessons</span>
-                      </div>
-
-                      <% if (!section.videos || !section.videos.length) { %>
-                        <p class="text-muted mb-0">Chưa có lesson trong section này.</p>
-                      <% } %>
-
-                      <div class="list-group list-group-flush">
-                        <% (section.videos || []).forEach((item, lessonIndex) => { %>
-                          <div class="list-group-item px-0 py-3 border-0 border-bottom">
-                            <div class="d-flex justify-content-between align-items-start gap-3">
-                              <div>
-                                <div class="small text-muted fw-semibold mb-1"><%= itemTypeLabel(item) %> <%= lessonIndex + 1 %></div>
-                                <div class="fw-semibold"><%= item.name || ('Lesson ' + (lessonIndex + 1)) %></div>
-                              </div>
-                              <span class="badge rounded-pill text-bg-secondary"><%= itemTypeLabel(item) %></span>
-                            </div>
+                  <div class="preview-curriculum-accordion" id="previewCurriculumAccordion">
+                    <% sections.forEach((section, sectionIndex) => { %>
+                      <div class="preview-section-card">
+                        <button
+                          class="preview-section-toggle collapsed"
+                          type="button"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#preview-section-<%= sectionIndex %>"
+                          aria-expanded="false"
+                          aria-controls="preview-section-<%= sectionIndex %>"
+                        >
+                          <div>
+                            <div class="small text-uppercase text-muted fw-semibold">Section <%= sectionIndex + 1 %></div>
+                            <h4 class="mb-0"><%= section.section || ('Section ' + (sectionIndex + 1)) %></h4>
                           </div>
-                        <% }) %>
+                          <div class="preview-section-meta">
+                            <span class="badge rounded-pill text-bg-light"><%= (section.videos || []).length %> lessons</span>
+                            <span class="preview-section-arrow" aria-hidden="true">⌄</span>
+                          </div>
+                        </button>
+
+                        <div
+                          id="preview-section-<%= sectionIndex %>"
+                          class="collapse"
+                          data-bs-parent="#previewCurriculumAccordion"
+                        >
+                          <div class="preview-section-body">
+                            <% if (!section.videos || !section.videos.length) { %>
+                              <p class="text-muted mb-0">Chưa có lesson trong section này.</p>
+                            <% } else { %>
+                              <div class="preview-lesson-list">
+                                <% (section.videos || []).forEach((item, lessonIndex) => { %>
+                                  <div class="preview-lesson-item">
+                                    <div>
+                                      <div class="small text-muted fw-semibold mb-1"><%= itemTypeLabel(item) %> <%= lessonIndex + 1 %></div>
+                                      <div class="fw-semibold"><%= item.name || ('Lesson ' + (lessonIndex + 1)) %></div>
+                                    </div>
+                                    <span class="badge rounded-pill text-bg-secondary"><%= itemTypeLabel(item) %></span>
+                                  </div>
+                                <% }) %>
+                              </div>
+                            <% } %>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  <% }) %>
+                    <% }) %>
+                  </div>
                 </div>
               </div>
             </div>

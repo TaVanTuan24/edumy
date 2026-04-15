@@ -29,6 +29,8 @@
 }
 
 .discovery-hero {
+    position: relative;
+    isolation: isolate;
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
     gap: 24px;
@@ -42,9 +44,33 @@
     overflow: hidden;
 }
 
+.discovery-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(135deg, rgba(8, 15, 29, 0.28), rgba(8, 15, 29, 0.08)),
+        url("/images/picture.png") center right / cover no-repeat;
+    opacity: 0.22;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.discovery-hero > * {
+    position: relative;
+    z-index: 1;
+}
+
 .discovery-hero-library {
     grid-template-columns: 1fr;
     padding: 28px 32px;
+}
+
+.discovery-hero-library::before {
+    background:
+        linear-gradient(135deg, rgba(8, 15, 29, 0.18), rgba(8, 15, 29, 0.04)),
+        url("/images/picture2.png") center center / cover no-repeat;
+    opacity: 0.26;
 }
 
 .discovery-eyebrow {
@@ -515,6 +541,76 @@
     padding: 22px;
 }
 
+.preview-curriculum-accordion {
+    display: grid;
+    gap: 14px;
+}
+
+.preview-section-card {
+    border: 1px solid var(--cp-border);
+    border-radius: 18px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.preview-section-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px;
+    border: 0;
+    background: #f8fafc;
+    text-align: left;
+    color: var(--cp-ink-strong);
+}
+
+.preview-section-toggle:hover {
+    background: #f1f5f9;
+}
+
+.preview-section-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.preview-section-arrow {
+    font-size: 1.2rem;
+    line-height: 1;
+    color: var(--cp-ink-soft);
+    transition: transform 0.18s ease;
+}
+
+.preview-section-toggle:not(.collapsed) .preview-section-arrow {
+    transform: rotate(180deg);
+}
+
+.preview-section-body {
+    padding: 0 20px 18px;
+}
+
+.preview-lesson-list {
+    display: grid;
+    gap: 10px;
+    padding-top: 4px;
+}
+
+.preview-lesson-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.preview-lesson-item:first-child {
+    border-top: 0;
+}
+
 .show-section-title {
     margin: 0 0 10px;
     color: var(--cp-ink-strong);
@@ -590,6 +686,15 @@
         grid-template-columns: 1fr;
     }
 
+    .discovery-hero::before {
+        background-position: center;
+        opacity: 0.18;
+    }
+
+    .discovery-hero-library::before {
+        opacity: 0.22;
+    }
+
     .discovery-stats {
         grid-template-columns: 1fr;
     }
@@ -625,5 +730,16 @@
 
     .course-tabs-wrap {
         padding: 16px;
+    }
+
+    .preview-section-toggle,
+    .preview-section-body {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .preview-lesson-item {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }

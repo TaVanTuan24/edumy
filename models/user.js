@@ -10,6 +10,16 @@ const UserSchema = new Schema({
         trim: true,
         lowercase: true
     },
+    avatar: {
+        url: {
+            type: String,
+            default: ''
+        },
+        filename: {
+            type: String,
+            default: ''
+        }
+    },
     enrolledCourses: {
         type: [Schema.Types.Mixed],
         default: []
@@ -61,7 +71,7 @@ const UserSchema = new Schema({
             completedLessonsCount: { type: Number, default: 0 }
         }
     }
-})
+});
 
 UserSchema.methods.getEnrolledCourseIdSet = function() {
     const ids = (this.enrolledCourses || []).map((entry) => {
@@ -71,7 +81,6 @@ UserSchema.methods.getEnrolledCourseIdSet = function() {
             return String(entry.courseId);
         }
 
-        // Backward compatibility in case some old documents still have raw ObjectId values.
         if (entry._bsontype === 'ObjectId' || typeof entry === 'string') {
             return String(entry);
         }

@@ -1,7 +1,7 @@
 (function() {
   'use strict';
 
-  function init() {
+  function initXpProgress() {
     const fill = document.getElementById('xpProgressFill');
     if (!fill) return;
 
@@ -15,5 +15,18 @@
     }, 120);
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  function initAvatarForm() {
+    const input = document.getElementById('profileAvatarInput');
+    const submit = document.getElementById('profileAvatarSubmit');
+    if (!input || !submit) return;
+
+    input.addEventListener('change', function() {
+      submit.disabled = !(input.files && input.files.length);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    initXpProgress();
+    initAvatarForm();
+  });
 })();

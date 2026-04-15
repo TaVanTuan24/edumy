@@ -2,15 +2,15 @@
   'use strict';
 
   function init() {
-    const rows = document.querySelectorAll('.leaderboard-table tbody tr');
-    rows.forEach(function(row, index) {
-      row.style.opacity = '0';
-      row.style.transform = 'translateY(6px)';
+    var items = document.querySelectorAll('[data-animate]');
+    items.forEach(function(item, index) {
+      item.style.opacity = '0';
+      item.style.transform = 'translateY(12px)';
       window.setTimeout(function() {
-        row.style.transition = 'all 0.2s ease';
-        row.style.opacity = '1';
-        row.style.transform = 'translateY(0)';
-      }, 30 * index);
+        item.style.transition = 'opacity 0.28s ease, transform 0.28s ease';
+        item.style.opacity = '1';
+        item.style.transform = 'translateY(0)';
+      }, 45 * index);
     });
   }
 

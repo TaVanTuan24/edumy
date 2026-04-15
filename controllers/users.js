@@ -1,13 +1,13 @@
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
+const { cloudinary } = require('../config/cloudinary');
 const { buildGamificationViewModel, awardGamification } = require('../utils/gamification');
-// const Participant = require('../models/participant');
 
 async function getLeaderboardSnapshot(limit, currentUserId) {
     const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
 
     const topUsers = await User.find({})
-        .select('username gamification.totalXP gamification.currentLevel')
+        .select('username avatar gamification.totalXP gamification.currentLevel')
         .sort({ 'gamification.totalXP': -1, username: 1 })
         .limit(safeLimit)
         .lean();
@@ -16,13 +16,14 @@ async function getLeaderboardSnapshot(limit, currentUserId) {
         rank: index + 1,
         userId: String(entry._id),
         username: entry.username || 'User',
+        avatarUrl: entry.avatar && entry.avatar.url ? entry.avatar.url : '',
         totalXP: Number(entry.gamification && entry.gamification.totalXP || 0),
         level: Number(entry.gamification && entry.gamification.currentLevel || 1),
         isCurrentUser: String(entry._id) === String(currentUserId)
     }));
 
     const currentUser = await User.findById(currentUserId)
-        .select('username gamification.totalXP gamification.currentLevel')
+        .select('username avatar gamification.totalXP gamification.currentLevel')
         .lean();
 
     let currentUserEntry = null;
@@ -34,6 +35,7 @@ async function getLeaderboardSnapshot(limit, currentUserId) {
             rank: higherCount + 1,
             userId: String(currentUser._id),
             username: currentUser.username || 'You',
+            avatarUrl: currentUser.avatar && currentUser.avatar.url ? currentUser.avatar.url : '',
             totalXP: currentUserXP,
             level: Number(currentUser.gamification && currentUser.gamification.currentLevel || 1),
             isCurrentUser: true
@@ -47,9 +49,45 @@ async function getLeaderboardSnapshot(limit, currentUserId) {
     };
 }
 
+async function getCompletedLessonCount(userId) {
+    const result = await UserCourseProgress.aggregate([
+        { $match: { userId } },
+        {
+            $project: {
+                completedCount: {
+                    $size: {
+                        $ifNull: ['$completedLessonIds', []]
+                    }
+                }
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                total: { $sum: '$completedCount' }
+            }
+        }
+    ]);
+
+    return Number(result[0] && result[0].total || 0);
+}
+
+async function syncCompletedLessonsStat(user) {
+    const totalCompletedLessons = await getCompletedLessonCount(user._id);
+    if (!user.gamification) user.gamification = {};
+    if (!user.gamification.stats) user.gamification.stats = {};
+
+    user.gamification.stats.completedLessonsCount = totalCompletedLessons;
+    if ((Number(user.gamification.stats.lessonsCompleted) || 0) < totalCompletedLessons) {
+        user.gamification.stats.lessonsCompleted = totalCompletedLessons;
+    }
+
+    return totalCompletedLessons;
+}
+
 module.exports.renderRegister = (req, res) => {
     res.render('users/register');
-}
+};
 
 module.exports.register = async (req, res) => {
     try {
@@ -69,85 +107,97 @@ module.exports.register = async (req, res) => {
         req.flash('error', e.message);
         res.redirect('/register');
     }
-}
+};
 
 module.exports.renderLogin = (req, res) => {
-    res.render('users/login')
-}
+    res.render('users/login');
+};
 
 module.exports.login = (req, res) => {
     req.flash('success', 'Welcome back!');
-    const redirectUrl = res.locals.returnTo || '/courses'; // update this line to use res.locals.returnTo now
+    const redirectUrl = res.locals.returnTo || '/courses';
     res.redirect(redirectUrl);
-}
+};
 
 module.exports.logout = (req, res, next) => {
-    req.logout(function (err) {
+    req.logout(function(err) {
         if (err) {
             return next(err);
         }
         req.flash('success', 'Goodbye!');
         res.redirect('/courses');
     });
-}
+};
 
 module.exports.renderProfile = async (req, res) => {
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).populate('enrolledCourseIds');
     if (!user) {
         req.flash('error', 'User not found.');
         return res.redirect('/courses');
     }
 
-    const progressDocs = await UserCourseProgress.find({ user: req.user._id }).select('completedLessons').lean();
-    const totalCompletedLessons = progressDocs.reduce((sum, doc) => {
-        const count = Array.isArray(doc.completedLessons) ? doc.completedLessons.length : 0;
-        return sum + count;
-    }, 0);
-
-    if (!user.gamification) {
-        user.gamification = {};
-    }
-    if (!user.gamification.stats) {
-        user.gamification.stats = {};
-    }
-    user.gamification.stats.completedLessonsCount = totalCompletedLessons;
-    if ((Number(user.gamification.stats.lessonsCompleted) || 0) < totalCompletedLessons) {
-        user.gamification.stats.lessonsCompleted = totalCompletedLessons;
-    }
+    await syncCompletedLessonsStat(user);
     await user.save();
 
     const gamification = buildGamificationViewModel(user);
     const leaderboard = await getLeaderboardSnapshot(5, req.user._id);
 
-    res.render('users/profile', {
-        profileUser: user,
-        gamification,
-        leaderboard
+    const progressDocs = await UserCourseProgress.find({ userId: req.user._id }).lean();
+    const progressByCourse = {};
+    progressDocs.forEach((doc) => {
+        progressByCourse[String(doc.courseId)] = doc;
     });
+
+    res.render('users/profile', {
+        user,
+        gamification,
+        leaderboard,
+        progressByCourse
+    });
+};
+
+module.exports.updateAvatar = async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        req.flash('error', 'User not found.');
+        return res.redirect('/profile');
+    }
+
+    if (!req.file) {
+        req.flash('error', 'Please choose an image to upload.');
+        return res.redirect('/profile');
+    }
+
+    const previousFilename = user.avatar && user.avatar.filename ? user.avatar.filename : '';
+    user.avatar = {
+        url: req.file.path,
+        filename: req.file.filename
+    };
+    await user.save();
+
+    if (previousFilename && previousFilename !== req.file.filename) {
+        try {
+            await cloudinary.uploader.destroy(previousFilename);
+        } catch (err) {
+            console.error('Failed to remove previous avatar from Cloudinary:', err);
+        }
+    }
+
+    req.flash('success', 'Avatar updated successfully.');
+    res.redirect('/profile');
 };
 
 module.exports.getGamificationProfile = async (req, res) => {
     const user = await User.findById(req.user._id);
+
     if (!user) {
-        return res.status(404).json({ success: false, error: 'User not found' });
+        return res.status(404).json({
+            success: false,
+            error: 'User not found'
+        });
     }
 
-    const progressDocs = await UserCourseProgress.find({ user: req.user._id }).select('completedLessons').lean();
-    const totalCompletedLessons = progressDocs.reduce((sum, doc) => {
-        const count = Array.isArray(doc.completedLessons) ? doc.completedLessons.length : 0;
-        return sum + count;
-    }, 0);
-
-    if (!user.gamification) {
-        user.gamification = {};
-    }
-    if (!user.gamification.stats) {
-        user.gamification.stats = {};
-    }
-    user.gamification.stats.completedLessonsCount = totalCompletedLessons;
-    if ((Number(user.gamification.stats.lessonsCompleted) || 0) < totalCompletedLessons) {
-        user.gamification.stats.lessonsCompleted = totalCompletedLessons;
-    }
+    await syncCompletedLessonsStat(user);
     await user.save();
 
     const gamification = buildGamificationViewModel(user);
@@ -209,8 +259,7 @@ module.exports.markCourseNotificationsRead = async (req, res) => {
                     completedCount: 0,
                     lastLessonId: ''
                 },
-                lastSeenUpdatedAt: now,
-                enrolledAt: now
+                lastSeenUpdatedAt: now
             };
         }
 
@@ -218,11 +267,7 @@ module.exports.markCourseNotificationsRead = async (req, res) => {
     });
 
     await user.save();
-
-    return res.json({
-        success: true,
-        updatedCount
-    });
+    res.json({ success: true, updatedCount });
 };
 
 module.exports.awardGamificationAction = async (req, res) => {
@@ -249,6 +294,3 @@ module.exports.awardGamificationAction = async (req, res) => {
         gamification: result.profile
     });
 };
-// module.exports.renderJoin = (req, res) => {
-//     res.render('users/join');
-// }

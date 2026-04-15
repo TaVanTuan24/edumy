@@ -38,11 +38,32 @@ const BADGES = [
     check: (user) => Number(user.gamification.stats.lessonsCompleted || 0) >= 10
   },
   {
+    id: 'lesson_sprinter',
+    name: 'Lesson Sprinter',
+    description: 'Complete 25 lessons.',
+    icon: 'fa-person-running',
+    check: (user) => Number(user.gamification.stats.lessonsCompleted || 0) >= 25
+  },
+  {
+    id: 'lesson_marathoner',
+    name: 'Lesson Marathoner',
+    description: 'Complete 50 lessons.',
+    icon: 'fa-route',
+    check: (user) => Number(user.gamification.stats.lessonsCompleted || 0) >= 50
+  },
+  {
     id: 'quiz_rookie',
     name: 'Quiz Rookie',
     description: 'Finish your first quiz.',
     icon: 'fa-circle-question',
     check: (user) => Number(user.gamification.stats.quizzesCompleted || 0) >= 1
+  },
+  {
+    id: 'quiz_contender',
+    name: 'Quiz Contender',
+    description: 'Complete 10 quizzes.',
+    icon: 'fa-list-check',
+    check: (user) => Number(user.gamification.stats.quizzesCompleted || 0) >= 10
   },
   {
     id: 'quiz_master',
@@ -80,6 +101,13 @@ const BADGES = [
     check: (user) => Number(user.gamification.stats.aiInteractions || 0) >= 1
   },
   {
+    id: 'ai_collaborator',
+    name: 'AI Collaborator',
+    description: 'Use AI tools 10 times.',
+    icon: 'fa-wand-magic-sparkles',
+    check: (user) => Number(user.gamification.stats.aiInteractions || 0) >= 10
+  },
+  {
     id: 'ai_power_user',
     name: 'AI Power User',
     description: 'Use AI tools 25 times.',
@@ -94,6 +122,13 @@ const BADGES = [
     check: (user) => Number(user.gamification.totalXP || 0) >= 1000
   },
   {
+    id: 'xp_3000',
+    name: 'XP Vanguard',
+    description: 'Reach 3,000 XP.',
+    icon: 'fa-shield-halved',
+    check: (user) => Number(user.gamification.totalXP || 0) >= 3000
+  },
+  {
     id: 'xp_5000',
     name: 'XP Champion',
     description: 'Reach 5,000 XP.',
@@ -101,11 +136,25 @@ const BADGES = [
     check: (user) => Number(user.gamification.totalXP || 0) >= 5000
   },
   {
+    id: 'level_5',
+    name: 'Level Breaker',
+    description: 'Reach level 5.',
+    icon: 'fa-mountain-sun',
+    check: (user) => Number(user.gamification.currentLevel || 1) >= 5
+  },
+  {
     id: 'course_completer',
     name: 'Course Completer',
     description: 'Fully complete one course.',
     icon: 'fa-award',
     check: (user) => Number(user.gamification.stats.coursesCompleted || 0) >= 1
+  },
+  {
+    id: 'course_finisher',
+    name: 'Course Finisher',
+    description: 'Fully complete three courses.',
+    icon: 'fa-medal',
+    check: (user) => Number(user.gamification.stats.coursesCompleted || 0) >= 3
   }
 ];
 

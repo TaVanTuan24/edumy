@@ -61,20 +61,12 @@
   };
 
   function isInteractiveDebugEnabled() {
-    try {
-      const params = new URLSearchParams(window.location.search || '');
-      const fromQuery = params.get('debugQuiz');
-      if (fromQuery === '1' || fromQuery === 'true') return true;
-      if (fromQuery === '0' || fromQuery === 'false') return false;
-
-      const fromStorage = localStorage.getItem('learning:interactiveQuizDebug');
-      if (fromStorage === '1') return true;
-      if (fromStorage === '0') return false;
-    } catch {
-      // Ignore URL/localStorage errors and use host fallback.
+    const existingPanel = interactiveDebugPanel || document.getElementById('interactiveQuizDebugPanel');
+    if (existingPanel && existingPanel.parentNode) {
+      existingPanel.parentNode.removeChild(existingPanel);
     }
-
-    return /^(localhost|127\.0\.0\.1)$/i.test(String(window.location.hostname || ''));
+    interactiveDebugPanel = null;
+    return false;
   }
 
   function ensureInteractiveDebugPanel() {

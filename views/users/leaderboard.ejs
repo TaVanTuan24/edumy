@@ -1,55 +1,189 @@
-<% layout('/layouts/boilerplate') %>
+﻿<% layout('/layouts/boilerplate') %>
 <link rel="stylesheet" href="/stylesheets/leaderboard.css">
 
-<div class="leaderboard-page container py-4">
-  <header class="leaderboard-header mb-4">
-    <div>
-      <h1 class="mb-1">Global Leaderboard</h1>
-      <p class="text-muted mb-0">Top learners ranked by total XP.</p>
-    </div>
-    <a class="btn btn-outline-primary" href="/profile">Back to Profile</a>
-  </header>
+<%
+  const topUsers = Array.isArray(leaderboard && leaderboard.topUsers) ? leaderboard.topUsers : [];
+  const currentUserEntry = leaderboard && leaderboard.currentUserEntry ? leaderboard.currentUserEntry : null;
+  const topThree = topUsers.slice(0, 3);
+  const restUsers = topUsers.slice(3);
+  const champion = topUsers[0] || null;
+  const totalDisplayed = topUsers.length;
+  const maxXP = champion ? champion.totalXP : 0;
+%>
 
-  <section class="leaderboard-card mb-4">
-    <div class="leaderboard-table-wrap">
-      <table class="table leaderboard-table mb-0">
-        <thead>
-          <tr>
-            <th>Rank</th>
-            <th>Username</th>
-            <th>Level</th>
-            <th>Total XP</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% if (leaderboard.topUsers.length === 0) { %>
-            <tr>
-              <td colspan="4" class="text-center text-muted py-4">No leaderboard data yet.</td>
-            </tr>
-          <% } %>
-          <% leaderboard.topUsers.forEach((entry) => { %>
-            <tr class="<%= entry.isCurrentUser ? 'is-current-user' : '' %>">
-              <td>#<%= entry.rank %></td>
-              <td><%= entry.username %> <%= entry.isCurrentUser ? '(You)' : '' %></td>
-              <td>Level <%= entry.level %></td>
-              <td><strong><%= entry.totalXP %> XP</strong></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  </section>
+<div class="leaderboard-page">
+  <div class="leaderboard-shell">
+    <section class="leaderboard-hero" data-animate>
+      <div class="leaderboard-hero-copy">
+        <span class="leaderboard-eyebrow">Bảng xếp hạng</span>
+        <h1 class="leaderboard-title">Bảng xếp hạng học viên đang tăng tốc mạnh nhất</h1>
+        <p class="leaderboard-lead">Theo dõi thứ hạng, nhìn rõ khoảng cách XP và dùng áp lực tích cực từ nhóm dẫn đầu để giữ nhịp học đều mỗi ngày.</p>
 
-  <% if (leaderboard.currentUserEntry && !leaderboard.topUsers.some((u) => u.userId === leaderboard.currentUserEntry.userId)) { %>
-    <section class="leaderboard-card current-user-card">
-      <h2>Your Position</h2>
-      <div class="position-row">
-        <span class="badge bg-primary">Rank #<%= leaderboard.currentUserEntry.rank %></span>
-        <span><strong><%= leaderboard.currentUserEntry.totalXP %> XP</strong></span>
-        <span>Level <%= leaderboard.currentUserEntry.level %></span>
+        <div class="leaderboard-stats">
+          <article class="leaderboard-stat">
+            <span class="leaderboard-stat-value"><%= totalDisplayed %></span>
+            <span class="leaderboard-stat-label">Học viên đang hiển thị</span>
+          </article>
+          <article class="leaderboard-stat">
+            <span class="leaderboard-stat-value"><%= champion ? champion.totalXP : 0 %></span>
+            <span class="leaderboard-stat-label">XP của người dẫn đầu</span>
+          </article>
+          <article class="leaderboard-stat">
+            <span class="leaderboard-stat-value"><%= currentUserEntry ? '#' + currentUserEntry.rank : '-' %></span>
+            <span class="leaderboard-stat-label">Vị trí hiện tại của bạn</span>
+          </article>
+        </div>
+      </div>
+
+      <div class="leaderboard-hero-panel">
+        <div class="leaderboard-hero-panel-head">
+          <span class="leaderboard-chip">Đang dẫn nhịp</span>
+          <a class="btn btn-light leaderboard-back-btn" href="/profile">Quay lại hồ sơ</a>
+        </div>
+
+        <% if (champion) { %>
+          <div class="leaderboard-champion">
+            <div class="leaderboard-champion-rank">#1</div>
+            <div>
+              <div class="leaderboard-champion-name"><%= champion.username %></div>
+              <div class="leaderboard-champion-meta">Cấp <%= champion.level %> • <%= champion.totalXP %> XP</div>
+            </div>
+          </div>
+        <% } else { %>
+          <div class="leaderboard-empty-inline">Chưa có dữ liệu bảng xếp hạng.</div>
+        <% } %>
       </div>
     </section>
-  <% } %>
+
+    <% if (topThree.length) { %>
+      <section class="leaderboard-podium">
+        <% topThree.forEach((entry) => { %>
+          <article class="podium-card podium-rank-<%= entry.rank %> <%= entry.isCurrentUser ? 'is-current-user' : '' %>" data-animate>
+            <div class="podium-emblem podium-emblem-<%= entry.rank %>">
+              <% if (entry.rank === 1) { %>
+                <svg viewBox="0 0 64 48" aria-hidden="true"><path d="M8 38 4 10l14 10L32 4l14 16L60 10l-4 28Z"/><path d="M14 44h36"/></svg>
+              <% } %>
+              <% if (entry.rank === 2) { %>
+                <svg viewBox="0 0 48 56" aria-hidden="true"><path d="M24 4 40 12v14c0 12-7.6 19.8-16 26-8.4-6.2-16-14-16-26V12Z"/><path d="M16 28h16"/></svg>
+              <% } %>
+              <% if (entry.rank === 3) { %>
+                <svg viewBox="0 0 56 56" aria-hidden="true"><path d="M20 4h16l12 12v16L36 44H20L8 32V16Z"/><path d="M20 28h16"/></svg>
+              <% } %>
+            </div>
+            <div class="podium-medal">
+              <% if (entry.rank === 1) { %>Vô địch<% } %>
+              <% if (entry.rank === 2) { %>Á quân<% } %>
+              <% if (entry.rank === 3) { %>Top 3<% } %>
+            </div>
+            <div class="podium-rank">#<%= entry.rank %></div>
+            <h2 class="podium-name"><%= entry.username %><% if (entry.isCurrentUser) { %> <span class="podium-you">Bạn</span><% } %></h2>
+            <p class="podium-meta">Cấp <%= entry.level %></p>
+            <div class="podium-xp"><%= entry.totalXP %> XP</div>
+            <div class="podium-bar">
+              <span style="width:<%= maxXP ? Math.max(18, Math.round((entry.totalXP / maxXP) * 100)) : 18 %>%"></span>
+            </div>
+          </article>
+        <% }) %>
+      </section>
+    <% } %>
+
+    <section class="leaderboard-grid">
+      <div class="leaderboard-card leaderboard-main-card" data-animate>
+        <div class="leaderboard-card-head">
+          <div>
+            <h2>Bảng xếp hạng chi tiết</h2>
+            <p>Danh sách đang hiển thị theo tổng XP tích lũy. Giữ nhịp hoàn thành bài học để tăng hạng.</p>
+          </div>
+          <span class="leaderboard-limit-badge">Top <%= leaderboard.limit %></span>
+        </div>
+
+        <% if (!topUsers.length) { %>
+          <div class="leaderboard-empty-state">Chưa có dữ liệu bảng xếp hạng.</div>
+        <% } else { %>
+          <div class="leaderboard-table-list">
+            <% topUsers.forEach((entry) => { %>
+              <article class="leaderboard-row <%= entry.isCurrentUser ? 'is-current-user' : '' %>" data-animate>
+                <div class="leaderboard-row-rank">
+                  <span>#<%= entry.rank %></span>
+                </div>
+
+                <div class="leaderboard-row-user">
+                  <h3><%= entry.username %><% if (entry.isCurrentUser) { %> <span class="leaderboard-you-pill">Bạn</span><% } %></h3>
+                  <p>Cấp <%= entry.level %></p>
+                </div>
+
+                <div class="leaderboard-row-progress">
+                  <div class="leaderboard-row-progress-track">
+                    <span style="width:<%= maxXP ? Math.max(10, Math.round((entry.totalXP / maxXP) * 100)) : 10 %>%"></span>
+                  </div>
+                </div>
+
+                <div class="leaderboard-row-xp">
+                  <strong><%= entry.totalXP %></strong>
+                  <span>XP</span>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <aside class="leaderboard-side">
+        <section class="leaderboard-card current-user-card" data-animate>
+          <div class="leaderboard-card-head leaderboard-card-head-tight">
+            <div>
+              <h2>Vị trí của bạn</h2>
+              <p>Điểm neo để biết bạn đang cách nhóm đầu bao xa.</p>
+            </div>
+          </div>
+
+          <% if (currentUserEntry) { %>
+            <div class="current-user-spotlight">
+              <div class="current-user-rank">#<%= currentUserEntry.rank %></div>
+              <div class="current-user-name"><%= currentUserEntry.username %></div>
+              <div class="current-user-meta">Cấp <%= currentUserEntry.level %> • <%= currentUserEntry.totalXP %> XP</div>
+            </div>
+          <% } else { %>
+            <div class="leaderboard-empty-inline">Không tìm thấy dữ liệu của tài khoản hiện tại.</div>
+          <% } %>
+        </section>
+
+        <section class="leaderboard-card leaderboard-tip-card" data-animate>
+          <div class="leaderboard-card-head leaderboard-card-head-tight">
+            <div>
+              <h2>Cách leo hạng</h2>
+              <p>Tăng XP đều quan trọng hơn bứt tốc ngắn hạn.</p>
+            </div>
+          </div>
+          <ul class="leaderboard-tips">
+            <li>Hoàn thành bài học dở trước khi mở quá nhiều khóa học mới.</li>
+            <li>Duy trì nhịp học mỗi ngày để không bị đứt quãng tiến độ.</li>
+            <li>Nhắm vượt người ngay phía trên bạn thay vì chỉ nhìn top 1.</li>
+          </ul>
+        </section>
+
+        <% if (restUsers.length) { %>
+          <section class="leaderboard-card leaderboard-mini-card" data-animate>
+            <div class="leaderboard-card-head leaderboard-card-head-tight">
+              <div>
+                <h2>Nhóm bám đuổi</h2>
+                <p>Các vị trí ngay sau top 3.</p>
+              </div>
+            </div>
+            <div class="leaderboard-mini-list">
+              <% restUsers.slice(0, 5).forEach((entry) => { %>
+                <div class="leaderboard-mini-item <%= entry.isCurrentUser ? 'is-current-user' : '' %>">
+                  <span class="leaderboard-mini-rank">#<%= entry.rank %></span>
+                  <span class="leaderboard-mini-name"><%= entry.username %></span>
+                  <strong class="leaderboard-mini-xp"><%= entry.totalXP %> XP</strong>
+                </div>
+              <% }) %>
+            </div>
+          </section>
+        <% } %>
+      </aside>
+    </section>
+  </div>
 </div>
 
 <script src="/javascripts/leaderboard.js" defer></script>

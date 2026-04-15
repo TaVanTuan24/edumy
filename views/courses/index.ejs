@@ -1,4 +1,4 @@
-<% layout('/layouts/boilerplate')%>
+﻿<% layout('/layouts/boilerplate')%>
 <link rel="stylesheet" href="/stylesheets/course-pages.css">
 
 <%
@@ -16,21 +16,21 @@
     <section class="discovery-hero discovery-hero-library">
       <div>
         <span class="discovery-eyebrow">My learning</span>
-        <h1 class="discovery-title">Ti?p t?c h?c t? noi b?n d� d?ng l?i</h1>
-        <p class="discovery-lead">Danh s�ch kh�a h?c du?c tr�nh b�y g?n hon, t?p trung v�o thumbnail, title v� h�nh d?ng ti?p t?c h?c gi?ng phong c�ch thu vi?n kh�a h?c th?c d?ng.</p>
+        <h1 class="discovery-title">Tiếp tục học từ nơi bạn đã dừng lại</h1>
+        <p class="discovery-lead">Mỗi lần quay lại là một bước tiến mới, tiếp tục học đều hôm nay để kỹ năng của bạn mạnh hơn từng ngày.</p>
 
         <div class="discovery-stats">
           <div class="discovery-stat">
             <span class="discovery-stat-value"><%= totalCourses %></span>
-            <span class="discovery-stat-label">Kh�a h?c d� dang k�</span>
+            <span class="discovery-stat-label">Khóa học đã đăng ký</span>
           </div>
           <div class="discovery-stat">
             <span class="discovery-stat-value"><%= topTopics.length %></span>
-            <span class="discovery-stat-label">Ch? d? dang theo h?c</span>
+            <span class="discovery-stat-label">Chủ đề đang theo học</span>
           </div>
           <div class="discovery-stat">
             <span class="discovery-stat-value">Now</span>
-            <span class="discovery-stat-label">Ti?p t?c h?c ch? v?i m?t l?n b?m</span>
+            <span class="discovery-stat-label">Tiếp tục học chỉ với một lần bấm</span>
           </div>
         </div>
 
@@ -47,13 +47,13 @@
     <section class="topic-section">
       <div class="topic-head">
         <div>
-          <h2 class="topic-title">Kh�a h?c d� dang k�</h2>
-          <div class="topic-meta"><%= totalCourses %> kh�a h?c trong thu vi?n h?c t?p c?a b?n</div>
+          <h2 class="topic-title">Khóa học đã đăng ký</h2>
+          <div class="topic-meta"><%= totalCourses %> khóa học trong thư viện học tập của bạn</div>
         </div>
       </div>
 
       <% if (!totalCourses) { %>
-        <div class="alert alert-light border">B?n chua dang k� kh�a h?c n�o.</div>
+        <div class="alert alert-light border">Bạn chưa đăng ký khóa học nào.</div>
       <% } else { %>
         <div class="course-card-grid course-card-grid-library">
           <% courses.forEach((course) => { %>
@@ -65,7 +65,7 @@
               <div class="course-card-body">
                 <h3 class="course-card-title"><%= course.title %></h3>
                 <p class="course-card-description">
-                  <%= (course.description || 'Ti?p t?c h?c kh�a h?c n�y d? xem n?i dung chi ti?t v� ti?n d? hi?n t?i c?a b?n.').slice(0, 140) %><%= course.description && course.description.length > 140 ? '...' : '' %>
+                  <%= (course.description || 'Tiếp tục học khóa học này để xem nội dung chi tiết và tiến độ hiện tại của bạn.').slice(0, 140) %><%= course.description && course.description.length > 140 ? '...' : '' %>
                 </p>
 
                 <div class="course-card-rating course-card-rating-compact">
@@ -73,7 +73,7 @@
                 </div>
 
                 <div class="course-card-footer">
-                  <a class="btn btn-primary" href="/courses/<%= course._id %>">Ti?p t?c h?c</a>
+                  <a class="btn btn-primary" href="/courses/<%= course._id %>">Tiếp tục học</a>
                 </div>
               </div>
             </article>
