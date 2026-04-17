@@ -47,7 +47,7 @@ router.delete('/library/:id', isLoggedIn, async (req, res) => {
         }
 
         await Course.updateMany(
-            {},
+            { author: req.user._id },
             {
                 $pull: {
                     'sections.$[].lessons': { refId: libraryId },

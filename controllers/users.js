@@ -2,6 +2,7 @@ const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const { cloudinary } = require('../config/cloudinary');
 const { buildGamificationViewModel, awardGamification } = require('../utils/gamification');
+const { isAdminUser } = require('../middleware');
 
 async function getLeaderboardSnapshot(limit, currentUserId) {
     const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
@@ -51,12 +52,12 @@ async function getLeaderboardSnapshot(limit, currentUserId) {
 
 async function getCompletedLessonCount(userId) {
     const result = await UserCourseProgress.aggregate([
-        { $match: { userId } },
+        { $match: { user: userId } },
         {
             $project: {
                 completedCount: {
                     $size: {
-                        $ifNull: ['$completedLessonIds', []]
+                        $ifNull: ['$completedLessons', []]
                     }
                 }
             }
@@ -125,7 +126,7 @@ module.exports.logout = (req, res, next) => {
             return next(err);
         }
         req.flash('success', 'Goodbye!');
-        res.redirect('/courses');
+        res.redirect('/');
     });
 };
 
@@ -142,10 +143,10 @@ module.exports.renderProfile = async (req, res) => {
     const gamification = buildGamificationViewModel(user);
     const leaderboard = await getLeaderboardSnapshot(5, req.user._id);
 
-    const progressDocs = await UserCourseProgress.find({ userId: req.user._id }).lean();
+    const progressDocs = await UserCourseProgress.find({ user: req.user._id }).lean();
     const progressByCourse = {};
     progressDocs.forEach((doc) => {
-        progressByCourse[String(doc.courseId)] = doc;
+        progressByCourse[String(doc.course)] = doc;
     });
 
     res.render('users/profile', {
@@ -271,6 +272,10 @@ module.exports.markCourseNotificationsRead = async (req, res) => {
 };
 
 module.exports.awardGamificationAction = async (req, res) => {
+    if (!isAdminUser(req.user)) {
+        return res.status(403).json({ success: false, error: 'This endpoint is restricted.' });
+    }
+
     const allowed = new Set(['lessonComplete', 'quizResult', 'aiTutor', 'aiQuizGenerate', 'aiSlideGenerate', 'courseComplete']);
     const action = String(req.body && req.body.action || '').trim();
     const meta = req.body && req.body.meta && typeof req.body.meta === 'object' ? req.body.meta : {};

@@ -16,6 +16,18 @@ function countCourseLessons(course) {
   }, 0);
 }
 
+function sanitizeCourseInput(rawCourse) {
+  const source = rawCourse && typeof rawCourse === 'object' ? rawCourse : {};
+  const allowedFields = ['title', 'description', 'driveLink', 'topic', 'driveStructure', 'sections'];
+
+  return allowedFields.reduce((acc, key) => {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      acc[key] = source[key];
+    }
+    return acc;
+  }, {});
+}
+
 function getEnrolledCourseIds(user) {
   if (!user || typeof user.getEnrolledCourseIdSet !== 'function') return [];
 
@@ -224,7 +236,7 @@ module.exports.renderNewForm = (req, res) => {
 };
 
 module.exports.createCourse = async (req, res) => {
-  const course = new Course(req.body.course);
+  const course = new Course(sanitizeCourseInput(req.body.course));
   course.images = req.files ? req.files.map(f => ({ url: f.path, filename: f.filename })) : [];
   course.author = req.user._id;
 
@@ -318,9 +330,16 @@ module.exports.renderEditForm = async (req, res) => {
 };
 
 module.exports.updateCourse = async (req, res) => {
-  const course = await Course.findByIdAndUpdate(req.params.id, req.body.course);
-  const imgs = req.files.map(f => ({ url: f.path, filename: f.filename }));
-  course.images.push(...imgs);
+  const course = await Course.findByIdAndUpdate(req.params.id, sanitizeCourseInput(req.body.course), { new: true, runValidators: true });
+  if (!course) {
+    req.flash('error', 'Cannot find that course!');
+    return res.redirect('/courses');
+  }
+
+  const imgs = Array.isArray(req.files) ? req.files.map(f => ({ url: f.path, filename: f.filename })) : [];
+  if (imgs.length) {
+    course.images.push(...imgs);
+  }
   await course.save();
   req.flash('success', 'Successfully updated course!');
   res.redirect(`/courses/${course._id}`);

@@ -18,7 +18,7 @@
   }
 %>
 
-<div class="course-show-page">
+<div class="course-show-page course-preview-page">
   <div class="learning-root">
     <section class="show-course-header">
       <div class="show-course-breadcrumb">Course Preview</div>
@@ -37,9 +37,13 @@
           </div>
 
           <div class="mt-4 d-flex flex-wrap gap-2">
-            <form action="/explore/<%= course._id %>/enroll" method="POST">
-              <button class="btn btn-success">Tham gia khóa học</button>
-            </form>
+            <% if (isEnrolled) { %>
+              <a class="btn btn-success" href="/courses/<%= course._id %>">Vào khóa học</a>
+            <% } else { %>
+              <form action="/explore/<%= course._id %>/enroll" method="POST">
+                <button class="btn btn-success">Tham gia khóa học</button>
+              </form>
+            <% } %>
             <a class="btn btn-outline-light" href="/explore">Quay lại explore</a>
           </div>
         </div>
@@ -162,6 +166,21 @@
               <div class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
             </div>
             <div class="small text-muted mt-2">Toàn bộ curriculum preview đã sẵn sàng để xem.</div>
+          </div>
+
+          <div class="card mb-3 preview-cta-card">
+            <div class="card-body">
+              <div class="small text-uppercase text-muted fw-semibold mb-2">Bắt đầu học</div>
+              <h6 class="mb-2">Bạn có thể tham gia trực tiếp từ trang preview.</h6>
+              <p class="text-muted small mb-3">Sau khi tham gia, khóa học sẽ xuất hiện trong danh sách học của bạn.</p>
+              <% if (isEnrolled) { %>
+                <a class="btn btn-success w-100" href="/courses/<%= course._id %>">Vào khóa học</a>
+              <% } else { %>
+                <form action="/explore/<%= course._id %>/enroll" method="POST" class="d-grid">
+                  <button class="btn btn-success">Tham gia khóa học</button>
+                </form>
+              <% } %>
+            </div>
           </div>
 
           <div class="card mb-3" id="learningGamificationCard">

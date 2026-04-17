@@ -38,8 +38,10 @@ module.exports.previewCourse = async (req, res) => {
             populate: { path: 'author' }
         });
     if (!course) return res.redirect('/explore');
+    const user = await User.findById(req.user._id).select('enrolledCourses enrolledCourseIds');
     const generatedDescription = await generateCourseDescription(course);
-    res.render('courses/preview-modern', { course, generatedDescription });
+    const isEnrolled = !!(user && typeof user.findEnrollment === 'function' && user.findEnrollment(course._id));
+    res.render('courses/preview-modern', { course, generatedDescription, isEnrolled });
 };
 
 module.exports.enrollCourse = async (req, res) => {

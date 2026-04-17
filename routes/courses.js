@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { isLoggedIn } = require('../middleware');
+const { isLoggedIn, requireCourseAccess, requireCourseManagement } = require('../middleware');
 const catchAsync = require('../utils/catchAsync');
 const course = require('../controllers/courses');
 const multer = require('multer');
@@ -17,16 +17,16 @@ router.get('/new', isLoggedIn, course.renderNewForm);
 
 router
   .route('/:id')
-  .get(isLoggedIn, catchAsync(course.showCourses))
-  .put(isLoggedIn, catchAsync(course.updateCourse))
-  .delete(isLoggedIn, catchAsync(course.deleteCourse));
+  .get(isLoggedIn, requireCourseAccess, catchAsync(course.showCourses))
+  .put(isLoggedIn, requireCourseManagement, upload.array('image'), catchAsync(course.updateCourse))
+  .delete(isLoggedIn, requireCourseManagement, catchAsync(course.deleteCourse));
 
-router.get('/:id/edit', isLoggedIn, catchAsync(course.renderEditForm));
+router.get('/:id/edit', isLoggedIn, requireCourseManagement, catchAsync(course.renderEditForm));
 
-router.post('/:courseId/progress', isLoggedIn, catchAsync(course.updateProgress));
-router.post('/:courseId/notes', isLoggedIn, catchAsync(course.saveNote));
-router.post('/:courseId/quiz-results', isLoggedIn, catchAsync(course.saveQuizResult));
-router.post('/:id/review', isLoggedIn, catchAsync(course.createReview));
-router.get('/:id/reviews', isLoggedIn, catchAsync(course.getReviews));
+router.post('/:courseId/progress', isLoggedIn, requireCourseAccess, catchAsync(course.updateProgress));
+router.post('/:courseId/notes', isLoggedIn, requireCourseAccess, catchAsync(course.saveNote));
+router.post('/:courseId/quiz-results', isLoggedIn, requireCourseAccess, catchAsync(course.saveQuizResult));
+router.post('/:id/review', isLoggedIn, requireCourseAccess, catchAsync(course.createReview));
+router.get('/:id/reviews', isLoggedIn, requireCourseAccess, catchAsync(course.getReviews));
 
 module.exports = router;

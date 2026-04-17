@@ -367,6 +367,10 @@
     display: none;
 }
 
+.course-preview-page .show-course-header {
+    display: block;
+}
+
 .show-course-inline-head {
     display: grid;
     gap: 14px;
@@ -645,6 +649,16 @@
 
 #learningGamificationCard {
     margin-bottom: 16px !important;
+}
+
+.preview-cta-card {
+    border: 1px solid var(--cp-border);
+    border-radius: 22px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.preview-cta-card .card-body {
+    padding: 18px;
 }
 
 .learning-sections-wrap {

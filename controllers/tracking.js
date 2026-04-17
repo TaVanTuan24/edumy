@@ -1,5 +1,6 @@
 const UserCourseProgress = require('../models/userCourseProgress');
 const User = require('../models/user');
+const Course = require('../models/course');
 const { awardGamification } = require('../utils/gamification');
 
 function normalizeLessonTracking(doc, lessonId, lessonType) {
@@ -40,6 +41,36 @@ async function getOrCreateProgress(userId, courseId) {
     { $setOnInsert: { user: userId, course: courseId } },
     { new: true, upsert: true }
   );
+}
+
+function getQuizQuestionCount(course, lessonId) {
+  const targetLessonId = String(lessonId || '').trim();
+  if (!course || !targetLessonId) return 0;
+
+  const sections = Array.isArray(course.sections) ? course.sections : [];
+  for (const section of sections) {
+    const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+    for (const lesson of lessons) {
+      if (String(lesson && lesson._id || '') !== targetLessonId) continue;
+      return Array.isArray(lesson && lesson.quiz) ? lesson.quiz.length : 0;
+    }
+  }
+
+  const driveStructure = Array.isArray(course.driveStructure) ? course.driveStructure : [];
+  for (const section of driveStructure) {
+    const lessons = Array.isArray(section && section.videos) ? section.videos : [];
+    for (const lesson of lessons) {
+      if (String(lesson && lesson._id || '') !== targetLessonId) continue;
+
+      if (Array.isArray(lesson && lesson.content && lesson.content.questions)) {
+        return lesson.content.questions.length;
+      }
+
+      return Array.isArray(lesson && lesson.questions) ? lesson.questions.length : 0;
+    }
+  }
+
+  return 0;
 }
 
 module.exports.trackEvent = async (req, res) => {
@@ -133,18 +164,23 @@ module.exports.trackQuiz = async (req, res) => {
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType || 'quiz');
 
-    const scoreValue = Number(score) || 0;
-    const totalValue = Number(total) || 0;
+    const course = await Course.findById(courseId).select('sections driveStructure').lean();
+    const expectedTotal = getQuizQuestionCount(course, lessonId);
+    const rawTotal = Math.max(0, Number(total) || 0);
+    const totalValue = expectedTotal > 0 ? expectedTotal : rawTotal;
+    const scoreValue = Math.min(Math.max(0, Number(score) || 0), totalValue || rawTotal || 0);
     const percent = totalValue > 0 ? Math.round((scoreValue / totalValue) * 100) : 0;
     const previousPercent = Number(entry.quizScore || 0);
 
-    entry.quizAttempts = Number(entry.quizAttempts || 0) + (Number(attempts) || 1);
+    entry.quizAttempts = Number(entry.quizAttempts || 0) + Math.max(1, Math.min(Number(attempts) || 1, 1));
     entry.quizScore = percent;
 
+    let hadPreviousResult = false;
     if (lessonId) {
       const quizKey = String(lessonId);
       const existingIndex = progressDoc.quizResults.findIndex((item) => String(item.quizId) === quizKey);
       if (existingIndex >= 0) {
+        hadPreviousResult = true;
         progressDoc.quizResults[existingIndex].score = scoreValue;
         progressDoc.quizResults[existingIndex].total = totalValue;
       } else {
@@ -157,13 +193,16 @@ module.exports.trackQuiz = async (req, res) => {
 
     const user = await User.findById(req.user._id);
     if (user) {
-      await awardGamification(user, {
-        action: 'quizResult',
-        meta: {
-          percent,
-          isHighScoreFirstTime: previousPercent < 80 && percent >= 80
-        }
-      });
+      const isHighScoreFirstTime = previousPercent < 80 && percent >= 80;
+      if (!hadPreviousResult || isHighScoreFirstTime) {
+        await awardGamification(user, {
+          action: 'quizResult',
+          meta: {
+            percent,
+            isHighScoreFirstTime
+          }
+        });
+      }
     }
 
     res.json({ success: true });

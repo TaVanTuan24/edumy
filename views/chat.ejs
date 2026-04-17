@@ -770,6 +770,15 @@
             sendMessage();
         }
 
+        function escapeHtml(text) {
+            return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Add message to UI
         function addMessage(text, role, animate = true) {
             const messageDiv = document.createElement('div');
@@ -783,7 +792,7 @@
             messageDiv.innerHTML = `
                 <div class="message-icon">${iconBg}</div>
                 <div class="message-content">
-                    <div class="message-text">${marked.parse(text)}</div>
+                    <div class="message-text">${marked.parse(escapeHtml(text))}</div>
                 </div>
             `;
 

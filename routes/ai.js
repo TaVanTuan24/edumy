@@ -7,6 +7,7 @@ const User = require("../models/user")
 const Video = require("../models/video")
 const Transcript = require("../models/Transcript")
 const { awardGamification } = require('../utils/gamification')
+const { userCanAccessCourse } = require('../middleware')
 const {
     buildSlidePrompt,
     parseAiSlideResponse,
@@ -37,9 +38,18 @@ router.post("/chat", async (req, res) => {
         const { message, chatId, courseId, question, lessonId, context } = req.body
 
         if (courseId && question) {
+            const course = await Course.findById(courseId).select('author sections driveStructure')
+            if (!course) {
+                return res.status(404).json({ error: "Course not found" })
+            }
+
+            const user = await User.findById(userId).select('email enrolledCourses enrolledCourseIds')
+            if (!user || !userCanAccessCourse(user, course)) {
+                return res.status(403).json({ error: "You do not have access to this course." })
+            }
+
             const response = await answerCourseQuestion({
-                userId,
-                courseId,
+                course,
                 question,
                 lessonId,
                 context
@@ -889,16 +899,16 @@ async function askLlama(prompt) {
     return res.data && res.data.response ? res.data.response : ""
 }
 
-async function answerCourseQuestion({ userId: _userId, courseId, question, lessonId, context }) {
+async function answerCourseQuestion({ course, question, lessonId, context }) {
     const trimmedQuestion = stripHtml(question).slice(0, 800)
     if (!trimmedQuestion) return ""
 
+    const courseId = String(course && course._id || '')
     const contextLessonId = context && context.lessonId ? String(context.lessonId) : String(lessonId || "")
     const cacheKey = `${courseId}:${contextLessonId}:${trimmedQuestion.toLowerCase()}`
     const cached = getCache(cacheKey)
     if (cached) return cached
 
-    const course = await Course.findById(courseId)
     if (!course) return "I could not find this in the course."
 
     const docs = buildLessonDocs(course)
