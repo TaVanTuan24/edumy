@@ -117,7 +117,7 @@ function getCourseIdFromRequest(req) {
 }
 
 async function loadCourseForRequest(req) {
-  const Course = require('./models/course');
+  const Course = require('../models/course');
   const courseId = getCourseIdFromRequest(req);
   if (!courseId) {
     return { error: 'Course id is required.', statusCode: 400 };
@@ -154,7 +154,7 @@ const isLoggedIn = (req, res, next) => {
 };
 
 const isAuthor = async (req, res, next) => {
-  const Review = require('./models/review');
+  const Review = require('../models/review');
   const { reviewId } = req.params;
   const review = await Review.findById(reviewId);
   if (!review || !review.author.equals(req.user._id)) {
@@ -220,9 +220,9 @@ const requireCourseManagement = async (req, res, next) => {
   next();
 };
 
-module.exports = { 
+module.exports = {
   sanitizeReturnTo,
-  storeReturnTo, 
+  storeReturnTo,
   isLoggedIn,
   isAuthor,
   isAdmin,

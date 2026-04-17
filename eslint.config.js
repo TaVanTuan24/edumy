@@ -27,8 +27,6 @@ module.exports = [
       'services/**/*.js',
       'utils/**/*.js',
       '__tests__/**/*.js',
-      'middleware.js',
-      'firebase.js',
       'eslint.config.js'
     ],
     languageOptions: {
