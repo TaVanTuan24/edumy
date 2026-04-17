@@ -6,8 +6,205 @@ const Course = require('../models/course');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const Video = require('../models/video');
+const {
+    getCanonicalSections,
+    syncCourseContent
+} = require('../utils/courseContentAdapter');
 
 router.use(isLoggedIn, isAdmin);
+
+async function loadEditableCourse(courseId) {
+    const course = await Course.findById(courseId)
+    if (!course) return null
+    syncCourseContent(course)
+    return course
+}
+
+async function saveEditableCourse(course) {
+    console.log('[CourseEditor] canonical sections before save:', JSON.stringify(
+        (course.sections || []).map((section) => ({
+            id: String(section && section._id || ''),
+            title: String(section && section.title || ''),
+            lessons: Array.isArray(section && section.lessons)
+                ? section.lessons.map((lesson) => ({
+                    id: String(lesson && lesson._id || ''),
+                    title: String(lesson && lesson.title || ''),
+                    type: String(lesson && lesson.type || '')
+                }))
+                : []
+        }))
+    ))
+    syncCourseContent(course)
+    await course.save()
+    console.log('[CourseEditor] canonical sections after save:', JSON.stringify(
+        (course.sections || []).map((section) => ({
+            id: String(section && section._id || ''),
+            title: String(section && section.title || ''),
+            lessons: Array.isArray(section && section.lessons)
+                ? section.lessons.map((lesson) => ({
+                    id: String(lesson && lesson._id || ''),
+                    title: String(lesson && lesson.title || ''),
+                    type: String(lesson && lesson.type || '')
+                }))
+                : []
+        }))
+    ))
+    return course
+}
+
+function getLegacyDriveStructure(course) {
+    syncCourseContent(course)
+    return Array.isArray(course && course.driveStructure) ? course.driveStructure : []
+}
+
+function getLegacyLesson(course, sectionIndex, lessonIndex) {
+    const driveStructure = getLegacyDriveStructure(course)
+    return driveStructure?.[sectionIndex]?.videos?.[lessonIndex] || null
+}
+
+function getCanonicalLesson(course, sectionIndex, lessonIndex) {
+    return course?.sections?.[sectionIndex]?.lessons?.[lessonIndex] || null
+}
+
+function normalizeQuizAnswerPayload(question) {
+    const rawAnswers = Array.isArray(question && question.answers) && question.answers.length
+        ? question.answers
+        : Array.isArray(question && question.options) && question.options.length
+            ? question.options
+            : Array.isArray(question && question.choices) && question.choices.length
+                ? question.choices
+                : []
+
+    const normalized = rawAnswers
+        .map((answer, index) => {
+            if (typeof answer === 'string') {
+                return {
+                    id: `answer-${index + 1}`,
+                    text: answer.trim(),
+                    isCorrect: false
+                }
+            }
+
+            return {
+                id: String(answer && (answer.id || answer._id) || `answer-${index + 1}`),
+                text: String(answer && (answer.text || answer.answer || answer.value) || '').trim(),
+                isCorrect: Boolean(answer && (answer.isCorrect || answer.correct))
+            }
+        })
+        .filter((answer) => answer.text)
+
+    let correctIndex = normalized.findIndex((answer) => answer.isCorrect)
+    if (correctIndex < 0) {
+        const numericCorrectIndex = Number(
+            question && (
+                question.correctIndex
+                ?? question.correctOptionIndex
+                ?? question.correctAnswerIndex
+            )
+        )
+        if (Number.isInteger(numericCorrectIndex) && numericCorrectIndex >= 0 && numericCorrectIndex < normalized.length) {
+            correctIndex = numericCorrectIndex
+        }
+    }
+
+    if (correctIndex < 0) {
+        const correctAnswer = String(question && question.correctAnswer || '').trim().toLowerCase()
+        if (correctAnswer) {
+            const letterIndex = ['a', 'b', 'c', 'd'].indexOf(correctAnswer)
+            if (letterIndex >= 0 && letterIndex < normalized.length) {
+                correctIndex = letterIndex
+            } else {
+                correctIndex = normalized.findIndex((answer) => answer.text.trim().toLowerCase() === correctAnswer)
+            }
+        }
+    }
+
+    if (correctIndex >= 0) {
+        normalized.forEach((answer, index) => {
+            answer.isCorrect = index === correctIndex
+        })
+    }
+
+    if (!normalized.length) {
+        const fallbackCorrectAnswer = String(question && question.correctAnswer || '').trim()
+        normalized.push({
+            id: 'answer-1',
+            text: fallbackCorrectAnswer || 'Option 1',
+            isCorrect: true
+        })
+    }
+
+    while (normalized.length < 2) {
+        normalized.push({
+            id: `answer-${normalized.length + 1}`,
+            text: `Option ${normalized.length + 1}`,
+            isCorrect: false
+        })
+    }
+
+    if (!normalized.some((answer) => answer.isCorrect) && normalized[0]) {
+        normalized[0].isCorrect = true
+    }
+
+    return normalized
+}
+
+function getQuizOptionPayloadSource({ answers = [], options = [], choices = [] } = {}) {
+    if (Array.isArray(answers) && answers.length) return answers
+    if (Array.isArray(options) && options.length) return options
+    if (Array.isArray(choices) && choices.length) return choices
+    return []
+}
+
+function buildCanonicalQuizQuestion(questionText, optionObjects, correctIndex) {
+    const normalizedOptions = Array.isArray(optionObjects)
+        ? optionObjects.map((opt) => String(opt && opt.text || opt || '').trim()).filter(Boolean)
+        : []
+    const safeCorrectIndex = Number.isInteger(correctIndex) ? correctIndex : 0
+    const normalizedQuestionText = String(questionText || '').trim() || 'Untitled question'
+
+    return {
+        question: normalizedQuestionText,
+        options: normalizedOptions,
+        correctAnswer: normalizedOptions[safeCorrectIndex] || normalizedOptions[0] || ''
+    }
+}
+
+function buildEditorQuizQuestionResponse(question) {
+    const answers = normalizeQuizAnswerPayload(question)
+    const correctAnswerObject = answers.find((answer) => answer.isCorrect)
+    const correctAnswer = String(
+        (question && question.correctAnswer)
+        || (correctAnswerObject && correctAnswerObject.text)
+        || ''
+    ).trim()
+
+    return {
+        ...(question && question._id ? { _id: question._id } : {}),
+        question: String(question && question.question || '').trim(),
+        answers: answers.map((answer, index) => ({
+            id: answer.id || `answer-${index + 1}`,
+            text: answer.text,
+            isCorrect: Boolean(answer.isCorrect)
+        })),
+        options: answers.map((answer) => ({
+            text: answer.text,
+            correct: Boolean(answer.isCorrect)
+        })),
+        correctAnswer
+    }
+}
+
+function reindexCanonicalSections(course) {
+    const sections = Array.isArray(course && course.sections) ? course.sections : []
+    sections.forEach((section, sectionIndex) => {
+        section.order = sectionIndex
+        const lessons = Array.isArray(section && section.lessons) ? section.lessons : []
+        lessons.forEach((lesson, lessonIndex) => {
+            lesson.order = lessonIndex
+        })
+    })
+}
 
 function extractYouTubeId(input) {
     const raw = String(input || '').trim();
@@ -82,17 +279,19 @@ function normalizeSlidesPayload(slides) {
                 id: String(element?.id || `el-${index + 1}-${elementIndex + 1}`),
                 type: normalizedType,
                 x: Number.isFinite(Number(element?.x)) ? Number(element.x) : 0,
-                y: Number.isFinite(Number(element?.y)) ? Number(element.y) : 0
+                y: Number.isFinite(Number(element?.y)) ? Number(element.y) : 0,
+                width: Number.isFinite(Number(element?.width)) ? Number(element.width) : undefined,
+                height: Number.isFinite(Number(element?.height)) ? Number(element.height) : undefined
             }
 
             if (normalizedType === 'text') {
-                normalized.text = String(element?.text || '').trim()
-                normalized.fontSize = Number.isFinite(Number(element?.fontSize)) ? Number(element.fontSize) : 28
-                normalized.color = String(element?.color || '#1c1d1f')
+                normalized.text = String(element?.text || element?.content || '').trim()
+                normalized.fontSize = Number.isFinite(Number(element?.fontSize || element?.styles?.fontSize)) ? Number(element?.fontSize || element?.styles?.fontSize) : 28
+                normalized.color = String(element?.color || element?.styles?.color || '#1c1d1f')
 
-                const align = String(element?.align || 'left').toLowerCase()
+                const align = String(element?.align || element?.styles?.textAlign || 'left').toLowerCase()
                 normalized.align = ['left', 'center', 'right'].includes(align) ? align : 'left'
-                normalized.bold = Boolean(element?.bold)
+                normalized.bold = Boolean(element?.bold || Number(element?.styles?.fontWeight) >= 600)
             } else {
                 normalized.src = String(element?.src || '').trim()
             }
@@ -102,6 +301,12 @@ function normalizeSlidesPayload(slides) {
 
         return {
             id: String(slide?.id || `slide-${index + 1}`),
+            title: String(slide?.title || `Slide ${index + 1}`),
+            layout: String(slide?.layout || 'left-text'),
+            theme: String(slide?.theme || 'light'),
+            template: String(slide?.template || ''),
+            semantic: slide?.semantic && typeof slide.semantic === 'object' ? slide.semantic : undefined,
+            validation: slide?.validation && typeof slide.validation === 'object' ? slide.validation : undefined,
             elements: normalizedElements
         }
     })
@@ -171,22 +376,22 @@ function normalizeInteractiveQuizPayload(quizzes) {
 }
 
 function countTotalLessons(course) {
-    if (!course || !Array.isArray(course.driveStructure)) return 0;
-    return course.driveStructure.reduce((total, section) => {
-        const items = Array.isArray(section && section.videos) ? section.videos : [];
+    const sections = getCanonicalSections(course);
+    return sections.reduce((total, section) => {
+        const items = Array.isArray(section && section.lessons) ? section.lessons : [];
         return total + items.length;
     }, 0);
 }
 
 function buildLessonTitleMap(course) {
     const map = new Map();
-    if (!course || !Array.isArray(course.driveStructure)) return map;
+    const sections = getCanonicalSections(course);
 
-    course.driveStructure.forEach((section) => {
-        const items = Array.isArray(section && section.videos) ? section.videos : [];
+    sections.forEach((section) => {
+        const items = Array.isArray(section && section.lessons) ? section.lessons : [];
         items.forEach((item) => {
             if (!item || !item._id) return;
-            map.set(String(item._id), item.name || item.title || 'Lesson');
+            map.set(String(item._id), item.title || item.name || 'Lesson');
         });
     });
 
@@ -228,21 +433,9 @@ router.get('/ai/slide', async (req, res) => {
 });
 router.get('/courses/:id/editor', async (req, res) => {
 
-    const course = await Course.findById(req.params.id)
-
-    // Normalize driveStructure - ensure all items have type field
-    if (course.driveStructure) {
-        course.driveStructure.forEach(section => {
-            if (section.videos && Array.isArray(section.videos)) {
-                section.videos.forEach(item => {
-                    if (!item.type) {
-                        item.type = "video"; // Default to video for backward compatibility
-                    } else if (item.type === 'lecture') {
-                        item.type = 'video';
-                    }
-                });
-            }
-        });
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).send('Course not found')
     }
 
     res.render('admin/courseEditor', { course })
@@ -250,7 +443,7 @@ router.get('/courses/:id/editor', async (req, res) => {
 })
 
 router.get('/courses/:id/video-settings', async (req, res) => {
-    const course = await Course.findById(req.params.id)
+    const course = await loadEditableCourse(req.params.id)
     if (!course) {
         return res.status(404).send('Course not found')
     }
@@ -262,7 +455,7 @@ router.get('/courses/:id/video-settings', async (req, res) => {
         return res.status(400).send('Missing section or lesson index')
     }
 
-    const lesson = course.driveStructure?.[sectionIndex]?.videos?.[lessonIndex]
+    const lesson = getLegacyLesson(course, sectionIndex, lessonIndex)
     if (!lesson) {
         return res.status(404).send('Lesson not found')
     }
@@ -484,7 +677,7 @@ router.get('/courses/:courseId/user/:userId', async (req, res) => {
 });
 
 router.get('/courses/:id/slide-editor', async (req, res) => {
-    const course = await Course.findById(req.params.id)
+    const course = await loadEditableCourse(req.params.id)
 
     if (!course) {
         return res.status(404).send('Course not found')
@@ -495,7 +688,7 @@ router.get('/courses/:id/slide-editor', async (req, res) => {
 
     const lesson = Number.isNaN(sectionIndex) || Number.isNaN(lessonIndex)
         ? null
-        : course.driveStructure?.[sectionIndex]?.videos?.[lessonIndex] || null
+        : (getCanonicalLesson(course, sectionIndex, lessonIndex) || getLegacyLesson(course, sectionIndex, lessonIndex))
 
     const slideData = Array.isArray(lesson?.content?.slides)
         ? lesson.content.slides
@@ -506,13 +699,19 @@ router.get('/courses/:id/slide-editor', async (req, res) => {
         slideData,
         sectionIndex: Number.isNaN(sectionIndex) ? '' : sectionIndex,
         lessonIndex: Number.isNaN(lessonIndex) ? '' : lessonIndex,
-        lessonTitle: lesson?.name || ''
+        lessonTitle: lesson?.title || lesson?.name || ''
     })
 })
 
 router.put('/course/:id/slide-editor/save', async (req, res) => {
     try {
         const { sectionIndex, lessonIndex, title, content } = req.body
+        console.log('[CourseEditor] slide save payload:', JSON.stringify({
+            sectionIndex,
+            lessonIndex,
+            title,
+            slideCount: Array.isArray(content && content.slides) ? content.slides.length : 0
+        }))
 
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const parsedLessonIndex = parseInt(lessonIndex, 10)
@@ -527,19 +726,30 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Slide content missing' })
         }
 
-        await Course.updateOne(
-            { _id: req.params.id },
-            {
-                $set: {
-                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.type`]: 'slide',
-                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.name`]: String(title || 'Slide Lesson').trim(),
-                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.content`]: {
-                        slides: normalizedSlides
-                    },
-                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.aiGenerated`]: false
-                }
-            }
-        )
+        const course = await loadEditableCourse(req.params.id)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' })
+        }
+
+        const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found' })
+        }
+
+        lesson.type = 'slide'
+        lesson.title = String(title || 'Slide Lesson').trim()
+        lesson.content = { ...(lesson.content || {}), slides: normalizedSlides }
+        lesson.aiGenerated = false
+        course.markModified('sections')
+
+        await saveEditableCourse(course)
+        console.log('[CourseEditor] canonical lesson after slide save:', JSON.stringify({
+            sectionIndex: parsedSectionIndex,
+            lessonIndex: parsedLessonIndex,
+            lessonId: String(lesson && lesson._id || ''),
+            title: lesson.title,
+            slideCount: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides.length : 0
+        }))
 
         return res.json({ success: true })
     } catch (err) {
@@ -550,21 +760,9 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
 // New Udemy-style course editor (3-column layout)
 router.get('/courses/:id/editor-new', async (req, res) => {
 
-    const course = await Course.findById(req.params.id)
-
-    // Normalize driveStructure - ensure all items have type field
-    if (course.driveStructure) {
-        course.driveStructure.forEach(section => {
-            if (section.videos && Array.isArray(section.videos)) {
-                section.videos.forEach(item => {
-                    if (!item.type) {
-                        item.type = "video"; // Default to video for backward compatibility
-                    } else if (item.type === 'lecture') {
-                        item.type = 'video';
-                    }
-                });
-            }
-        });
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).send('Course not found')
     }
 
     res.render('admin/courseEditorNew', { course })
@@ -573,22 +771,35 @@ router.get('/courses/:id/editor-new', async (req, res) => {
 router.put('/course/:id/lesson/edit', async (req,res)=>{
 
 const {sectionIndex,lessonIndex,name,url,interactiveQuizzes} = req.body
+console.log('[CourseEditor] incoming lesson edit payload:', JSON.stringify({ sectionIndex, lessonIndex, name, url, interactiveQuizzesCount: Array.isArray(interactiveQuizzes) ? interactiveQuizzes.length : 0 }))
 
 const parsedSectionIndex = parseInt(sectionIndex, 10)
 const parsedLessonIndex = parseInt(lessonIndex, 10)
 const normalizedInteractiveQuizzes = normalizeInteractiveQuizPayload(interactiveQuizzes)
 
-await Course.updateOne(
-{_id:req.params.id},
-{
-$set:{
-[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.name`]:name,
-[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.preview`]:url,
-[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.interactiveQuizzes`]:normalizedInteractiveQuizzes,
-[`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.content.interactiveQuizzes`]:normalizedInteractiveQuizzes
+const course = await loadEditableCourse(req.params.id)
+if (!course) {
+    return res.status(404).send('course not found')
 }
+
+const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
+if (!lesson) {
+    return res.status(404).send('lesson not found')
 }
-)
+
+lesson.title = String(name || lesson.title || '').trim()
+if (lesson.type === 'video') {
+    lesson.videoUrl = String(url || '').trim()
+    lesson.preview = String(url || '').trim()
+}
+lesson.interactiveQuizzes = normalizedInteractiveQuizzes
+lesson.content = {
+    ...(lesson.content || {}),
+    ...(lesson.type === 'video' ? { videoUrl: String(url || '').trim() } : {}),
+    interactiveQuizzes: normalizedInteractiveQuizzes
+}
+
+await saveEditableCourse(course)
 
 res.send("updated")
 
@@ -597,17 +808,21 @@ router.delete('/course/:id/lesson/delete', async (req, res) => {
 
     const { sectionIndex, lessonIndex } = req.body
 
-    await Course.updateOne(
-        { _id: req.params.id },
-        {
-            $pull: {
-                [`driveStructure.${sectionIndex}.videos`]: {
-                    $eq: (await Course.findById(req.params.id))
-                        .driveStructure[sectionIndex].videos[lessonIndex]
-                }
-            }
-        }
-    )
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).json({ success: false, error: 'Course not found' })
+    }
+
+    const parsedSectionIndex = parseInt(sectionIndex, 10)
+    const parsedLessonIndex = parseInt(lessonIndex, 10)
+    const lessons = course.sections?.[parsedSectionIndex]?.lessons
+    if (!Array.isArray(lessons) || parsedLessonIndex < 0 || parsedLessonIndex >= lessons.length) {
+        return res.status(400).json({ success: false, error: 'Invalid lesson reference' })
+    }
+
+    lessons.splice(parsedLessonIndex, 1)
+    reindexCanonicalSections(course)
+    await saveEditableCourse(course)
 
     res.json({ success: true })
 
@@ -615,29 +830,33 @@ router.delete('/course/:id/lesson/delete', async (req, res) => {
 router.put('/course/:id/lesson/add', async (req, res) => {
     try {
         const { sectionIndex, name, url, type } = req.body
+        console.log('[CourseEditor] incoming add lesson payload:', JSON.stringify({ sectionIndex, name, url, type }))
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const itemType = normalizeItemType(type, 'video')
 
-        const course = await Course.findById(req.params.id)
+        const course = await loadEditableCourse(req.params.id)
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const videos = course.driveStructure?.[parsedSectionIndex]?.videos
+        const videos = course.sections?.[parsedSectionIndex]?.lessons
         if (!Array.isArray(videos)) {
             return res.status(400).json({ success: false, error: 'Invalid section index' })
         }
 
         const newItem = {
             type: itemType,
-            name: name,
+            title: name,
+            videoUrl: url,
             preview: url,
+            content: itemType === 'video' ? { videoUrl: url } : {},
             order: videos.length
         }
 
         videos.push(newItem)
 
-        await course.save()
+        reindexCanonicalSections(course)
+        await saveEditableCourse(course)
 
         console.log('Saved item:', newItem)
 
@@ -657,8 +876,16 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
             sourceIndex,
             destIndex
         } = req.body
+        console.log('[CourseEditor] incoming lesson reorder payload:', JSON.stringify({
+            sectionIndex,
+            lessonsCount: Array.isArray(lessons) ? lessons.length : null,
+            sourceSectionIndex,
+            destSectionIndex,
+            sourceIndex,
+            destIndex
+        }))
 
-        const course = await Course.findById(req.params.id)
+        const course = await loadEditableCourse(req.params.id)
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
@@ -675,8 +902,46 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
                 order: idx
             }))
 
-            course.driveStructure[parsedSectionIndex].videos = normalizedLessons
-            await course.save()
+            course.sections[parsedSectionIndex].lessons = normalizedLessons.map((item, idx) => {
+                const quiz = Array.isArray(item.questions)
+                    ? item.questions.map((question) => {
+                        const rawOptions = Array.isArray(question && question.options)
+                            ? question.options.map((opt) => {
+                                if (typeof opt === 'string') return { text: opt };
+                                return { text: String(opt && (opt.text || opt.answer || '')).trim(), correct: Boolean(opt && opt.correct) };
+                            })
+                            : Array.isArray(question && question.answers)
+                                ? question.answers.map((opt) => ({ text: String(opt && (opt.text || opt.answer || opt || '')).trim(), correct: Boolean(opt && opt.correct) }))
+                                : [];
+                        const correctIndex = rawOptions.findIndex((opt) => Boolean(opt && opt.correct));
+                        return buildCanonicalQuizQuestion(question && question.question, rawOptions, correctIndex >= 0 ? correctIndex : 0);
+                    })
+                    : [];
+
+                const type = normalizeItemType(item.type, 'video')
+                const content = { ...(item.content || {}) }
+                if (type === 'quiz') {
+                    content.questions = quiz
+                }
+                if (type === 'video') {
+                    content.videoUrl = item.preview || item.videoUrl || content.videoUrl || ''
+                }
+
+                return {
+                    ...(item && item._id ? { _id: item._id } : {}),
+                    title: item.name || item.title || 'Untitled Lesson',
+                    type,
+                    videoUrl: item.preview || item.videoUrl || '',
+                    preview: item.preview || item.videoUrl || '',
+                    refId: item.refId || '',
+                    content,
+                    quiz,
+                    interactiveQuizzes: Array.isArray(item.interactiveQuizzes) ? item.interactiveQuizzes : [],
+                    order: idx
+                }
+            })
+            reindexCanonicalSections(course)
+            await saveEditableCourse(course)
             return res.json({ success: true })
         }
 
@@ -690,8 +955,8 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid reorder payload' })
         }
 
-        const sourceVideos = course.driveStructure?.[fromSection]?.videos
-        const destinationVideos = course.driveStructure?.[toSection]?.videos
+        const sourceVideos = course.sections?.[fromSection]?.lessons
+        const destinationVideos = course.sections?.[toSection]?.lessons
 
         if (!Array.isArray(sourceVideos) || !Array.isArray(destinationVideos)) {
             return res.status(400).json({ success: false, error: 'Invalid section references' })
@@ -719,7 +984,8 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
             })
         }
 
-        await course.save()
+        reindexCanonicalSections(course)
+        await saveEditableCourse(course)
 
         res.json({
             success: true,
@@ -735,14 +1001,19 @@ router.put('/course/:id/section/edit', async (req, res) => {
 
     const { sectionIndex, name } = req.body
 
-    await Course.updateOne(
-        { _id: req.params.id },
-        {
-            $set: {
-                [`driveStructure.${sectionIndex}.section`]: name
-            }
-        }
-    )
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).json({ success: false, error: 'Course not found' })
+    }
+
+    const parsedSectionIndex = parseInt(sectionIndex, 10)
+    const section = course.sections?.[parsedSectionIndex]
+    if (!section) {
+        return res.status(400).json({ success: false, error: 'Invalid section index' })
+    }
+
+    section.title = name
+    await saveEditableCourse(course)
 
     res.json({ success: true })
 
@@ -751,17 +1022,18 @@ router.post("/course/:id/section/add", async (req, res) => {
 
     const { name } = req.body
 
-    await Course.findByIdAndUpdate(
-        req.params.id,
-        {
-            $push: {
-                driveStructure: {
-                    section: name,
-                    videos: []
-                }
-            }
-        }
-    )
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).json({ success: false, error: 'Course not found' })
+    }
+
+    course.sections.push({
+        title: name,
+        lessons: [],
+        order: course.sections.length
+    })
+    reindexCanonicalSections(course)
+    await saveEditableCourse(course)
 
     res.json({ success: true })
 
@@ -769,29 +1041,32 @@ router.post("/course/:id/section/add", async (req, res) => {
 router.post("/course/:id/quiz/add", async (req, res) => {
     try {
         const { sectionIndex, name, type } = req.body
+        console.log('[CourseEditor] incoming add quiz payload:', JSON.stringify({ sectionIndex, name, type }))
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const itemType = normalizeItemType(type, 'quiz')
 
-        const course = await Course.findById(req.params.id)
+        const course = await loadEditableCourse(req.params.id)
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const videos = course.driveStructure?.[parsedSectionIndex]?.videos
+        const videos = course.sections?.[parsedSectionIndex]?.lessons
         if (!Array.isArray(videos)) {
             return res.status(400).json({ success: false, error: 'Invalid section index' })
         }
 
         const newItem = {
             type: itemType,
-            name: name,
-            questions: [],
+            title: name,
+            content: { questions: [] },
+            quiz: [],
             order: videos.length
         }
 
         videos.push(newItem)
 
-        await course.save()
+        reindexCanonicalSections(course)
+        await saveEditableCourse(course)
 
         console.log('Saved item:', newItem)
 
@@ -806,22 +1081,23 @@ router.post("/course/:id/quiz/add", async (req, res) => {
 router.post("/course/:id/slide/add", async (req, res) => {
     try {
         const { sectionIndex, name, type } = req.body
+        console.log('[CourseEditor] incoming add slide payload:', JSON.stringify({ sectionIndex, name, type }))
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const itemType = normalizeItemType(type, 'slide')
 
-        const course = await Course.findById(req.params.id)
+        const course = await loadEditableCourse(req.params.id)
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const videos = course.driveStructure?.[parsedSectionIndex]?.videos
+        const videos = course.sections?.[parsedSectionIndex]?.lessons
         if (!Array.isArray(videos)) {
             return res.status(400).json({ success: false, error: 'Invalid section index' })
         }
 
         const newItem = {
             type: itemType,
-            name: name,
+            title: name,
             content: {
                 slides: []
             },
@@ -830,7 +1106,8 @@ router.post("/course/:id/slide/add", async (req, res) => {
 
         videos.push(newItem)
 
-        await course.save()
+        reindexCanonicalSections(course)
+        await saveEditableCourse(course)
 
         console.log('Saved item:', newItem)
 
@@ -845,13 +1122,13 @@ router.post("/course/:id/slide/add", async (req, res) => {
 router.get('/course/:id/lesson/:sectionIndex/:lessonIndex', async (req, res) => {
     try {
         const { sectionIndex, lessonIndex } = req.params
-        const course = await Course.findById(req.params.id).lean()
+        const course = await loadEditableCourse(req.params.id)
         
         if (!course) {
             return res.json({ success: false, error: 'Course not found' })
         }
         
-        const lesson = course.driveStructure[sectionIndex]?.videos[lessonIndex]
+        const lesson = getCanonicalLesson(course, Number(sectionIndex), Number(lessonIndex)) || getLegacyLesson(course, Number(sectionIndex), Number(lessonIndex))
         
         if (!lesson) {
             return res.json({ success: false, error: 'Lesson not found' })
@@ -867,13 +1144,13 @@ router.get('/course/:id/lesson/:sectionIndex/:lessonIndex', async (req, res) => 
 router.get('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes', async (req, res) => {
     try {
         const { sectionIndex, lessonIndex } = req.params
-        const course = await Course.findById(req.params.id).lean()
+        const course = await loadEditableCourse(req.params.id)
 
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const lesson = course.driveStructure?.[sectionIndex]?.videos?.[lessonIndex]
+        const lesson = getLegacyLesson(course, Number(sectionIndex), Number(lessonIndex))
         if (!lesson) {
             return res.status(404).json({ success: false, error: 'Lesson not found' })
         }
@@ -894,15 +1171,19 @@ router.put('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes', 
         const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
         const interactiveQuizzes = normalizeInteractiveQuizPayload(req.body && req.body.interactiveQuizzes)
 
-        await Course.updateOne(
-            { _id: req.params.id },
-            {
-                $set: {
-                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.interactiveQuizzes`]: interactiveQuizzes,
-                    [`driveStructure.${parsedSectionIndex}.videos.${parsedLessonIndex}.content.interactiveQuizzes`]: interactiveQuizzes
-                }
-            }
-        )
+        const course = await loadEditableCourse(req.params.id)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' })
+        }
+
+        const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found' })
+        }
+
+        lesson.interactiveQuizzes = interactiveQuizzes
+        lesson.content = { ...(lesson.content || {}), interactiveQuizzes }
+        await saveEditableCourse(course)
 
         return res.json({ success: true, interactiveQuizzes })
     } catch (err) {
@@ -914,13 +1195,13 @@ router.post('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes',
     try {
         const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
         const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
-        const course = await Course.findById(req.params.id)
+        const course = await loadEditableCourse(req.params.id)
 
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const lesson = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedLessonIndex]
+        const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
         if (!lesson) {
             return res.status(404).json({ success: false, error: 'Lesson not found' })
         }
@@ -936,7 +1217,7 @@ router.post('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes',
         lesson.content = lesson.content || {}
         lesson.content.interactiveQuizzes = appended
 
-        await course.save()
+        await saveEditableCourse(course)
         return res.json({ success: true, interactiveQuizzes: appended })
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message })
@@ -951,12 +1232,12 @@ router.patch('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes/
             ? req.body.orderedIds.map((id) => String(id))
             : []
 
-        const course = await Course.findById(req.params.id)
+        const course = await loadEditableCourse(req.params.id)
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const lesson = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedLessonIndex]
+        const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
         if (!lesson) {
             return res.status(404).json({ success: false, error: 'Lesson not found' })
         }
@@ -983,7 +1264,7 @@ router.patch('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes/
         lesson.content = lesson.content || {}
         lesson.content.interactiveQuizzes = normalized
 
-        await course.save()
+        await saveEditableCourse(course)
         return res.json({ success: true, interactiveQuizzes: normalized })
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message })
@@ -996,12 +1277,12 @@ router.delete('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes
         const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
         const quizId = String(req.params.quizId)
 
-        const course = await Course.findById(req.params.id)
+        const course = await loadEditableCourse(req.params.id)
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const lesson = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedLessonIndex]
+        const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
         if (!lesson) {
             return res.status(404).json({ success: false, error: 'Lesson not found' })
         }
@@ -1019,7 +1300,7 @@ router.delete('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes
         lesson.content = lesson.content || {}
         lesson.content.interactiveQuizzes = normalized
 
-        await course.save()
+        await saveEditableCourse(course)
         return res.json({ success: true, interactiveQuizzes: normalized })
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message })
@@ -1032,14 +1313,39 @@ router.get(
 
         const { courseId, sectionIndex, quizIndex } = req.params
 
-        const course = await Course.findById(courseId)
+        const course = await loadEditableCourse(courseId)
+        if (!course) {
+            return res.status(404).send('Course not found')
+        }
 
-        const quiz =
-            course.driveStructure[sectionIndex].videos[quizIndex]
+        const quiz = getCanonicalLesson(course, Number(sectionIndex), Number(quizIndex)) || getLegacyLesson(course, Number(sectionIndex), Number(quizIndex))
+        const quizForEditor = quiz
+            ? {
+                ...quiz,
+                questions: (
+                    Array.isArray(quiz.quiz)
+                        ? quiz.quiz
+                        : Array.isArray(quiz.questions)
+                            ? quiz.questions
+                            : Array.isArray(quiz.content && quiz.content.questions)
+                                ? quiz.content.questions
+                                : []
+                ).map((question) => buildEditorQuizQuestionResponse(question))
+            }
+            : null
+        console.log('[CourseEditor] quiz lesson payload returned to editor:', JSON.stringify({
+            sectionIndex,
+            quizIndex,
+            questionCount: Array.isArray(quizForEditor && quizForEditor.questions) ? quizForEditor.questions.length : 0,
+            title: quizForEditor && (quizForEditor.name || quizForEditor.title),
+            answersPerQuestion: Array.isArray(quizForEditor && quizForEditor.questions)
+                ? quizForEditor.questions.map((question) => Array.isArray(question.answers) ? question.answers.length : 0)
+                : []
+        }))
 
         res.render("admin/quizEditor", {
             course,
-            quiz,
+            quiz: quizForEditor,
             sectionIndex,
             quizIndex
         })
@@ -1054,10 +1360,23 @@ router.post(
                 sectionIndex,
                 quizIndex,
                 question = "",
+                answers = [],
+                choices = [],
                 options = [],
                 correct,
                 correctIndex
             } = req.body
+            console.log('[CourseEditor] quiz save payload:', JSON.stringify({
+                mode: 'add',
+                sectionIndex,
+                quizIndex,
+                question,
+                answersCount: Array.isArray(answers) ? answers.length : 0,
+                optionsCount: Array.isArray(options) ? options.length : 0,
+                choicesCount: Array.isArray(choices) ? choices.length : 0,
+                correctIndex,
+                correct
+            }))
 
             const parsedSectionIndex = parseInt(sectionIndex, 10)
             const parsedQuizIndex = parseInt(quizIndex, 10)
@@ -1066,14 +1385,14 @@ router.post(
                 return res.status(400).json({ success: false, error: "Invalid sectionIndex or quizIndex" })
             }
 
-            const normalizedQuestion = String(question).trim()
-            const normalizedOptions = (Array.isArray(options) ? options : [])
+            const normalizedQuestion = String(question).trim() || 'Untitled question'
+            const normalizedOptions = getQuizOptionPayloadSource({ answers, options, choices })
                 .map(opt => {
                     if (typeof opt === 'string') return { text: opt.trim(), correct: false }
                     if (opt && typeof opt === 'object') {
                         return {
-                            text: String(opt.text || '').trim(),
-                            correct: Boolean(opt.correct)
+                            text: String(opt.text || opt.answer || opt.value || '').trim(),
+                            correct: Boolean(opt.correct || opt.isCorrect)
                         }
                     }
                     return { text: '', correct: false }
@@ -1097,28 +1416,35 @@ router.post(
                 correct: i === finalCorrectIndex
             }))
 
-            const quizPath = `driveStructure.${parsedSectionIndex}.videos.${parsedQuizIndex}.questions`
+            const course = await loadEditableCourse(courseId)
+            if (!course) {
+                return res.status(404).json({ success: false, error: 'Course not found' })
+            }
 
-            await Course.updateOne(
-                { _id: courseId },
-                {
-                    $push: {
-                        [quizPath]: {
-                            question: normalizedQuestion,
-                            options: optionObjects
-                        }
-                    }
-                }
-            )
+            const quizLesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedQuizIndex]
+            if (!quizLesson) {
+                return res.status(404).json({ success: false, error: 'Quiz not found' })
+            }
 
-            const course = await Course.findById(courseId)
-            const questions = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedQuizIndex]?.questions || []
+            const questions = Array.isArray(quizLesson.quiz) ? quizLesson.quiz : []
+            const nextQuestion = buildCanonicalQuizQuestion(normalizedQuestion, optionObjects, finalCorrectIndex)
+            questions.push(nextQuestion)
+            quizLesson.quiz = questions
+            quizLesson.content = { ...(quizLesson.content || {}), questions }
+            course.markModified('sections')
+
+            await saveEditableCourse(course)
             const questionIndex = questions.length - 1
+            console.log('[CourseEditor] quiz payload after backend normalization:', JSON.stringify({
+                mode: 'add',
+                questionIndex,
+                question: buildEditorQuizQuestionResponse(questions[questionIndex])
+            }))
 
             res.json({
                 success: true,
                 questionIndex,
-                question: questions[questionIndex]
+                question: buildEditorQuizQuestionResponse(questions[questionIndex])
             })
         } catch (err) {
             res.status(500).json({ success: false, error: err.message })
@@ -1134,9 +1460,22 @@ router.put(
                 quizIndex,
                 questionIndex,
                 question = "",
+                answers = [],
+                choices = [],
                 options = [],
                 correctIndex
             } = req.body
+            console.log('[CourseEditor] quiz save payload:', JSON.stringify({
+                mode: 'update',
+                sectionIndex,
+                quizIndex,
+                questionIndex,
+                question,
+                answersCount: Array.isArray(answers) ? answers.length : 0,
+                optionsCount: Array.isArray(options) ? options.length : 0,
+                choicesCount: Array.isArray(choices) ? choices.length : 0,
+                correctIndex
+            }))
 
             const parsedSectionIndex = parseInt(sectionIndex, 10)
             const parsedQuizIndex = parseInt(quizIndex, 10)
@@ -1152,13 +1491,13 @@ router.put(
             }
 
             const normalizedQuestion = String(question).trim()
-            const normalizedOptions = (Array.isArray(options) ? options : [])
+            const normalizedOptions = getQuizOptionPayloadSource({ answers, options, choices })
                 .map(opt => {
                     if (typeof opt === 'string') return { text: opt.trim(), correct: false }
                     if (opt && typeof opt === 'object') {
                         return {
-                            text: String(opt.text || '').trim(),
-                            correct: Boolean(opt.correct)
+                            text: String(opt.text || opt.answer || opt.value || '').trim(),
+                            correct: Boolean(opt.correct || opt.isCorrect)
                         }
                     }
                     return { text: '', correct: false }
@@ -1182,15 +1521,30 @@ router.put(
                 correct: i === parsedCorrectIndex
             }))
 
-            await Course.updateOne(
-                { _id: courseId },
-                {
-                    $set: {
-                        [`driveStructure.${parsedSectionIndex}.videos.${parsedQuizIndex}.questions.${parsedQuestionIndex}.question`]: normalizedQuestion,
-                        [`driveStructure.${parsedSectionIndex}.videos.${parsedQuizIndex}.questions.${parsedQuestionIndex}.options`]: optionObjects
-                    }
-                }
-            )
+            const course = await loadEditableCourse(courseId)
+            if (!course) {
+                return res.status(404).json({ success: false, error: 'Course not found' })
+            }
+
+            const quizLesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedQuizIndex]
+            const questions = Array.isArray(quizLesson && quizLesson.quiz) ? quizLesson.quiz : []
+            if (!questions[parsedQuestionIndex]) {
+                return res.status(400).json({ success: false, error: 'Question index out of range' })
+            }
+
+            questions[parsedQuestionIndex] = {
+                ...(questions[parsedQuestionIndex] || {}),
+                ...buildCanonicalQuizQuestion(normalizedQuestion, optionObjects, parsedCorrectIndex)
+            }
+            quizLesson.quiz = questions
+            quizLesson.content = { ...(quizLesson.content || {}), questions }
+            course.markModified('sections')
+            await saveEditableCourse(course)
+            console.log('[CourseEditor] quiz payload after backend normalization:', JSON.stringify({
+                mode: 'update',
+                questionIndex: parsedQuestionIndex,
+                question: buildEditorQuizQuestionResponse(questions[parsedQuestionIndex])
+            }))
 
             res.json({ success: true })
         } catch (err) {
@@ -1216,8 +1570,13 @@ router.delete(
                 return res.status(400).json({ success: false, error: "Invalid indexes" })
             }
 
-            const course = await Course.findById(courseId)
-            const questions = course.driveStructure?.[parsedSectionIndex]?.videos?.[parsedQuizIndex]?.questions || []
+            const course = await loadEditableCourse(courseId)
+            if (!course) {
+                return res.status(404).json({ success: false, error: 'Course not found' })
+            }
+
+            const quizLesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedQuizIndex]
+            const questions = Array.isArray(quizLesson && quizLesson.quiz) ? quizLesson.quiz : []
 
             if (parsedQuestionIndex < 0 || parsedQuestionIndex >= questions.length) {
                 return res.status(400).json({ success: false, error: "Question index out of range" })
@@ -1225,8 +1584,10 @@ router.delete(
 
             questions.splice(parsedQuestionIndex, 1)
 
-            course.driveStructure[parsedSectionIndex].videos[parsedQuizIndex].questions = questions
-            await course.save()
+            quizLesson.quiz = questions
+            quizLesson.content = { ...(quizLesson.content || {}), questions }
+            course.markModified('sections')
+            await saveEditableCourse(course)
 
             res.json({ success: true })
         } catch (err) {
@@ -1247,12 +1608,15 @@ router.put(
                 return res.status(400).json({ success: false, error: "Invalid sectionIndex or quizIndex" })
             }
 
-            const course = await Course.findById(courseId)
+            const course = await loadEditableCourse(courseId)
+            if (!course) {
+                return res.status(404).json({ success: false, error: 'Course not found' })
+            }
 
             let questions =
-                course.driveStructure[parsedSectionIndex]
-                    .videos[parsedQuizIndex]
-                    .questions
+                course.sections[parsedSectionIndex]
+                    .lessons[parsedQuizIndex]
+                    .quiz
 
             const normalizedOrder = (Array.isArray(order) ? order : []).map(i => parseInt(i, 10))
             const isValidOrder =
@@ -1266,11 +1630,18 @@ router.put(
             questions =
                 normalizedOrder.map(i => questions[i])
 
-            course.driveStructure[parsedSectionIndex]
-                .videos[parsedQuizIndex]
-                .questions = questions
+            course.sections[parsedSectionIndex]
+                .lessons[parsedQuizIndex]
+                .quiz = questions
+            course.sections[parsedSectionIndex]
+                .lessons[parsedQuizIndex]
+                .content = {
+                    ...(course.sections[parsedSectionIndex].lessons[parsedQuizIndex].content || {}),
+                    questions
+                }
+            course.markModified('sections')
 
-            await course.save()
+            await saveEditableCourse(course)
 
             res.json({ success: true })
         } catch (err) {
@@ -1283,10 +1654,12 @@ router.get(
 
         const { courseId, sectionIndex, quizIndex } = req.params
 
-        const course = await Course.findById(courseId)
+        const course = await loadEditableCourse(courseId)
+        if (!course) {
+            return res.status(404).send('Course not found')
+        }
 
-        const quiz =
-            course.driveStructure[sectionIndex].videos[quizIndex]
+        const quiz = getLegacyLesson(course, Number(sectionIndex), Number(quizIndex))
 
         res.render("quizPlayer", { quiz })
 
@@ -1306,17 +1679,20 @@ router.put('/course/:id/lesson/slides/add', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Slide content missing' })
     }
 
-    await Course.updateOne(
-        { _id: req.params.id },
-        {
-            $set: {
-                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.content`]: {
-                    slides: normalizedSlides
-                },
-                [`driveStructure.${sectionIndex}.videos.${lessonIndex}.aiGenerated`]: true
-            }
-        }
-    )
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).json({ success: false, error: 'Course not found' })
+    }
+
+    const lesson = course.sections?.[Number(sectionIndex)]?.lessons?.[Number(lessonIndex)]
+    if (!lesson) {
+        return res.status(404).json({ success: false, error: 'Lesson not found' })
+    }
+
+    lesson.content = { ...(lesson.content || {}), slides: normalizedSlides }
+    lesson.aiGenerated = true
+    course.markModified('sections')
+    await saveEditableCourse(course)
 
     res.json({ success: true })
 })
@@ -1325,17 +1701,22 @@ router.put('/course/:id/lesson/slides/add', async (req, res) => {
 router.put('/course/:id/lesson/slides/update', async (req, res) => {
     const { sectionIndex, lessonIndex, slideIndex, title, content } = req.body
 
-    const slidePathBase = `driveStructure.${sectionIndex}.videos.${lessonIndex}`
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).json({ success: false, error: 'Course not found' })
+    }
 
-    await Course.updateOne(
-        { _id: req.params.id },
-        {
-            $set: {
-                [`${slidePathBase}.content.slides.${slideIndex}.title`]: title,
-                [`${slidePathBase}.content.slides.${slideIndex}.content`]: content
-            }
-        }
-    )
+    const lesson = course.sections?.[Number(sectionIndex)]?.lessons?.[Number(lessonIndex)]
+    const slides = Array.isArray(lesson && lesson.content && lesson.content.slides) ? lesson.content.slides : []
+    if (!lesson || !slides[slideIndex]) {
+        return res.status(404).json({ success: false, error: 'Slide not found' })
+    }
+
+    slides[slideIndex].title = title
+    slides[slideIndex].content = content
+    lesson.content = { ...(lesson.content || {}), slides }
+    course.markModified('sections')
+    await saveEditableCourse(course)
 
     res.json({ success: true })
 })
@@ -1344,17 +1725,20 @@ router.put('/course/:id/lesson/slides/update', async (req, res) => {
 router.put('/course/:id/lesson/slides/delete', async (req, res) => {
     const { sectionIndex, lessonIndex } = req.body
 
-    const slidePathBase = `driveStructure.${sectionIndex}.videos.${lessonIndex}`
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        return res.status(404).json({ success: false, error: 'Course not found' })
+    }
 
-    await Course.updateOne(
-        { _id: req.params.id },
-        {
-            $set: {
-                [`${slidePathBase}.content`]: { slides: [] },
-                [`${slidePathBase}.aiGenerated`]: false
-            }
-        }
-    )
+    const lesson = course.sections?.[Number(sectionIndex)]?.lessons?.[Number(lessonIndex)]
+    if (!lesson) {
+        return res.status(404).json({ success: false, error: 'Lesson not found' })
+    }
+
+    lesson.content = { ...(lesson.content || {}), slides: [] }
+    lesson.aiGenerated = false
+    course.markModified('sections')
+    await saveEditableCourse(course)
 
     res.json({ success: true })
 })

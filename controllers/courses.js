@@ -7,12 +7,16 @@ const UserCourseProgress = require('../models/userCourseProgress');
 const mongoose = require('mongoose');
 const { awardGamification, buildGamificationViewModel } = require('../utils/gamification');
 const Discussion = require('../models/discussion');
+const {
+  getCanonicalSections,
+  syncCourseContent
+} = require('../utils/courseContentAdapter');
 
 function countCourseLessons(course) {
-  if (!course || !Array.isArray(course.driveStructure)) return 0;
-  return course.driveStructure.reduce((total, section) => {
-    const items = Array.isArray(section && section.videos) ? section.videos : [];
-    return total + items.length;
+  const sections = getCanonicalSections(course);
+  return sections.reduce((total, section) => {
+    const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+    return total + lessons.length;
   }, 0);
 }
 
@@ -76,146 +80,6 @@ async function markCourseSeenForUser(userId, course) {
   return { hadUpdate: false, markedSeen: false };
 }
 
-function normalizeLessonContent(item) {
-  if (!item || typeof item !== 'object') return;
-
-  const rawType = String(item.type || 'video').toLowerCase();
-  const type = rawType === 'video' ? 'lecture' : rawType;
-
-  let normalizedContent = {};
-
-  if (type === 'quiz') {
-    const questionsFromContent = Array.isArray(item.content && item.content.questions) ? item.content.questions : [];
-    const questionsFromLegacy = Array.isArray(item.questions) ? item.questions : [];
-    const questions = questionsFromContent.length ? questionsFromContent : questionsFromLegacy;
-
-    normalizedContent = {
-      questions: questions.map((q) => {
-        const rawOptions = Array.isArray(q && q.options)
-          ? q.options
-          : Array.isArray(q && q.answers)
-            ? q.answers
-            : [];
-
-        const options = rawOptions.map((opt) => {
-          if (typeof opt === 'string') return opt;
-          if (opt && typeof opt === 'object') {
-            return String(opt.text || opt.answer || '').trim();
-          }
-          return '';
-        }).filter(Boolean);
-
-        let correctAnswer = q && q.correctAnswer ? q.correctAnswer : '';
-        if (!correctAnswer) {
-          const correctOption = rawOptions.find((opt) => opt && (opt.correct === true || opt.isCorrect === true));
-          if (correctOption) {
-            correctAnswer = typeof correctOption === 'string'
-              ? correctOption
-              : String(correctOption.text || correctOption.answer || '').trim();
-          }
-        }
-
-        return {
-          question: q && q.question ? q.question : '',
-          options: options,
-          correctAnswer: correctAnswer,
-          explanation: q && q.explanation ? q.explanation : ''
-        };
-      })
-    };
-  } else if (type === 'slide') {
-    const slidesFromContent = Array.isArray(item.content && item.content.slides) ? item.content.slides : [];
-
-    normalizedContent = {
-      slides: slidesFromContent
-    };
-  } else {
-    const contentInteractiveQuizzes = Array.isArray(item.content && item.content.interactiveQuizzes)
-      ? item.content.interactiveQuizzes
-      : [];
-    const rootInteractiveQuizzes = Array.isArray(item.interactiveQuizzes)
-      ? item.interactiveQuizzes
-      : [];
-    const interactiveQuizzes = (contentInteractiveQuizzes.length ? contentInteractiveQuizzes : rootInteractiveQuizzes)
-      .map((entry, index) => {
-        const rawOptions = Array.isArray(entry && entry.options) ? entry.options : [];
-        const options = rawOptions.map((opt) => String(opt || '').trim()).slice(0, 4);
-        while (options.length < 4) options.push('');
-
-        const triggerTimeSec = Number(entry && entry.triggerTimeSec);
-        const correctOptionIndex = Number(entry && entry.correctOptionIndex);
-
-        return {
-          _id: entry && entry._id,
-          triggerTimeSec: Number.isFinite(triggerTimeSec) && triggerTimeSec >= 0 ? triggerTimeSec : 0,
-          question: String(entry && entry.question || '').trim(),
-          options,
-          correctOptionIndex: Number.isFinite(correctOptionIndex) && correctOptionIndex >= 0 && correctOptionIndex <= 3 ? correctOptionIndex : 0,
-          explanation: String(entry && entry.explanation || '').trim(),
-          pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
-          order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index
-        };
-      })
-      .filter((entry) => entry.question)
-      .sort((a, b) => {
-        const byTime = a.triggerTimeSec - b.triggerTimeSec;
-        if (byTime !== 0) return byTime;
-        return a.order - b.order;
-      })
-      .map((entry, index) => ({ ...entry, order: index }));
-
-    normalizedContent = {
-      videoUrl: item.preview || item.videoUrl || '',
-      interactiveQuizzes
-    };
-  }
-
-  item.type = type;
-  item.title = item.name || item.title || 'Untitled Lesson';
-  item.content = normalizedContent;
-}
-
-function normalizeCourseContent(course) {
-  if (!course) return;
-
-  const hasDriveStructure = Array.isArray(course.driveStructure) && course.driveStructure.length > 0;
-  const hasSections = Array.isArray(course.sections) && course.sections.length > 0;
-
-  if (!hasDriveStructure && hasSections) {
-    course.driveStructure = course.sections.map((section) => {
-      const lessons = Array.isArray(section.lessons) ? section.lessons : [];
-
-      return {
-        section: section.title || 'Section',
-        videos: lessons.map((lesson) => ({
-          _id: lesson._id,
-          type: lesson.type === 'video' ? 'lecture' : lesson.type,
-          name: lesson.title || 'Untitled Lesson',
-          title: lesson.title || 'Untitled Lesson',
-          preview: lesson.videoUrl || '',
-          content: {
-            videoUrl: lesson.videoUrl || '',
-            questions: Array.isArray(lesson.quiz) ? lesson.quiz : [],
-            slides: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides : []
-          },
-          questions: Array.isArray(lesson.quiz) ? lesson.quiz : [],
-          slides: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides : []
-        }))
-      };
-    });
-  }
-
-  if (!Array.isArray(course.driveStructure)) return;
-
-  course.driveStructure.forEach((section) => {
-    if (!section || !Array.isArray(section.videos)) return;
-
-    section.videos.forEach((item) => {
-      normalizeLessonContent(item);
-    });
-  });
-}
-
 module.exports.index = async (req, res) => {
   const user = await User.findById(req.user._id);
   const enrolledIds = getEnrolledCourseIds(user);
@@ -272,7 +136,7 @@ module.exports.showCourses = async (req, res) => {
 
   const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
 
-  normalizeCourseContent(course);
+  syncCourseContent(course);
 
   let completedVideos = [];
   let gamification = null;
@@ -415,7 +279,7 @@ module.exports.updateProgress = async (req, res) => {
         progressDoc.watchTime = Number(progressDoc.watchTime || 0) + watchDelta;
       }
 
-      const course = await Course.findById(courseObjectId).select('driveStructure');
+      const course = await Course.findById(courseObjectId).select('sections driveStructure');
       const totalLessons = countCourseLessons(course);
       progressDoc.completionRate = totalLessons
         ? Math.round((progressDoc.completedLessons.length / totalLessons) * 100)

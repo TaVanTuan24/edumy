@@ -15,7 +15,7 @@
 <body data-course-id="<%= course._id %>">
     <!-- Course Data (hidden, parsed by JavaScript) -->
     <script id="course-data" type="application/json">
-        <%- JSON.stringify(course.driveStructure || []) %>
+        <%- JSON.stringify(course.sections || []) %>
     </script>
 
     <!-- Top Bar -->
@@ -56,13 +56,13 @@
             </div>
 
             <div class="sidebar-content" id="sectionsContainer">
-                <% if (course.driveStructure && course.driveStructure.length > 0) { %>
-                    <% course.driveStructure.forEach((section, sIndex) => { %>
+                <% if (course.sections && course.sections.length > 0) { %>
+                    <% course.sections.forEach((section, sIndex) => { %>
                         <div class="section-card" data-section-id="<%= section._id %>">
                             <div class="section-header" data-section-index="<%= sIndex %>">
                                 <i class="fas fa-chevron-right section-icon" id="icon-<%= sIndex %>"></i>
                                 <span class="section-title" id="title-<%= section._id %>" data-section-index="<%= sIndex %>" title="Click to rename">
-                                    <%= section.section || 'Untitled Section' %>
+                                    <%= section.title || 'Untitled Section' %>
                                 </span>
                                 <div class="actions">
                                     <button class="edit-section-btn" data-section-id="<%= section._id %>" title="Edit section">
@@ -77,17 +77,17 @@
                                  id="section-content-<%= sIndex %>" 
                                  data-section-id="<%= section._id %>"
                                  data-section-index="<%= sIndex %>">
-                                <% if (section.videos && section.videos.length > 0) { %>
-                                    <% section.videos.forEach((video, vIndex) => { %>
+                                <% if (section.lessons && section.lessons.length > 0) { %>
+                                    <% section.lessons.forEach((video, vIndex) => { %>
                                         <div class="lesson-item" 
                                              data-item-id="<%= video._id %>" 
                                              data-section-id="<%= section._id %>"
                                              data-section-index="<%= sIndex %>"
                                              data-lesson-index="<%= vIndex %>"
-                                            data-order="<%= typeof video.order === 'number' ? video.order : vIndex %>"
+                                             data-order="<%= typeof video.order === 'number' ? video.order : vIndex %>"
                                              data-type="<%= video.type %>"
-                                             data-name="<%= video.name || '' %>"
-                                             data-url="<%= video.preview || video.refId || '' %>"
+                                             data-name="<%= video.title || '' %>"
+                                             data-url="<%= video.preview || video.videoUrl || video.refId || '' %>"
                                              data-ref-id="<%= video.refId || '' %>">
                                             <span class="drag-handle"><i class="fa-solid fa-grip-vertical">≡</i></span>
                                             <div class="item-icon <%= video.type %>">
@@ -95,7 +95,7 @@
                                             </div>
                                             <div class="item-info">
                                                 <div class="item-title">
-                                                    <%= video.name || 'Untitled' %>
+                                                    <%= video.title || 'Untitled' %>
                                                 </div>
                                                 <div class="item-meta">
                                                         <%= (video.type === 'video' || video.type === 'lecture') ? 'Lecture' : video.type === 'quiz' ? 'Quiz' : video.type === 'slide' ? 'Slide' : 'Lecture' %>

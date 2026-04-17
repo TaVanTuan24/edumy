@@ -2,6 +2,7 @@ const UserCourseProgress = require('../models/userCourseProgress');
 const User = require('../models/user');
 const Course = require('../models/course');
 const { awardGamification } = require('../utils/gamification');
+const { getCanonicalSections } = require('../utils/courseContentAdapter');
 
 function normalizeLessonTracking(doc, lessonId, lessonType) {
   if (!doc.lessonTracking) doc.lessonTracking = [];
@@ -47,26 +48,14 @@ function getQuizQuestionCount(course, lessonId) {
   const targetLessonId = String(lessonId || '').trim();
   if (!course || !targetLessonId) return 0;
 
-  const sections = Array.isArray(course.sections) ? course.sections : [];
+  const sections = getCanonicalSections(course);
   for (const section of sections) {
     const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
     for (const lesson of lessons) {
       if (String(lesson && lesson._id || '') !== targetLessonId) continue;
-      return Array.isArray(lesson && lesson.quiz) ? lesson.quiz.length : 0;
-    }
-  }
-
-  const driveStructure = Array.isArray(course.driveStructure) ? course.driveStructure : [];
-  for (const section of driveStructure) {
-    const lessons = Array.isArray(section && section.videos) ? section.videos : [];
-    for (const lesson of lessons) {
-      if (String(lesson && lesson._id || '') !== targetLessonId) continue;
-
-      if (Array.isArray(lesson && lesson.content && lesson.content.questions)) {
-        return lesson.content.questions.length;
-      }
-
-      return Array.isArray(lesson && lesson.questions) ? lesson.questions.length : 0;
+      if (Array.isArray(lesson && lesson.quiz)) return lesson.quiz.length;
+      if (Array.isArray(lesson && lesson.content && lesson.content.questions)) return lesson.content.questions.length;
+      return 0;
     }
   }
 

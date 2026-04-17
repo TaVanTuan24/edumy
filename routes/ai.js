@@ -14,6 +14,7 @@ const {
     createFallbackResolvedSlides,
     resolveDraftSlides
 } = require('../utils/aiSlidePipeline')
+const { getCanonicalSections } = require('../utils/courseContentAdapter')
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req, res, next) => {
@@ -602,22 +603,11 @@ async function callOllama(prompt) {
 
 function buildLessonDocs(course) {
     const docs = []
-
-    if (Array.isArray(course.sections) && course.sections.length) {
-        course.sections.forEach((section) => {
-            const lessons = Array.isArray(section.lessons) ? section.lessons : []
-            lessons.forEach((lesson) => {
-                docs.push(...extractLessonDocs(lesson, section.title || "", course._id))
-            })
-        })
-        return docs
-    }
-
-    const driveSections = Array.isArray(course.driveStructure) ? course.driveStructure : []
-    driveSections.forEach((section) => {
-        const items = Array.isArray(section.videos) ? section.videos : []
-        items.forEach((item) => {
-            docs.push(...extractLessonDocs(item, section.section || "", course._id))
+    const sections = getCanonicalSections(course)
+    sections.forEach((section) => {
+        const lessons = Array.isArray(section && section.lessons) ? section.lessons : []
+        lessons.forEach((lesson) => {
+            docs.push(...extractLessonDocs(lesson, section.title || "", course._id))
         })
     })
 
@@ -648,10 +638,10 @@ function findLegacyLessonById(course, lessonId) {
     const target = String(lessonId || '').trim()
     if (!target) return null
 
-    const driveSections = Array.isArray(course && course.driveStructure) ? course.driveStructure : []
-    for (let sectionIndex = 0; sectionIndex < driveSections.length; sectionIndex += 1) {
-        const section = driveSections[sectionIndex]
-        const items = Array.isArray(section && section.videos) ? section.videos : []
+    const sections = getCanonicalSections(course)
+    for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+        const section = sections[sectionIndex]
+        const items = Array.isArray(section && section.lessons) ? section.lessons : []
 
         for (let lessonIndex = 0; lessonIndex < items.length; lessonIndex += 1) {
             const item = items[lessonIndex]
@@ -662,7 +652,7 @@ function findLegacyLessonById(course, lessonId) {
                 lesson: item,
                 sectionIndex,
                 lessonIndex,
-                sectionTitle: section && section.section ? String(section.section) : ''
+                sectionTitle: section && section.title ? String(section.title) : ''
             }
         }
     }

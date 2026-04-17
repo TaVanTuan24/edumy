@@ -3,6 +3,11 @@ const router = express.Router();
 const { isLoggedIn, isAdmin } = require('../../middleware');
 const Course = require('../../models/course');
 const ContentLibrary = require('../../models/contentLibrary');
+const {
+    applyLegacyDriveStructure,
+    normalizeCourseContent,
+    syncCourseContent
+} = require('../../utils/courseContentAdapter');
 
 const VALID_LESSON_TYPES = new Set(['video', 'slide', 'quiz']);
 
@@ -67,6 +72,56 @@ function normalizeDriveStructure(input) {
 
 router.use(isLoggedIn, isAdmin);
 
+async function loadCourseForEditing(courseId) {
+    const course = await Course.findById(courseId);
+    if (!course) return null;
+    syncCourseContent(course);
+    return course;
+}
+
+async function saveCourseContent(course) {
+    console.log('[CourseEditor][API] canonical sections before save:', JSON.stringify(
+        (course.sections || []).map((section) => ({
+            id: String(section && section._id || ''),
+            title: String(section && section.title || ''),
+            lessons: Array.isArray(section && section.lessons)
+                ? section.lessons.map((lesson) => ({
+                    id: String(lesson && lesson._id || ''),
+                    title: String(lesson && lesson.title || ''),
+                    type: String(lesson && lesson.type || '')
+                }))
+                : []
+        }))
+    ));
+    syncCourseContent(course);
+    await course.save();
+    console.log('[CourseEditor][API] canonical sections after save:', JSON.stringify(
+        (course.sections || []).map((section) => ({
+            id: String(section && section._id || ''),
+            title: String(section && section.title || ''),
+            lessons: Array.isArray(section && section.lessons)
+                ? section.lessons.map((lesson) => ({
+                    id: String(lesson && lesson._id || ''),
+                    title: String(lesson && lesson.title || ''),
+                    type: String(lesson && lesson.type || '')
+                }))
+                : []
+        }))
+    ));
+    return course;
+}
+
+function reindexSections(course) {
+    course.sections = (Array.isArray(course.sections) ? course.sections : []).map((section, index) => {
+        section.order = index;
+        section.lessons = (Array.isArray(section.lessons) ? section.lessons : []).map((lesson, lessonIndex) => {
+            lesson.order = lessonIndex;
+            return lesson;
+        });
+        return section;
+    });
+}
+
 // Legacy course editor uses driveStructure and saves the whole array.
 router.post('/course/reorder', async (req, res) => {
     try {
@@ -75,13 +130,13 @@ router.post('/course/reorder', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing courseId' });
         }
 
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' });
         }
 
-        course.driveStructure = normalizeDriveStructure(driveStructure);
-        await course.save();
+        applyLegacyDriveStructure(course, normalizeDriveStructure(driveStructure));
+        await saveCourseContent(course);
 
         res.json({ success: true, driveStructure: course.driveStructure });
     } catch (err) {
@@ -97,7 +152,7 @@ router.post('/section/reorder', async (req, res) => {
     try {
         const { courseId, sectionOrder } = req.body;
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -113,7 +168,8 @@ router.post('/section/reorder', async (req, res) => {
         }).filter(s => s !== null);
 
         course.sections = reorderedSections;
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
 
         res.json({ success: true, sections: course.sections });
     } catch (err) {
@@ -127,7 +183,7 @@ router.post('/section', async (req, res) => {
     try {
         const { courseId, title } = req.body;
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -139,7 +195,8 @@ router.post('/section', async (req, res) => {
         };
 
         course.sections.push(newSection);
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
 
         const addedSection = course.sections[course.sections.length - 1];
         res.json({ success: true, section: addedSection });
@@ -155,7 +212,7 @@ router.put('/section/:courseId/:sectionId', async (req, res) => {
         const { courseId, sectionId } = req.params;
         const { title } = req.body;
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -166,7 +223,7 @@ router.put('/section/:courseId/:sectionId', async (req, res) => {
         }
 
         section.title = title;
-        await course.save();
+        await saveCourseContent(course);
 
         res.json({ success: true, section });
     } catch (err) {
@@ -180,13 +237,14 @@ router.delete('/section/:courseId/:sectionId', async (req, res) => {
     try {
         const { courseId, sectionId } = req.params;
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
 
         course.sections.pull({ _id: sectionId });
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
 
         res.json({ success: true });
     } catch (err) {
@@ -200,14 +258,15 @@ router.delete('/section/:courseId/:sectionId', async (req, res) => {
 // Add lesson to section
 router.post('/lesson', async (req, res) => {
     try {
-        const { courseId, sectionId, title, type } = req.body;
+        const { courseId, sectionId, title, type, videoUrl, preview, description } = req.body;
+        console.log('[CourseEditor][API] incoming add lesson payload:', JSON.stringify({ courseId, sectionId, title, type, videoUrl, preview, description }));
         const normalizedType = String(type || '').trim().toLowerCase();
 
         if (!VALID_LESSON_TYPES.has(normalizedType)) {
             return res.status(400).json({ error: 'Invalid lesson type. Use video, slide, or quiz.' });
         }
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -220,14 +279,22 @@ router.post('/lesson', async (req, res) => {
         const newLesson = {
             title: title || 'New Lesson',
             type: normalizedType,
-            videoUrl: '',
-            slides: [],
+            videoUrl: String(videoUrl || preview || '').trim(),
+            preview: String(preview || videoUrl || '').trim(),
+            refId: '',
+            description: String(description || '').trim(),
+            content: normalizedType === 'slide' ? { slides: [] } : normalizedType === 'quiz' ? { questions: [] } : {},
             quiz: [],
             order: section.lessons.length
         };
 
+        if (normalizedType === 'video' && newLesson.videoUrl) {
+            newLesson.content.videoUrl = newLesson.videoUrl;
+        }
+
         section.lessons.push(newLesson);
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
 
         console.log('Saved item:', newLesson);
 
@@ -245,7 +312,7 @@ router.put('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
         const { courseId, sectionId, lessonId } = req.params;
         const { title, type, videoUrl, slides, quiz } = req.body;
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -263,11 +330,21 @@ router.put('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
         // Update fields
         if (title !== undefined) lesson.title = title;
         if (type !== undefined) lesson.type = type;
-        if (videoUrl !== undefined) lesson.videoUrl = videoUrl;
-        if (slides !== undefined) lesson.slides = slides;
-        if (quiz !== undefined) lesson.quiz = quiz;
+        if (videoUrl !== undefined) {
+            lesson.videoUrl = videoUrl;
+            lesson.preview = videoUrl;
+        }
+        if (slides !== undefined) {
+            lesson.content = lesson.content || {};
+            lesson.content.slides = Array.isArray(slides) ? slides : [];
+        }
+        if (quiz !== undefined) {
+            lesson.quiz = Array.isArray(quiz) ? quiz : [];
+            lesson.content = lesson.content || {};
+            lesson.content.questions = lesson.quiz;
+        }
 
-        await course.save();
+        await saveCourseContent(course);
 
         res.json({ success: true, lesson });
     } catch (err) {
@@ -281,7 +358,7 @@ router.delete('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
     try {
         const { courseId, sectionId, lessonId } = req.params;
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -292,7 +369,8 @@ router.delete('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
         }
 
         section.lessons.pull({ _id: lessonId });
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
 
         res.json({ success: true });
     } catch (err) {
@@ -304,25 +382,73 @@ router.delete('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
 // Reorder lessons within/between sections
 router.post('/lesson/reorder', async (req, res) => {
     try {
-        const { courseId, sourceSectionId, destSectionId, sourceIndex, destIndex } = req.body;
+        const {
+            courseId,
+            sourceSectionId,
+            destSectionId,
+            sourceSectionIndex,
+            destSectionIndex,
+            sourceIndex,
+            destIndex
+        } = req.body;
+        console.log('[CourseEditor][API] incoming reorder payload:', JSON.stringify({
+            courseId,
+            sourceSectionId,
+            destSectionId,
+            sourceSectionIndex,
+            destSectionIndex,
+            sourceIndex,
+            destIndex
+        }));
         
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
 
-        const sourceSection = course.sections.id(sourceSectionId);
-        const destSection = course.sections.id(destSectionId);
+        console.log('[CourseEditor][API] canonical sections before reorder:', JSON.stringify(
+            (course.sections || []).map((section) => ({
+                id: String(section && section._id || ''),
+                title: String(section && section.title || ''),
+                lessonIds: Array.isArray(section && section.lessons) ? section.lessons.map((lesson) => String(lesson && lesson._id || '')) : []
+            }))
+        ));
+
+        const parsedSourceSectionIndex = parseInt(sourceSectionIndex, 10);
+        const parsedDestSectionIndex = parseInt(destSectionIndex, 10);
+        const parsedSourceIndex = parseInt(sourceIndex, 10);
+        const parsedDestIndex = parseInt(destIndex, 10);
+
+        const sourceSection = sourceSectionId
+            ? course.sections.id(sourceSectionId)
+            : (!Number.isNaN(parsedSourceSectionIndex) ? course.sections?.[parsedSourceSectionIndex] : null);
+        const destSection = destSectionId
+            ? course.sections.id(destSectionId)
+            : (!Number.isNaN(parsedDestSectionIndex) ? course.sections?.[parsedDestSectionIndex] : null);
 
         if (!sourceSection || !destSection) {
             return res.status(404).json({ error: 'Section not found' });
         }
 
+        if (
+            Number.isNaN(parsedSourceIndex)
+            || Number.isNaN(parsedDestIndex)
+            || parsedSourceIndex < 0
+            || parsedSourceIndex >= sourceSection.lessons.length
+            || parsedDestIndex < 0
+            || parsedDestIndex > destSection.lessons.length
+        ) {
+            return res.status(400).json({ error: 'Invalid reorder indexes' });
+        }
+
         // Get the lesson being moved
-        const [movedLesson] = sourceSection.lessons.splice(sourceIndex, 1);
+        const [movedLesson] = sourceSection.lessons.splice(parsedSourceIndex, 1);
+        if (!movedLesson) {
+            return res.status(400).json({ error: 'Lesson not found at source index' });
+        }
         
         // Insert at destination
-        destSection.lessons.splice(destIndex, 0, movedLesson);
+        destSection.lessons.splice(parsedDestIndex, 0, movedLesson);
 
         // Update order values
         sourceSection.lessons.forEach((lesson, index) => {
@@ -332,7 +458,16 @@ router.post('/lesson/reorder', async (req, res) => {
             lesson.order = index;
         });
 
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
+
+        console.log('[CourseEditor][API] canonical sections after reorder:', JSON.stringify(
+            (course.sections || []).map((section) => ({
+                id: String(section && section._id || ''),
+                title: String(section && section.title || ''),
+                lessonIds: Array.isArray(section && section.lessons) ? section.lessons.map((lesson) => String(lesson && lesson._id || '')) : []
+            }))
+        ));
 
         res.json({ success: true, sections: course.sections });
     } catch (err) {
@@ -421,7 +556,7 @@ router.post('/lesson/from-library', async (req, res) => {
     try {
         const { courseId, sectionId, libraryItemId } = req.body;
 
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -441,7 +576,12 @@ router.post('/lesson/from-library', async (req, res) => {
             title: libraryItem.title,
             type: libraryItem.type === 'lesson' ? 'video' : libraryItem.type,
             videoUrl: libraryItem.data.videoUrl || '',
-            slides: libraryItem.data.slides || [],
+            preview: libraryItem.data.videoUrl || '',
+            refId: String(libraryItem._id),
+            content: {
+                slides: libraryItem.data.slides || [],
+                questions: libraryItem.data.quiz || []
+            },
             quiz: libraryItem.data.quiz || [],
             order: section.lessons.length
         };
@@ -451,7 +591,8 @@ router.post('/lesson/from-library', async (req, res) => {
         // Increment usage count
         libraryItem.usageCount += 1;
         await libraryItem.save();
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
 
         const addedLesson = section.lessons[section.lessons.length - 1];
         res.json({ success: true, lesson: addedLesson });
@@ -470,13 +611,16 @@ router.post('/course/add-item', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing data' });
         }
 
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ success: false, error: 'Course not found' });
         }
 
-        const sectionIndex = course.driveStructure.findIndex((section) => String(section._id) === String(sectionId));
-        if (sectionIndex < 0) {
+        const section = course.sections.id(sectionId)
+            || (Array.isArray(course.sections)
+                ? course.sections.find((entry) => String(entry._id) === String(sectionId))
+                : null);
+        if (!section) {
             return res.status(404).json({ success: false, error: 'Section not found' });
         }
 
@@ -486,29 +630,37 @@ router.post('/course/add-item', async (req, res) => {
         }
 
         const normalizedType = type === 'lesson' ? 'video' : type;
-        const newItem = {
+        const newLesson = {
+            title: libraryItem.title || ('New ' + normalizedType),
             type: normalizedType,
-            name: libraryItem.title || ('New ' + normalizedType),
+            videoUrl: normalizedType === 'video' ? (libraryItem.data?.videoUrl || '') : '',
             preview: normalizedType === 'video' ? (libraryItem.data?.videoUrl || '') : '',
             refId: String(libraryItem._id),
             content: {},
-            questions: [],
-            order: course.driveStructure[sectionIndex].videos.length
+            quiz: [],
+            order: section.lessons.length
         };
 
         if (normalizedType === 'slide') {
-            newItem.content = { slides: libraryItem.data?.slides || [] };
+            newLesson.content = { slides: libraryItem.data?.slides || [] };
         } else if (normalizedType === 'quiz') {
             const quiz = libraryItem.data?.quiz || [];
-            newItem.content = { questions: quiz };
-            newItem.questions = quiz;
+            newLesson.content = { questions: quiz };
+            newLesson.quiz = quiz;
         }
 
-        course.driveStructure[sectionIndex].videos.push(newItem);
+        section.lessons.push(newLesson);
 
         libraryItem.usageCount += 1;
         await libraryItem.save();
-        await course.save();
+        reindexSections(course);
+        await saveCourseContent(course);
+
+        const normalized = normalizeCourseContent(course);
+        const legacySection = normalized.driveStructure.find((entry) => String(entry._id) === String(section._id));
+        const newItem = legacySection && Array.isArray(legacySection.videos)
+            ? legacySection.videos[legacySection.videos.length - 1]
+            : null;
 
         res.json({ success: true, item: newItem });
     } catch (err) {
@@ -522,7 +674,7 @@ router.post('/lesson/to-library', async (req, res) => {
     try {
         const { courseId, sectionId, lessonId, title } = req.body;
 
-        const course = await Course.findById(courseId);
+        const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
@@ -540,7 +692,7 @@ router.post('/lesson/to-library', async (req, res) => {
         // Prepare data based on lesson type
         let data = {};
         if (lesson.type === 'slide') {
-            data.slides = lesson.slides;
+            data.slides = Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides : [];
         } else if (lesson.type === 'quiz') {
             data.quiz = lesson.quiz;
         } else if (lesson.type === 'video') {
@@ -553,7 +705,7 @@ router.post('/lesson/to-library', async (req, res) => {
             type: lesson.type,
             title: title || lesson.title,
             data,
-            preview: lesson.type === 'slide' ? `${lesson.slides.length} slides` : 
+            preview: lesson.type === 'slide' ? `${(data.slides || []).length} slides` : 
                      lesson.type === 'quiz' ? `${lesson.quiz.length} questions` : 'Video lesson'
         });
 

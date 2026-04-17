@@ -112,13 +112,67 @@
         if (dataEl) {
             try {
                 const raw = (dataEl.textContent || '').trim();
-                courseData = raw ? JSON.parse(raw) : [];
+                courseData = normalizeEditorSections(raw ? JSON.parse(raw) : []);
                 console.log('[CourseEditor] Parsed course data sections:', Array.isArray(courseData) ? courseData.length : 0);
             } catch(e) {
                 courseData = [];
                 console.error('[CourseEditor] Failed to parse course data:', e);
             }
         }
+    }
+
+    function normalizeEditorSections(rawSections) {
+        const source = Array.isArray(rawSections) ? rawSections : [];
+        return source.map(function(section, sectionIndex) {
+            const rawLessons = Array.isArray(section && section.lessons)
+                ? section.lessons
+                : Array.isArray(section && section.videos)
+                    ? section.videos
+                    : [];
+
+            return {
+                _id: section && section._id ? String(section._id) : ('section-' + sectionIndex),
+                title: String((section && (section.title || section.section)) || 'Untitled Section'),
+                order: Number.isFinite(Number(section && section.order)) ? Number(section.order) : sectionIndex,
+                lessons: rawLessons.map(function(lesson, lessonIndex) {
+                    return normalizeEditorLesson(lesson, lessonIndex);
+                })
+            };
+        });
+    }
+
+    function normalizeEditorLesson(lesson, lessonIndex) {
+        const type = normalizeLessonType(lesson && lesson.type);
+        const content = lesson && lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+        const quiz = Array.isArray(lesson && lesson.quiz)
+            ? lesson.quiz
+            : Array.isArray(lesson && lesson.questions)
+                ? lesson.questions
+                : Array.isArray(content.questions)
+                    ? content.questions
+                    : [];
+
+        return {
+            _id: lesson && lesson._id ? String(lesson._id) : ('lesson-' + Date.now() + '-' + lessonIndex),
+            title: String((lesson && (lesson.title || lesson.name)) || 'Untitled'),
+            type: type,
+            videoUrl: String((lesson && (lesson.videoUrl || lesson.preview)) || (content && content.videoUrl) || ''),
+            preview: String((lesson && lesson.preview) || (lesson && lesson.videoUrl) || (content && content.videoUrl) || ''),
+            refId: String((lesson && lesson.refId) || ''),
+            content: content,
+            quiz: quiz,
+            interactiveQuizzes: Array.isArray(lesson && lesson.interactiveQuizzes)
+                ? lesson.interactiveQuizzes
+                : Array.isArray(content && content.interactiveQuizzes)
+                    ? content.interactiveQuizzes
+                    : [],
+            order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : lessonIndex
+        };
+    }
+
+    function normalizeLessonType(rawType) {
+        const value = String(rawType || 'video').toLowerCase();
+        return value === 'lecture' ? 'video' : value;
     }
 
     // ==================== SORTABLE ====================
@@ -332,8 +386,10 @@
             e.stopPropagation();
             const id = editItemBtn.dataset.id;
             const type = editItemBtn.dataset.type;
+            const sectionIndex = editItemBtn.dataset.sectionIndex;
+            const lessonIndex = editItemBtn.dataset.lessonIndex;
             if (id && type) {
-                editItem(type, id);
+                editItem(type, id, sectionIndex, lessonIndex);
             }
             return;
         }
@@ -502,23 +558,18 @@
         const title = prompt('Section title:');
         if (!title) return;
 
-        const newSection = {
-            _id: 'section-' + Date.now(),
-            section: title,
-            videos: []
-        };
-
         try {
-            const res = await fetch('/api/admin/course/reorder', {
+            const res = await fetch('/api/admin/section', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     courseId,
-                    driveStructure: [...courseData, newSection]
+                    title
                 })
             });
             const data = await res.json();
-            if (data.success) location.reload();
+            if (!res.ok || !data.success || !data.section) throw new Error(data.error || 'Failed to add section');
+            location.reload();
         } catch {
             alert('Failed to add section');
         }
@@ -531,12 +582,11 @@
         const { sectionIndex, sectionId, sectionCard } = sectionCtx;
 
         try {
-            const res = await fetch(`/admin/course/${courseId}/section/edit`, {
+            const res = await fetch(`/api/admin/section/${courseId}/${sectionId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sectionIndex: parseInt(sectionIndex, 10),
-                    name: trimmedTitle
+                    title: trimmedTitle
                 })
             });
 
@@ -546,7 +596,7 @@
             }
 
             if (courseData[sectionIndex]) {
-                courseData[sectionIndex].section = trimmedTitle;
+                courseData[sectionIndex].title = trimmedTitle;
             }
 
             const titleEl = sectionCard?.querySelector('.section-title') || document.getElementById('title-' + sectionId);
@@ -594,17 +644,27 @@
 
     async function deleteSection(sectionId) {
         if (!confirm('Delete this section?')) return;
-
-        const updated = courseData.filter(s => s._id !== sectionId);
-        await saveCourseOrder(updated);
+        try {
+            const res = await fetch(`/api/admin/section/${courseId}/${sectionId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete section');
+            location.reload();
+        } catch {
+            alert('Failed to delete section');
+        }
     }
 
     async function saveCourseOrder(sections) {
         try {
-            const res = await fetch('/api/admin/course/reorder', {
+            const res = await fetch('/api/admin/section/reorder', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseId, driveStructure: sections })
+                body: JSON.stringify({
+                    courseId,
+                    sectionOrder: sections.map(function(section) { return section._id; })
+                })
             });
             const data = await res.json();
             if (data.success) {
@@ -839,30 +899,37 @@
 
         const config = {
             video: {
-                endpoint: `/admin/course/${courseId}/lesson/add`,
-                method: 'PUT',
+                endpoint: '/api/admin/lesson',
+                method: 'POST',
                 payload: {
-                    sectionIndex: addItemState.sectionIndex,
-                    name,
-                    url,
+                    courseId,
+                    sectionId: addItemState.sectionId,
+                    title: name,
+                    videoUrl: url,
+                    preview: url,
+                    description: document.getElementById('addItemDescription') ? document.getElementById('addItemDescription').value.trim() : '',
                     type: 'video'
                 }
             },
             slide: {
-                endpoint: `/admin/course/${courseId}/slide/add`,
+                endpoint: '/api/admin/lesson',
                 method: 'POST',
                 payload: {
-                    sectionIndex: addItemState.sectionIndex,
-                    name,
+                    courseId,
+                    sectionId: addItemState.sectionId,
+                    title: name,
+                    description: document.getElementById('addItemDescription') ? document.getElementById('addItemDescription').value.trim() : '',
                     type: 'slide'
                 }
             },
             quiz: {
-                endpoint: `/admin/course/${courseId}/quiz/add`,
+                endpoint: '/api/admin/lesson',
                 method: 'POST',
                 payload: {
-                    sectionIndex: addItemState.sectionIndex,
-                    name,
+                    courseId,
+                    sectionId: addItemState.sectionId,
+                    title: name,
+                    description: document.getElementById('addItemDescription') ? document.getElementById('addItemDescription').value.trim() : '',
                     type: 'quiz'
                 }
             }
@@ -879,27 +946,25 @@
 
             const data = await res.json();
 
-            if (!res.ok || !data.success) {
+            if (!res.ok || !data.success || !data.lesson) {
                 showAddItemError(data.error || `Unable to create ${addItemState.type}. Please try again.`);
                 return;
             }
 
             const section = getSectionState(addItemState.sectionId, addItemState.sectionIndex);
-            if (section && Array.isArray(section.videos)) {
-                const savedItem = data.item || {};
-                const savedType = typeof savedItem.type === 'string' ? savedItem.type : addItemState.type;
-                const localItem = {
-                    _id: savedItem._id || data.itemId || data.id || `tmp-${Date.now()}`,
-                    type: savedType,
-                    name,
+            if (section && Array.isArray(section.lessons)) {
+                const localItem = normalizeEditorLesson({
+                    ...(data.lesson || {}),
+                    videoUrl: addItemState.type === 'video' ? url : '',
                     preview: addItemState.type === 'video' ? url : '',
-                    refId: '',
-                    order: section.videos.length
-                };
+                    content: addItemState.type === 'video'
+                        ? { ...((data.lesson && data.lesson.content) || {}), videoUrl: url }
+                        : (data.lesson && data.lesson.content) || {}
+                }, section.lessons.length);
 
-                section.videos.push(localItem);
+                section.lessons.push(localItem);
                 addItemState.sectionIndex = courseData.findIndex((s) => s === section);
-                console.log('[CourseEditor] Items:', section.videos);
+                console.log('[CourseEditor] canonical section after add:', section);
                 renderSections();
                 refreshExpandedSectionHeights();
             } else {
@@ -929,7 +994,7 @@
 
             const titleEl = card.querySelector('.section-title');
             if (titleEl) {
-                titleEl.textContent = section.section || 'Untitled Section';
+                titleEl.textContent = section.title || 'Untitled Section';
                 titleEl.dataset.sectionIndex = String(sectionCtx.sectionIndex);
             }
 
@@ -961,7 +1026,8 @@
         if (!list) return;
 
         list.dataset.sectionIndex = String(sectionIndex);
-        list.innerHTML = (section.videos || []).map((video, vIndex) => buildLessonItemMarkup(video, section, sectionIndex, vIndex)).join('');
+        list.dataset.sectionId = String(section._id || '');
+        list.innerHTML = (section.lessons || []).map((video, vIndex) => buildLessonItemMarkup(video, section, sectionIndex, vIndex)).join('');
     }
 
     function buildLessonItemMarkup(video, section, sectionIndex, lessonIndex) {
@@ -978,19 +1044,19 @@
                  data-lesson-index="${lessonIndex}"
                  data-order="${lessonIndex}"
                  data-type="${type}"
-                 data-name="${escapeAttribute(video.name || '')}"
-                 data-url="${escapeAttribute(video.preview || video.refId || '')}"
+                 data-name="${escapeAttribute(video.title || '')}"
+                 data-url="${escapeAttribute(video.preview || video.videoUrl || video.refId || '')}"
                  data-ref-id="${escapeAttribute(video.refId || '')}">
                 <span class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></span>
                 <div class="item-icon ${type}">
                     <i class="fas ${icon}"></i>
                 </div>
                 <div class="item-info">
-                    <div class="item-title">${escapeHtml(video.name || 'Untitled')}</div>
+                    <div class="item-title">${escapeHtml(video.title || 'Untitled')}</div>
                     <div class="item-meta">${itemLabel}</div>
                 </div>
                 <div class="item-actions">
-                    <button class="edit-btn" data-id="${escapeAttribute(video.refId || '')}" data-type="${type}" title="Edit">
+                    <button class="edit-btn" data-id="${escapeAttribute(video._id || '')}" data-type="${type}" data-section-index="${sectionIndex}" data-lesson-index="${lessonIndex}" title="Edit">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
                     <button class="delete-item-btn" title="Delete">
@@ -1018,32 +1084,40 @@
             .replace(/>/g, '&gt;');
     }
 
-    function editItem(type, id) {
-        if (!id) {
+    function editItem(type, id, sectionIndex, lessonIndex) {
+        if (sectionIndex === undefined || lessonIndex === undefined) {
             alert('Item not found. Please reload.');
             return;
         }
         
         if (type === 'video') {
-            window.location.href = '/admin/lesson/' + id + '/edit';
+            window.location.href = `/admin/courses/${courseId}/video-settings?section=${sectionIndex}&lesson=${lessonIndex}`;
         } else if (type === 'slide') {
-            window.location.href = `/admin/courses/${courseId}/slide-editor`;
+            window.location.href = `/admin/courses/${courseId}/slide-editor?section=${sectionIndex}&lesson=${lessonIndex}`;
         } else if (type === 'quiz') {
-            window.location.href = '/admin/quiz/' + id + '/edit';
+            window.location.href = `/admin/course/${courseId}/quiz/${sectionIndex}/${lessonIndex}`;
         }
     }
 
     async function deleteItem(sectionId, itemId) {
         if (!confirm('Delete this item?')) return;
-
-        const updated = courseData.map(s => {
-            if (s._id === sectionId) {
-                return { ...s, videos: s.videos.filter(i => i._id !== itemId) };
-            }
-            return s;
-        });
-
-        await saveCourseOrder(updated);
+        try {
+            const res = await fetch(`/api/admin/lesson/${courseId}/${sectionId}/${itemId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
+            courseData = courseData.map(function(section) {
+                if (String(section._id) !== String(sectionId)) return section;
+                return {
+                    ...section,
+                    lessons: (section.lessons || []).filter(function(lesson) { return String(lesson._id) !== String(itemId); })
+                };
+            });
+            renderSections();
+        } catch {
+            alert('Delete failed');
+        }
     }
 
     // ==================== LESSON EDITOR PANEL ====================
@@ -1594,10 +1668,16 @@
         setReorderStatus('Saving order...', 'saving');
 
         try {
-            const res = await fetch(`/admin/course/${courseId}/lesson/reorder`, {
-                method: 'PUT',
+            const sourceSectionId = evt.from?.dataset?.sectionId || '';
+            const destSectionId = evt.to?.dataset?.sectionId || '';
+
+            const res = await fetch('/api/admin/lesson/reorder', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    courseId,
+                    sourceSectionId,
+                    destSectionId,
                     sourceSectionIndex,
                     destSectionIndex,
                     sourceIndex,
@@ -1613,6 +1693,12 @@
                 return;
             }
 
+            if (Array.isArray(data.sections)) {
+                courseData = normalizeEditorSections(data.sections);
+                renderSections();
+                initSortable();
+            }
+
             setReorderStatus('Order saved', 'saved', true);
         } catch {
             setReorderStatus('Network error while saving order.', 'error');
@@ -1624,22 +1710,22 @@
         const sourceSection = courseData[sourceSectionIndex];
         const destSection = courseData[destSectionIndex];
 
-        if (!sourceSection || !destSection || !Array.isArray(sourceSection.videos) || !Array.isArray(destSection.videos)) {
+        if (!sourceSection || !destSection || !Array.isArray(sourceSection.lessons) || !Array.isArray(destSection.lessons)) {
             return;
         }
 
-        const movedItems = sourceSection.videos.splice(sourceIndex, 1);
+        const movedItems = sourceSection.lessons.splice(sourceIndex, 1);
         const movedItem = movedItems[0];
         if (!movedItem) return;
 
-        destSection.videos.splice(destIndex, 0, movedItem);
+        destSection.lessons.splice(destIndex, 0, movedItem);
 
-        sourceSection.videos.forEach((item, idx) => {
+        sourceSection.lessons.forEach((item, idx) => {
             item.order = idx;
         });
 
         if (sourceSectionIndex !== destSectionIndex) {
-            destSection.videos.forEach((item, idx) => {
+            destSection.lessons.forEach((item, idx) => {
                 item.order = idx;
             });
         }

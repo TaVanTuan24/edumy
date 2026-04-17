@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { getCanonicalSections } = require('./courseContentAdapter');
 
 const descriptionCache = new Map();
 
@@ -7,15 +8,15 @@ function normalizeText(value) {
 }
 
 function buildCurriculumOutline(course) {
-  const sections = Array.isArray(course && course.driveStructure) ? course.driveStructure : [];
+  const sections = getCanonicalSections(course);
 
   return sections.map((section, sectionIndex) => {
-    const sectionTitle = normalizeText(section && section.section) || `Section ${sectionIndex + 1}`;
-    const items = Array.isArray(section && section.videos) ? section.videos : [];
+    const sectionTitle = normalizeText(section && section.title) || `Section ${sectionIndex + 1}`;
+    const items = Array.isArray(section && section.lessons) ? section.lessons : [];
     const lessons = items
       .map((item, lessonIndex) => {
         const type = normalizeText(item && item.type) || 'video';
-        const name = normalizeText(item && item.name) || `Lesson ${lessonIndex + 1}`;
+        const name = normalizeText(item && item.title) || `Lesson ${lessonIndex + 1}`;
         return `${type}: ${name}`;
       })
       .slice(0, 12);

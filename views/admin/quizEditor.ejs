@@ -8,8 +8,8 @@
     data-course-id="<%= course._id %>"
     data-section-index="<%= sectionIndex %>"
     data-quiz-index="<%= quizIndex %>"
-    data-quiz='<%- JSON.stringify(quiz || {}).replace(/'/g, "&#39;") %>'
 >
+    <script id="quiz-editor-data" type="application/json"><%- JSON.stringify(quiz || {}) %></script>
     <div class="d-flex align-items-center justify-content-between mb-3">
         <div>
             <h3 class="mb-1">Quiz Editor</h3>

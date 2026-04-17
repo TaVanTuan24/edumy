@@ -7,6 +7,7 @@ const UserCourseProgress = require('../models/userCourseProgress');
 const ExpressError = require('../utils/ExpressError');
 const { resolveStream, safeUrlParse } = require('../services/streamResolver');
 const { createStreamProxyToken, verifyStreamProxyToken } = require('../utils/signStreamToken');
+const { getCanonicalSections } = require('../utils/courseContentAdapter');
 
 function getEnrolledCourseIdStrings(userDoc) {
   const ids = [];
@@ -140,30 +141,89 @@ function getCourseLessons(courseDoc) {
   }));
 }
 
+function getCourseLessons(courseDoc) {
+  const sections = getCanonicalSections(courseDoc);
+  const lessons = [];
+
+  sections.forEach((section, sectionIndex) => {
+    const sectionLessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+    sectionLessons.forEach((lesson, lessonIndex) => {
+      lessons.push({
+        id: String((lesson && lesson._id) || `lesson_${sectionIndex + 1}_${lessonIndex + 1}`),
+        title: String((lesson && lesson.title) || 'Untitled Lesson'),
+        type: String((lesson && lesson.type) || ''),
+        duration: lesson && lesson.duration ? lesson.duration : null,
+        order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : lessonIndex,
+        sectionTitle: String((section && section.title) || 'Course Content'),
+        sectionOrder: Number.isFinite(Number(section && section.order)) ? Number(section.order) : sectionIndex,
+        content: lesson && lesson.content ? lesson.content : null,
+        quiz: Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [],
+        questions: Array.isArray(lesson && lesson.content && lesson.content.questions) ? lesson.content.questions : [],
+        videoUrl: lesson && (lesson.videoUrl || lesson.preview || lesson.refId) ? (lesson.videoUrl || lesson.preview || lesson.refId) : ''
+      });
+    });
+  });
+
+  return lessons;
+}
+
+function hasPlayableVideoSource(lesson) {
+  return Boolean(getPlayableVideoSource(lesson));
+}
+
+function getPlayableVideoSource(lesson) {
+  const candidates = [
+    lesson && lesson.videoUrl,
+    lesson && lesson.preview,
+    lesson && lesson.refId,
+    lesson && lesson.content && lesson.content.videoUrl,
+    lesson && lesson.content && lesson.content.streamUrl,
+    lesson && lesson.content && lesson.content.url
+  ];
+
+  const match = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+  return match ? match.trim() : '';
+}
+
+function hasRealSlides(lesson) {
+  return extractStructuredSlidePages(lesson).length > 0
+    || extractSlidePages(lesson).length > 0
+    || !!extractSlideText(lesson);
+}
+
+function hasRealQuizQuestions(lesson) {
+  return normalizeQuizQuestions(lesson).length > 0;
+}
+
+function hasRealTimedQuizEvents(lesson) {
+  return normalizeTimedQuizQuestions(lesson).length > 0;
+}
+
 function normalizeLessonType(lesson) {
   const raw = String((lesson && lesson.type) || '').trim().toLowerCase();
-  if (raw === 'lecture') return 'video';
-  if (raw === 'video') return 'video';
-  if (raw === 'slide' || raw === 'presentation' || raw === 'ppt' || raw === 'document') return 'slide';
+  const hasSlides = hasRealSlides(lesson);
+  const hasQuiz = hasRealQuizQuestions(lesson);
+  const hasTimedQuiz = hasRealTimedQuizEvents(lesson);
+  const hasVideoUrl = hasPlayableVideoSource(lesson);
 
-  const hasVideoUrl = !!String((lesson && lesson.videoUrl) || '').trim();
-  if (raw === 'quiz' && hasVideoUrl) return 'video';
-
-  const slidePages = extractSlidePages(lesson);
-  if (slidePages.length > 0) return 'slide';
-
-  const slideText = extractSlideText(lesson);
-  if (slideText) return 'slide';
-
-  if (hasVideoUrl) {
-    return 'video';
+  // Trust coherent explicit types first.
+  if (raw === 'slide' || raw === 'presentation' || raw === 'ppt' || raw === 'document') {
+    return hasSlides ? 'slide' : 'unknown';
+  }
+  if (raw === 'quiz') {
+    return (hasQuiz || hasTimedQuiz) ? 'quiz' : 'unknown';
+  }
+  if (raw === 'lecture' || raw === 'video') {
+    return hasVideoUrl ? 'video' : 'unknown';
   }
 
-  const quizRows = Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [];
-  const questionRows = Array.isArray(lesson && lesson.questions) ? lesson.questions : [];
-  if (quizRows.length > 0 || questionRows.length > 0) return 'quiz';
+  // Strict fallback for legacy / drifted payloads.
+  if (hasSlides) return 'slide';
+  if (hasQuiz) return 'quiz';
+  if (hasVideoUrl) return 'video';
+  if (hasTimedQuiz) return 'quiz';
 
-  return '';
+  return 'unknown';
 }
 
 function extractSlideText(lesson) {
@@ -233,6 +293,159 @@ function extractSlidePages(lesson) {
       pages.push(merged.join('\n\n'));
     }
   }
+
+  return pages;
+}
+
+function getSlideCanvasSize(lesson, slide) {
+  const rawWidth = Number(
+    (slide && (slide.canvasWidth ?? slide.width))
+    ?? (lesson && lesson.content && (lesson.content.canvasWidth ?? lesson.content.width))
+    ?? 1280
+  );
+  const rawHeight = Number(
+    (slide && (slide.canvasHeight ?? slide.height))
+    ?? (lesson && lesson.content && (lesson.content.canvasHeight ?? lesson.content.height))
+    ?? 720
+  );
+
+  const width = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 1280;
+  const height = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 720;
+
+  return { width, height };
+}
+
+function resolveVrAssetUrl(req, value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:)?\/\//i.test(raw) || /^data:/i.test(raw)) {
+    return raw;
+  }
+  if (!req) {
+    return raw;
+  }
+
+  const prefix = `${req.protocol}://${req.get('host')}`;
+  return raw.startsWith('/') ? `${prefix}${raw}` : `${prefix}/${raw}`;
+}
+
+function normalizeSlideElementForVr(req, element, slideIndex, elementIndex) {
+  if (!element || typeof element !== 'object') return null;
+
+  const type = element.type === 'image' ? 'image' : 'text';
+  const normalized = {
+    id: String(element.id || `slide-${slideIndex + 1}-el-${elementIndex + 1}`),
+    type,
+    x: Number.isFinite(Number(element.x)) ? Number(element.x) : 0,
+    y: Number.isFinite(Number(element.y)) ? Number(element.y) : 0,
+    width: Number.isFinite(Number(element.width)) ? Number(element.width) : (type === 'image' ? 320 : 320),
+    height: Number.isFinite(Number(element.height)) ? Number(element.height) : (type === 'image' ? 220 : 80)
+  };
+
+  if (type === 'image') {
+    normalized.src = resolveVrAssetUrl(req, element.src || element.url || element.imageUrl);
+  } else {
+    normalized.text = String(element.text || element.content || '').trim();
+    normalized.fontSize = Number.isFinite(Number(element.fontSize)) ? Number(element.fontSize) : 28;
+    normalized.color = String(element.color || '#1c1d1f').trim() || '#1c1d1f';
+    normalized.align = String(element.align || 'left').trim().toLowerCase();
+    normalized.bold = Boolean(element.bold);
+  }
+
+  return normalized;
+}
+
+function extractStructuredSlidePages(reqOrLesson, maybeLesson) {
+  const lesson = maybeLesson || reqOrLesson;
+  const req = maybeLesson ? reqOrLesson : null;
+  const rawSlides = Array.isArray(lesson && lesson.content && lesson.content.slides)
+    ? lesson.content.slides
+    : (Array.isArray(lesson && lesson.slides)
+      ? lesson.slides
+      : (Array.isArray(lesson && lesson.content && lesson.content.pages) ? lesson.content.pages : []));
+
+  const pages = [];
+
+  rawSlides.forEach((slide, slideIndex) => {
+    if (!slide) return;
+
+    if (typeof slide === 'string') {
+      const text = slide.trim();
+      if (!text) return;
+      const { width, height } = getSlideCanvasSize(lesson, null);
+      pages.push({
+        id: `slide-${slideIndex + 1}`,
+        title: `Slide ${slideIndex + 1}`,
+        layout: 'left-text',
+        theme: 'light',
+        canvasWidth: width,
+        canvasHeight: height,
+        elements: [{
+          id: `slide-${slideIndex + 1}-text-1`,
+          type: 'text',
+          x: 80,
+          y: 80,
+          width: Math.max(320, width - 160),
+          height: Math.max(120, height - 160),
+          text,
+          fontSize: 28,
+          color: '#1c1d1f',
+          align: 'left',
+          bold: false
+        }]
+      });
+      return;
+    }
+
+    const { width, height } = getSlideCanvasSize(lesson, slide);
+    const rawElements = Array.isArray(slide.elements) ? slide.elements : [];
+    const elements = rawElements
+      .map((element, elementIndex) => normalizeSlideElementForVr(req, element, slideIndex, elementIndex))
+      .filter((element) => {
+        if (!element) return false;
+        if (element.type === 'image') return Boolean(element.src);
+        return Boolean(element.text);
+      });
+
+    if (elements.length === 0) {
+      const fallbackText = String(
+        slide.title
+        || slide.text
+        || slide.content
+        || slide.body
+        || slide.description
+        || ''
+      ).trim();
+
+      if (fallbackText) {
+        elements.push({
+          id: `slide-${slideIndex + 1}-text-1`,
+          type: 'text',
+          x: 80,
+          y: 80,
+          width: Math.max(320, width - 160),
+          height: Math.max(120, height - 160),
+          text: fallbackText,
+          fontSize: 28,
+          color: '#1c1d1f',
+          align: 'left',
+          bold: false
+        });
+      }
+    }
+
+    if (elements.length === 0) return;
+
+    pages.push({
+      id: String(slide.id || `slide-${slideIndex + 1}`),
+      title: String(slide.title || `Slide ${slideIndex + 1}`),
+      layout: String(slide.layout || 'left-text'),
+      theme: String(slide.theme || 'light'),
+      canvasWidth: width,
+      canvasHeight: height,
+      elements
+    });
+  });
 
   return pages;
 }
@@ -565,22 +778,59 @@ module.exports.getVrCourseLessons = async (req, res) => {
       : []
   );
 
-  const lessons = getCourseLessons(course).map((lesson, idx) => ({
-    type: normalizeLessonType(lesson),
-    id: String(lesson.id),
-    title: String(lesson.title || ''),
-    videoUrl: lesson.videoUrl || '',
-    slideText: extractSlideText(lesson),
-    slides: extractSlidePages(lesson),
-    quizQuestions: normalizeQuizQuestions(lesson),
-    timedQuizzes: normalizeTimedQuizQuestions(lesson),
-    interactiveQuizzes: normalizeTimedQuizQuestions(lesson),
-    duration: lesson.duration || null,
-    order: Number.isFinite(Number(lesson.order)) ? Number(lesson.order) : idx + 1,
-    sectionTitle: String(lesson.sectionTitle || ''),
-    sectionOrder: Number.isFinite(Number(lesson.sectionOrder)) ? Number(lesson.sectionOrder) : null,
-    isCompleted: completedSet.has(String(lesson.id))
-  }));
+  const lessons = getCourseLessons(course).map((lesson, idx) => {
+    const slidePages = extractStructuredSlidePages(req, lesson);
+    const slides = extractSlidePages(lesson);
+    const slideText = extractSlideText(lesson);
+    const quizQuestions = normalizeQuizQuestions(lesson);
+    const timedQuizzes = normalizeTimedQuizQuestions(lesson);
+    const normalizedType = normalizeLessonType({
+      ...lesson,
+      slides,
+      slideText,
+      quiz: quizQuestions,
+      questions: quizQuestions,
+      interactiveQuizzes: timedQuizzes
+    });
+
+    const shapedLesson = {
+      type: normalizedType,
+      id: String(lesson.id),
+      title: String(lesson.title || ''),
+      videoUrl: getPlayableVideoSource(lesson),
+      slideText,
+      slides,
+      slidePages,
+      slideCanvasWidth: slidePages[0] && slidePages[0].canvasWidth ? slidePages[0].canvasWidth : 1280,
+      slideCanvasHeight: slidePages[0] && slidePages[0].canvasHeight ? slidePages[0].canvasHeight : 720,
+      slideCount: slidePages.length || slides.length,
+      quizQuestions,
+      quizQuestionsCount: quizQuestions.length,
+      timedQuizzes,
+      interactiveQuizzes: timedQuizzes,
+      duration: lesson.duration || null,
+      order: Number.isFinite(Number(lesson.order)) ? Number(lesson.order) : idx + 1,
+      sectionTitle: String(lesson.sectionTitle || ''),
+      sectionOrder: Number.isFinite(Number(lesson.sectionOrder)) ? Number(lesson.sectionOrder) : null,
+      isCompleted: completedSet.has(String(lesson.id))
+    };
+
+    console.log('[VR] lesson payload shaped:', JSON.stringify({
+      courseId,
+      lessonId: shapedLesson.id,
+      title: shapedLesson.title,
+      type: shapedLesson.type,
+      hasSlides: shapedLesson.slideCount > 0 || shapedLesson.slidePages.length > 0 || Boolean(shapedLesson.slideText),
+      slidePageCount: shapedLesson.slidePages.length,
+      slideCanvasWidth: shapedLesson.slideCanvasWidth,
+      slideCanvasHeight: shapedLesson.slideCanvasHeight,
+      quizCount: shapedLesson.quizQuestionsCount,
+      timedQuizCount: shapedLesson.timedQuizzes.length,
+      hasVideoUrl: Boolean(shapedLesson.videoUrl)
+    }));
+
+    return shapedLesson;
+  });
 
   return res.json({ success: true, data: lessons });
 };

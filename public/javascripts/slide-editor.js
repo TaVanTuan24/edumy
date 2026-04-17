@@ -650,6 +650,12 @@
                 slides: serializeSlides(state.slides)
             }
         };
+        console.log('[SlideEditor] save payload:', {
+            sectionIndex: payload.sectionIndex,
+            lessonIndex: payload.lessonIndex,
+            title: payload.title,
+            slideCount: payload.content.slides.length
+        });
 
         try {
             const response = await fetch('/admin/course/' + encodeURIComponent(courseId) + '/slide-editor/save', {

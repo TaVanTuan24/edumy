@@ -1,6 +1,7 @@
 const Course = require('../models/course');
 const User = require('../models/user');
 const { generateCourseDescription } = require('../utils/courseDescriptionGenerator');
+const { syncCourseContent } = require('../utils/courseContentAdapter');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -38,6 +39,7 @@ module.exports.previewCourse = async (req, res) => {
             populate: { path: 'author' }
         });
     if (!course) return res.redirect('/explore');
+    syncCourseContent(course);
     const user = await User.findById(req.user._id).select('enrolledCourses enrolledCourseIds');
     const generatedDescription = await generateCourseDescription(course);
     const isEnrolled = !!(user && typeof user.findEnrollment === 'function' && user.findEnrollment(course._id));

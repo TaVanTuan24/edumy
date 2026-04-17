@@ -71,9 +71,25 @@
 
         state.sectionNotes = Array.isArray(window.sectionNotes) ? window.sectionNotes : [];
 
-        const driveStructure = Array.isArray(raw.driveStructure) ? raw.driveStructure : [];
-        state.sections = driveStructure.map(normalizeSection);
+        const structuredSections = Array.isArray(raw.sections) ? raw.sections : [];
+        if (structuredSections.length) {
+            state.sections = structuredSections.map(normalizeStructuredSection);
+        } else {
+            const driveStructure = Array.isArray(raw.driveStructure) ? raw.driveStructure : [];
+            state.sections = driveStructure.map(normalizeSection);
+        }
         state.flatLessons = state.sections.flatMap(function(section) { return section.lessons; });
+    }
+
+    function normalizeStructuredSection(section, index) {
+        const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+        return {
+            id: section && section._id ? String(section._id) : 'section-' + index,
+            title: (section && section.title) ? String(section.title) : ('Section ' + (index + 1)),
+            lessons: lessons.map(function(item, lessonIndex) {
+                return normalizeStructuredLesson(item, index, lessonIndex);
+            })
+        };
     }
 
     function normalizeSection(section, index) {
@@ -104,6 +120,24 @@
                 videoUrl: (item && item.preview) ? String(item.preview) : '',
                 slides: slides,
                 questions: questions
+            }
+        };
+    }
+
+    function normalizeStructuredLesson(item, sectionIndex, lessonIndex) {
+        const originalType = String((item && item.type) || 'video').toLowerCase();
+        const type = originalType === 'video' ? 'lecture' : (originalType === 'slide' ? 'slide' : originalType === 'quiz' ? 'quiz' : 'lecture');
+
+        return {
+            _id: item && item._id ? String(item._id) : ('lesson-' + sectionIndex + '-' + lessonIndex),
+            sectionIndex: sectionIndex,
+            lessonIndex: lessonIndex,
+            title: (item && item.title) ? String(item.title) : 'Untitled Lesson',
+            type: type,
+            content: {
+                videoUrl: (item && (item.videoUrl || item.preview)) ? String(item.videoUrl || item.preview) : '',
+                slides: Array.isArray(item && item.content && item.content.slides) ? item.content.slides : [],
+                questions: Array.isArray(item && item.quiz) ? item.quiz : []
             }
         };
     }

@@ -1,6 +1,7 @@
 const Discussion = require('../models/discussion');
 const Course = require('../models/course');
 const ollama = require('../config/ollama');
+const { getCanonicalSections, syncCourseContent } = require('../utils/courseContentAdapter');
 
 function normalizeTags(input) {
   const source = Array.isArray(input) ? input.join(',') : String(input || '');
@@ -46,15 +47,15 @@ function sortAnswers(answers, sortBy) {
 
 function getLessonDocs(course) {
   const docs = [];
-  const sections = Array.isArray(course && course.driveStructure) ? course.driveStructure : [];
+  const sections = getCanonicalSections(course);
 
   sections.forEach((section) => {
-    const sectionName = String(section && section.section || '');
-    const lessons = Array.isArray(section && section.videos) ? section.videos : [];
+    const sectionName = String(section && section.title || '');
+    const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
 
     lessons.forEach((lesson) => {
       const lessonId = String(lesson && lesson._id || '');
-      const title = String(lesson && (lesson.title || lesson.name) || '');
+      const title = String(lesson && lesson.title || '');
       const type = String(lesson && lesson.type || 'video');
 
       const chunks = [title, sectionName, type];
@@ -72,10 +73,10 @@ function getLessonDocs(course) {
       }
 
       if (type === 'quiz') {
-        const questions = Array.isArray(lesson && lesson.content && lesson.content.questions)
-          ? lesson.content.questions
-          : Array.isArray(lesson && lesson.questions)
-            ? lesson.questions
+        const questions = Array.isArray(lesson && lesson.quiz)
+          ? lesson.quiz
+          : Array.isArray(lesson && lesson.content && lesson.content.questions)
+            ? lesson.content.questions
             : [];
 
         questions.forEach((q) => {
@@ -196,7 +197,8 @@ module.exports.listQuestions = async (req, res) => {
 module.exports.renderAskForm = async (req, res) => {
   const { courseId } = req.params;
   const lessonId = String(req.query.lessonId || '');
-  const course = await Course.findById(courseId).select('title driveStructure');
+  const course = await Course.findById(courseId).select('title sections driveStructure');
+  syncCourseContent(course);
 
   res.render('discussions/new', { course, lessonId });
 };
@@ -463,7 +465,7 @@ module.exports.generateAiAnswer = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Question not found' });
     }
 
-    const course = await Course.findById(courseId).select('title driveStructure').lean();
+    const course = await Course.findById(courseId).select('title sections driveStructure').lean();
     if (!course) {
       return res.status(404).json({ success: false, error: 'Course not found' });
     }

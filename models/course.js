@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const review = require('./review');
+const { syncCourseContent } = require('../utils/courseContentAdapter');
 const Schema = mongoose.Schema;
 
 const opts = { toJSON: { virtuals: true }, timestamps: true }
@@ -107,7 +108,7 @@ const interactiveVideoQuizSchema = new Schema({
     }
 }, { _id: true })
 
-// Legacy driveStructure item schema used by current course editor.
+// Legacy driveStructure item schema kept temporarily for backward compatibility.
 const driveItemSchema = new Schema({
     type: {
         type: String,
@@ -172,6 +173,26 @@ const lessonSchema = new Schema({
     videoUrl: {
         type: String,
         default: ''
+    },
+    preview: {
+        type: String,
+        default: ''
+    },
+    refId: {
+        type: String,
+        default: ''
+    },
+    description: {
+        type: String,
+        default: ''
+    },
+    duration: {
+        type: Schema.Types.Mixed,
+        default: null
+    },
+    aiGenerated: {
+        type: Boolean,
+        default: false
     },
     content: {
         type: Object,
@@ -329,6 +350,8 @@ function normalizeInteractiveQuizzes(rawQuizzes) {
 }
 
 CourseSchema.pre('validate', function(next) {
+    syncCourseContent(this)
+
     if (Array.isArray(this.driveStructure)) {
         this.driveStructure.forEach((section) => {
             if (!section || !Array.isArray(section.videos)) return

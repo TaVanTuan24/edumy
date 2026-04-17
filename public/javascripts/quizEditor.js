@@ -5,12 +5,13 @@
     const courseId = root.dataset.courseId;
     const sectionIndex = Number(root.dataset.sectionIndex);
     const quizIndex = Number(root.dataset.quizIndex);
+    const quizDataNode = document.getElementById('quiz-editor-data');
 
     let quizData = { name: '', questions: [] };
     let selectedQuestionIndex = -1;
 
     try {
-        quizData = JSON.parse(root.dataset.quiz || '{}');
+        quizData = JSON.parse(quizDataNode ? (quizDataNode.textContent || '{}') : '{}');
     } catch {
         showAlert('Failed to load quiz data.', 'danger');
     }
@@ -18,6 +19,14 @@
     if (!Array.isArray(quizData.questions)) {
         quizData.questions = [];
     }
+    quizData.questions = quizData.questions.map(normalizeQuestionRecord);
+    console.log('[QuizEditor] quiz payload loaded into editor:', {
+        title: quizData.name || quizData.title || '',
+        questionCount: quizData.questions.length,
+        optionsPerQuestion: quizData.questions.map(function(question) {
+            return Array.isArray(question.options) ? question.options.length : 0;
+        })
+    });
 
     const els = {
         quizTitleInput: document.getElementById('quizTitleInput'),
@@ -113,7 +122,11 @@
         const payload = {
             sectionIndex,
             quizIndex,
-            question: '',
+            question: 'Untitled question',
+            answers: [
+                { id: 'answer-1', text: 'Option 1', isCorrect: true },
+                { id: 'answer-2', text: 'Option 2', isCorrect: false }
+            ],
             options: ['Option 1', 'Option 2'],
             correctIndex: 0
         };
@@ -130,14 +143,14 @@
         }
 
         const createdQuestion = response.question || {
-            question: '',
-            options: [
-                { text: 'Option 1', correct: true },
-                { text: 'Option 2', correct: false }
+            question: 'Untitled question',
+            answers: [
+                { text: 'Option 1', isCorrect: true },
+                { text: 'Option 2', isCorrect: false }
             ]
         };
 
-        quizData.questions.push(createdQuestion);
+        quizData.questions.push(normalizeQuestionRecord(createdQuestion));
         renderQuestionList();
         selectQuestion(quizData.questions.length - 1);
         showAlert('Question added.', 'success');
@@ -160,9 +173,11 @@
             quizIndex,
             questionIndex: selectedQuestionIndex,
             question: validation.question,
+            answers: validation.answers,
             options: validation.options,
             correctIndex: validation.correctIndex
         };
+        console.log('[QuizEditor] quiz payload before save:', payload);
 
         const response = await requestJson(endpoints.update, {
             method: 'PUT',
@@ -175,15 +190,11 @@
             return;
         }
 
-        quizData.questions[selectedQuestionIndex] = {
+        quizData.questions[selectedQuestionIndex] = normalizeQuestionRecord({
+            _id: quizData.questions[selectedQuestionIndex] && quizData.questions[selectedQuestionIndex]._id,
             question: validation.question,
-            options: validation.options.map(function (option, index) {
-                return {
-                    text: option.text,
-                    correct: index === validation.correctIndex
-                };
-            })
-        };
+            answers: validation.answers
+        });
 
         renderQuestionList();
         selectQuestion(selectedQuestionIndex);
@@ -281,7 +292,7 @@
             li.className = 'question-list-item';
             li.dataset.questionIndex = String(index);
 
-            const shortQuestion = question.question && question.question.trim()
+        const shortQuestion = question.question && question.question.trim()
                 ? question.question.trim()
                 : 'Untitled question';
 
@@ -319,9 +330,9 @@
         els.questionText.value = question.question || '';
         els.optionList.innerHTML = '';
 
-        const normalizedOptions = normalizeQuestionOptions(question.options);
-        normalizedOptions.forEach(function (option) {
-            addOptionRow(option.text, option.correct);
+        const normalizedOptions = normalizeQuestionAnswers(question.answers);
+        normalizedOptions.forEach(function (answer) {
+            addOptionRow(answer.text, answer.isCorrect);
         });
 
         syncOptionCounter();
@@ -391,36 +402,67 @@
         return {
             valid: true,
             question,
+            answers: options.map(function(option, index) {
+                return {
+                    id: option.id || ('answer-' + (index + 1)),
+                    text: option.text,
+                    isCorrect: index === correctIndex
+                };
+            }),
             options,
             correctIndex
         };
     }
 
-    function normalizeQuestionOptions(options) {
-        const sourceQuestion = quizData.questions[selectedQuestionIndex] || {};
-        const rawOptions = Array.isArray(options) && options.length
-            ? options
-            : Array.isArray(sourceQuestion.answers)
-                ? sourceQuestion.answers
-                : [];
+    function normalizeQuestionRecord(question) {
+        const sourceAnswers = question && Array.isArray(question.answers) && question.answers.length
+            ? question.answers
+            : question && Array.isArray(question.options) && question.options.length
+                ? question.options
+                : question && Array.isArray(question.choices) && question.choices.length
+                    ? question.choices
+                    : [];
+        const answers = normalizeQuestionAnswers(sourceAnswers, question);
 
-        const normalized = rawOptions.map(function (opt) {
-            if (typeof opt === 'string') return { text: opt, correct: false };
+        return {
+            ...(question && question._id ? { _id: question._id } : {}),
+            question: String(question && question.question || '').trim(),
+            answers: answers,
+            options: answers
+        };
+    }
+
+    function normalizeQuestionAnswers(answers, sourceQuestion) {
+        const question = sourceQuestion || {};
+        const rawAnswers = Array.isArray(answers) && answers.length
+            ? answers
+            : [];
+
+        const normalized = rawAnswers.map(function (answer, index) {
+            if (typeof answer === 'string') {
+                return {
+                    id: 'answer-' + (index + 1),
+                    text: answer,
+                    isCorrect: false
+                };
+            }
+
             return {
-                text: String((opt && (opt.text || opt.answer || opt.value)) || ''),
-                correct: Boolean(opt && (opt.correct || opt.isCorrect))
+                id: String((answer && (answer.id || answer._id)) || ('answer-' + (index + 1))),
+                text: String((answer && (answer.text || answer.answer || answer.value)) || ''),
+                isCorrect: Boolean(answer && (answer.isCorrect || answer.correct))
             };
         });
 
-        let correctIndex = normalized.findIndex(function (opt) {
-            return opt.correct;
+        let correctIndex = normalized.findIndex(function (answer) {
+            return answer.isCorrect;
         });
 
         if (correctIndex < 0) {
             const numericCorrectIndex = Number(
-                sourceQuestion.correctIndex
-                ?? sourceQuestion.correctOptionIndex
-                ?? sourceQuestion.correctAnswerIndex
+                question.correctIndex
+                ?? question.correctOptionIndex
+                ?? question.correctAnswerIndex
             );
 
             if (Number.isInteger(numericCorrectIndex) && numericCorrectIndex >= 0 && numericCorrectIndex < normalized.length) {
@@ -428,32 +470,42 @@
             }
         }
 
-        if (correctIndex < 0 && typeof sourceQuestion.correctAnswer === 'string') {
-            const correctAnswerText = sourceQuestion.correctAnswer.trim().toLowerCase();
+        if (correctIndex < 0 && typeof question.correctAnswer === 'string') {
+            const correctAnswerText = question.correctAnswer.trim().toLowerCase();
             const byLabel = ['a', 'b', 'c', 'd'].indexOf(correctAnswerText);
             if (byLabel >= 0 && byLabel < normalized.length) {
                 correctIndex = byLabel;
             } else {
-                correctIndex = normalized.findIndex(function (opt) {
-                    return String(opt.text || '').trim().toLowerCase() === correctAnswerText;
+                correctIndex = normalized.findIndex(function (answer) {
+                    return String(answer.text || '').trim().toLowerCase() === correctAnswerText;
                 });
             }
         }
 
         if (correctIndex >= 0) {
-            normalized.forEach(function (opt, index) {
-                opt.correct = index === correctIndex;
+            normalized.forEach(function (answer, index) {
+                answer.isCorrect = index === correctIndex;
             });
         }
 
-        if (normalized.length < 2) {
-            while (normalized.length < 2) {
-                normalized.push({ text: '', correct: false });
-            }
+        if (!normalized.length) {
+            normalized.push({
+                id: 'answer-1',
+                text: typeof question.correctAnswer === 'string' && question.correctAnswer.trim() ? question.correctAnswer.trim() : 'Option 1',
+                isCorrect: true
+            });
         }
 
-        if (!normalized.some(function (o) { return o.correct; })) {
-            normalized[0].correct = true;
+        while (normalized.length < 2) {
+            normalized.push({
+                id: 'answer-' + (normalized.length + 1),
+                text: 'Option ' + (normalized.length + 1),
+                isCorrect: normalized.length === 0
+            });
+        }
+
+        if (!normalized.some(function (answer) { return answer.isCorrect; }) && normalized[0]) {
+            normalized[0].isCorrect = true;
         }
 
         return normalized;

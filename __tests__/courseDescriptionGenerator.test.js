@@ -28,6 +28,38 @@ describe('courseDescriptionGenerator', () => {
     ]);
   });
 
+  test('buildCurriculumOutline prefers canonical sections.lessons when present', () => {
+    const outline = buildCurriculumOutline({
+      sections: [
+        {
+          title: 'Immersion Basics',
+          lessons: [
+            { type: 'video', title: 'Welcome to VR Learning' },
+            { type: 'quiz', title: 'Comfort and Safety Check' }
+          ]
+        }
+      ],
+      driveStructure: [
+        {
+          section: 'Old Structure',
+          videos: [
+            { type: 'video', name: 'Legacy Lesson' }
+          ]
+        }
+      ]
+    });
+
+    expect(outline).toEqual([
+      {
+        sectionTitle: 'Immersion Basics',
+        lessons: [
+          'video: Welcome to VR Learning',
+          'quiz: Comfort and Safety Check'
+        ]
+      }
+    ]);
+  });
+
   test('buildFallbackDescription uses curriculum names to produce a meaningful summary', () => {
     const description = buildFallbackDescription({
       title: 'Unity UI Fundamentals',
