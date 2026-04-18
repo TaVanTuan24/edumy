@@ -28,39 +28,31 @@ function buildSlidesFromContentString(contentString, fallbackTitle) {
   }];
 }
 
-function migrateLegacyItem(item) {
-  if (!item || typeof item !== 'object') return { changed: false };
+function migrateLesson(lesson) {
+  if (!lesson || typeof lesson !== 'object') return { changed: false };
 
-  const rawType = String(item.type || '').toLowerCase();
+  const rawType = String(lesson.type || '').toLowerCase();
   const isSlideType = rawType === 'slide';
-  const looksLikeSlide = Array.isArray(item.slides) && item.slides.length > 0;
-  const contentIsObject = item.content && typeof item.content === 'object' && !Array.isArray(item.content);
-  const contentSlides = contentIsObject && Array.isArray(item.content.slides) ? item.content.slides : [];
-  const contentString = typeof item.content === 'string' ? item.content : '';
+  const contentIsObject = lesson.content && typeof lesson.content === 'object' && !Array.isArray(lesson.content);
+  const contentSlides = contentIsObject && Array.isArray(lesson.content.slides) ? lesson.content.slides : [];
+  const contentString = typeof lesson.content === 'string' ? lesson.content : '';
 
-  if (!isSlideType && !looksLikeSlide && !contentSlides.length && !contentString.trim()) {
+  if (!isSlideType && !contentSlides.length && !contentString.trim()) {
     return { changed: false };
   }
 
   const normalizedSlides = contentSlides.length
     ? normalizeSlides(contentSlides)
-    : looksLikeSlide
-      ? normalizeSlides(item.slides)
-      : buildSlidesFromContentString(contentString, item.name || item.title || 'Slide');
+    : buildSlidesFromContentString(contentString, lesson.title || 'Slide');
 
-  const nextContent = contentIsObject ? { ...item.content, slides: normalizedSlides } : { slides: normalizedSlides };
-
-  const prevSlidesJson = JSON.stringify(Array.isArray(item.slides) ? item.slides : []);
-  const nextSlidesJson = JSON.stringify(normalizedSlides);
-  const prevContentJson = JSON.stringify(item.content || {});
+  const nextContent = contentIsObject ? { ...lesson.content, slides: normalizedSlides } : { slides: normalizedSlides };
+  const prevContentJson = JSON.stringify(lesson.content || {});
   const nextContentJson = JSON.stringify(nextContent);
-
-  const changed = prevSlidesJson !== nextSlidesJson || prevContentJson !== nextContentJson || rawType === 'lecture';
+  const changed = prevContentJson !== nextContentJson || rawType === 'lecture';
 
   if (changed) {
-    item.type = 'slide';
-    item.slides = normalizedSlides;
-    item.content = nextContent;
+    lesson.type = 'slide';
+    lesson.content = nextContent;
   }
 
   return { changed };
@@ -79,16 +71,14 @@ async function run() {
   for (const course of courses) {
     let changedInCourse = false;
 
-    if (Array.isArray(course.driveStructure)) {
-      for (const section of course.driveStructure) {
-        if (!section || !Array.isArray(section.videos)) continue;
+    for (const section of Array.isArray(course.sections) ? course.sections : []) {
+      if (!section || !Array.isArray(section.lessons)) continue;
 
-        for (const item of section.videos) {
-          const { changed } = migrateLegacyItem(item);
-          if (changed) {
-            changedInCourse = true;
-            lessonTouched += 1;
-          }
+      for (const lesson of section.lessons) {
+        const { changed } = migrateLesson(lesson);
+        if (changed) {
+          changedInCourse = true;
+          lessonTouched += 1;
         }
       }
     }

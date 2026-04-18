@@ -52,16 +52,6 @@ async function saveEditableCourse(course) {
     return course
 }
 
-function getLegacyDriveStructure(course) {
-    syncCourseContent(course)
-    return Array.isArray(course && course.driveStructure) ? course.driveStructure : []
-}
-
-function getLegacyLesson(course, sectionIndex, lessonIndex) {
-    const driveStructure = getLegacyDriveStructure(course)
-    return driveStructure?.[sectionIndex]?.videos?.[lessonIndex] || null
-}
-
 function getCanonicalLesson(course, sectionIndex, lessonIndex) {
     return course?.sections?.[sectionIndex]?.lessons?.[lessonIndex] || null
 }
@@ -391,7 +381,7 @@ function buildLessonTitleMap(course) {
         const items = Array.isArray(section && section.lessons) ? section.lessons : [];
         items.forEach((item) => {
             if (!item || !item._id) return;
-            map.set(String(item._id), item.title || item.name || 'Lesson');
+            map.set(String(item._id), item.title || 'Lesson');
         });
     });
 
@@ -455,7 +445,7 @@ router.get('/courses/:id/video-settings', async (req, res) => {
         return res.status(400).send('Missing section or lesson index')
     }
 
-    const lesson = getLegacyLesson(course, sectionIndex, lessonIndex)
+    const lesson = getCanonicalLesson(course, sectionIndex, lessonIndex)
     if (!lesson) {
         return res.status(404).send('Lesson not found')
     }
@@ -483,7 +473,7 @@ router.get('/courses/:id/video-settings', async (req, res) => {
         },
         {
             $set: {
-                title: String(lesson.name || lesson.title || ''),
+                title: String(lesson.title || ''),
                 url: videoUrl,
                 source: youtubeVideoId ? 'youtube' : 'other',
                 youtubeVideoId
@@ -688,7 +678,7 @@ router.get('/courses/:id/slide-editor', async (req, res) => {
 
     const lesson = Number.isNaN(sectionIndex) || Number.isNaN(lessonIndex)
         ? null
-        : (getCanonicalLesson(course, sectionIndex, lessonIndex) || getLegacyLesson(course, sectionIndex, lessonIndex))
+        : getCanonicalLesson(course, sectionIndex, lessonIndex)
 
     const slideData = Array.isArray(lesson?.content?.slides)
         ? lesson.content.slides
@@ -699,7 +689,7 @@ router.get('/courses/:id/slide-editor', async (req, res) => {
         slideData,
         sectionIndex: Number.isNaN(sectionIndex) ? '' : sectionIndex,
         lessonIndex: Number.isNaN(lessonIndex) ? '' : lessonIndex,
-        lessonTitle: lesson?.title || lesson?.name || ''
+        lessonTitle: lesson?.title || ''
     })
 })
 
@@ -929,7 +919,7 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
 
                 return {
                     ...(item && item._id ? { _id: item._id } : {}),
-                    title: item.name || item.title || 'Untitled Lesson',
+                    title: item.title || 'Untitled Lesson',
                     type,
                     videoUrl: item.preview || item.videoUrl || '',
                     preview: item.preview || item.videoUrl || '',
@@ -1128,7 +1118,7 @@ router.get('/course/:id/lesson/:sectionIndex/:lessonIndex', async (req, res) => 
             return res.json({ success: false, error: 'Course not found' })
         }
         
-        const lesson = getCanonicalLesson(course, Number(sectionIndex), Number(lessonIndex)) || getLegacyLesson(course, Number(sectionIndex), Number(lessonIndex))
+        const lesson = getCanonicalLesson(course, Number(sectionIndex), Number(lessonIndex))
         
         if (!lesson) {
             return res.json({ success: false, error: 'Lesson not found' })
@@ -1150,7 +1140,7 @@ router.get('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes', 
             return res.status(404).json({ success: false, error: 'Course not found' })
         }
 
-        const lesson = getLegacyLesson(course, Number(sectionIndex), Number(lessonIndex))
+        const lesson = getCanonicalLesson(course, Number(sectionIndex), Number(lessonIndex))
         if (!lesson) {
             return res.status(404).json({ success: false, error: 'Lesson not found' })
         }
@@ -1318,7 +1308,7 @@ router.get(
             return res.status(404).send('Course not found')
         }
 
-        const quiz = getCanonicalLesson(course, Number(sectionIndex), Number(quizIndex)) || getLegacyLesson(course, Number(sectionIndex), Number(quizIndex))
+        const quiz = getCanonicalLesson(course, Number(sectionIndex), Number(quizIndex))
         const quizForEditor = quiz
             ? {
                 ...quiz,
@@ -1337,7 +1327,7 @@ router.get(
             sectionIndex,
             quizIndex,
             questionCount: Array.isArray(quizForEditor && quizForEditor.questions) ? quizForEditor.questions.length : 0,
-            title: quizForEditor && (quizForEditor.name || quizForEditor.title),
+            title: quizForEditor && quizForEditor.title,
             answersPerQuestion: Array.isArray(quizForEditor && quizForEditor.questions)
                 ? quizForEditor.questions.map((question) => Array.isArray(question.answers) ? question.answers.length : 0)
                 : []
@@ -1659,7 +1649,7 @@ router.get(
             return res.status(404).send('Course not found')
         }
 
-        const quiz = getLegacyLesson(course, Number(sectionIndex), Number(quizIndex))
+        const quiz = getCanonicalLesson(course, Number(sectionIndex), Number(quizIndex))
 
         res.render("quizPlayer", { quiz })
 

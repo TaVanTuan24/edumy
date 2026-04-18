@@ -31,7 +31,7 @@
 
                         <div class="accordion" id="sectionAccordion<%=courseIndex%>">
 
-                            <% course.driveStructure.forEach((section, sectionIndex)=>{ %>
+                            <% (course.sections || []).forEach((section, sectionIndex)=>{ %>
 
                                 <div class="accordion-item">
 
@@ -41,7 +41,7 @@
                                             data-bs-toggle="collapse"
                                             data-bs-target="#section<%=courseIndex%><%=sectionIndex%>">
 
-                                            <%= section.section %>
+                                            <%= section.title %>
 
                                         </button>
 
@@ -57,12 +57,12 @@
 
                                             <ul class="list-group">
 
-                                                <% (section.videos || []).forEach((video, videoIndex)=>{ %>
+                                                <% (section.lessons || []).forEach((video, videoIndex)=>{ %>
 
                                                     <li class="list-group-item">
 
                                                         <b>
-                                                            <%= video.name %>
+                                                            <%= video.title %>
                                                         </b>
 
                                                         <br>

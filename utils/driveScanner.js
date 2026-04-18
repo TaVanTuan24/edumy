@@ -9,56 +9,54 @@ function buildDrivePreviewUrl(fileId, resourceKey) {
   const safeId = String(fileId || '').trim();
   if (!safeId) return '';
 
-  // Most reliable Google Drive iframe format for video playback.
   const url = new URL(`https://drive.google.com/file/d/${safeId}/preview`);
-
-  // Some files require resourcekey for embedded access after security updates.
   if (resourceKey) {
     url.searchParams.set('resourcekey', String(resourceKey));
   }
-
-  // Keep simple UX params; Google Drive may ignore unsupported params.
   url.searchParams.set('usp', 'drivesdk');
   return url.toString();
 }
 
 async function scanDriveStructure(folderId) {
-  const structure = [];
+  const sections = [];
 
-  async function listFolderContents(parentId, sectionName = '') {
+  async function listFolderContents(parentId, sectionTitle = '') {
     const res = await drive.files.list({
       q: `'${parentId}' in parents and trashed = false`,
       fields: 'files(id, name, mimeType, resourceKey, webViewLink)',
       pageSize: 1000
     });
 
-    const videos = [];
+    const lessons = [];
     for (const file of res.data.files) {
       if (file.mimeType === 'application/vnd.google-apps.folder') {
-        const subSection = await listFolderContents(file.id, file.name);
-        if (subSection.videos.length > 0) structure.push(subSection);
+        const nestedSection = await listFolderContents(file.id, file.name);
+        if (nestedSection.lessons.length > 0) sections.push(nestedSection);
       } else if (file.mimeType.startsWith('video/')) {
-        const previewLink = buildDrivePreviewUrl(file.id, file.resourceKey);
-        const previewFallback = buildDrivePreviewUrl(file.id, '');
+        const videoUrl = buildDrivePreviewUrl(file.id, file.resourceKey);
 
-        videos.push({
-          name: file.name,
-          preview: previewLink,
-          previewFallback,
-          fileId: file.id,
-          resourceKey: file.resourceKey || '',
-          webViewLink: file.webViewLink || ''
+        lessons.push({
+          title: file.name,
+          type: 'video',
+          videoUrl,
+          preview: videoUrl,
+          refId: file.id,
+          content: {
+            videoUrl,
+            resourceKey: file.resourceKey || '',
+            webViewLink: file.webViewLink || ''
+          }
         });
       }
     }
 
-    return { section: sectionName, videos };
+    return { title: sectionTitle, lessons };
   }
 
-  const result = await listFolderContents(folderId);
-  if (result.videos.length > 0) structure.push(result);
+  const rootSection = await listFolderContents(folderId);
+  if (rootSection.lessons.length > 0) sections.push(rootSection);
 
-  return structure;
+  return sections;
 }
 
 module.exports = scanDriveStructure;

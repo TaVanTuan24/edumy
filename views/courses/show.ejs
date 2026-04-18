@@ -63,11 +63,11 @@
           <div class="card mb-3" id="videoNoteSection">
             <div class="card-body">
               <h5 class="card-title">Ghi chú buổi học</h5>
-              <% course.driveStructure.forEach((section, index) => { %>
+              <% (course.sections || []).forEach((section, index) => { %>
                 <textarea class="form-control section-note"
                   id="note-section-<%= index %>"
                   rows="5"
-                  placeholder="Nhập ghi chú cho <%= section.section %>..."
+                  placeholder="Nhập ghi chú cho <%= section.title %>..."
                   onblur="saveNote(<%= index %>)"
                   style="display:none;"><%= sectionNotes[index] || '' %></textarea>
               <% }) %>
@@ -171,13 +171,13 @@
 
   <aside class="learning-sidebar">
     <div class="learning-sidebar-inner">
-    <% const totalVideos = course.driveStructure.reduce((acc, sec) => acc + (sec.videos || sec.items || []).length, 0); %>
+    <% const totalVideos = (course.sections || []).reduce((acc, sec) => acc + ((sec.lessons || []).length), 0); %>
     <% const completedCount = completedVideos.length; %>
     <% const gm = gamification || { currentLevel: 1, totalXP: 0, currentStreak: 0, levelProgress: { progressPercent: 0, nextLevel: 2, xpToNextLevel: 500 } }; %>
     <div class="mb-3">
-      <h6 class="text-success">Tiến độ học: <%= completedCount %> / <%= totalVideos %> video (<%= Math.round(completedCount / totalVideos * 100) %>%)</h6>
+      <h6 class="text-success">Tiến độ học: <%= completedCount %> / <%= totalVideos %> bài học (<%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>%)</h6>
       <div class="progress">
-        <div class="progress-bar bg-success" role="progressbar" style="width: <%= Math.round(completedCount / totalVideos * 100) %>%"
+        <div class="progress-bar bg-success" role="progressbar" style="width: <%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>%"
           aria-valuenow="<%= completedCount %>" aria-valuemin="0" aria-valuemax="<%= totalVideos %>"></div>
       </div>
     </div>
@@ -208,7 +208,7 @@
       </div>
     </div>
 
-    <% if (course.driveStructure && course.driveStructure.length > 0) { %>
+    <% if (course.sections && course.sections.length > 0) { %>
       <div class="learning-sections-wrap">
         <h5 class="mb-3">Course Content</h5>
         <div id="sectionsAccordion" class="sections-accordion">

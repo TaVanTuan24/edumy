@@ -39,7 +39,7 @@ router.post("/chat", async (req, res) => {
         const { message, chatId, courseId, question, lessonId, context } = req.body
 
         if (courseId && question) {
-            const course = await Course.findById(courseId).select('author sections driveStructure')
+            const course = await Course.findById(courseId).select('author sections')
             if (!course) {
                 return res.status(404).json({ error: "Course not found" })
             }
@@ -710,7 +710,7 @@ async function buildTranscriptDocsForLesson(course, lessonId) {
 
     if (!transcriptText) return []
 
-    const lessonTitle = stripHtml(found.lesson.name || found.lesson.title || videoDoc.title || '')
+    const lessonTitle = stripHtml(found.lesson.title || videoDoc.title || '')
     const sectionTitle = stripHtml(found.sectionTitle || '')
     const content = [
         lessonTitle ? `Video lesson: ${lessonTitle}` : '',
@@ -731,7 +731,7 @@ function extractLessonDocs(item, sectionTitle, courseId) {
 
     const type = String(item.type || "video").toLowerCase()
     const lessonId = String(item._id || "")
-    const title = stripHtml(item.title || item.name || "")
+    const title = stripHtml(item.title || "")
     const section = stripHtml(sectionTitle || "")
 
     const docs = []

@@ -50,8 +50,7 @@ router.delete('/library/:id', isLoggedIn, async (req, res) => {
             { author: req.user._id },
             {
                 $pull: {
-                    'sections.$[].lessons': { refId: libraryId },
-                    'driveStructure.$[].videos': { refId: libraryId }
+                    'sections.$[].lessons': { refId: libraryId }
                 }
             }
         );

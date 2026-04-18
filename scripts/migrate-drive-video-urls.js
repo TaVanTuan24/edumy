@@ -61,45 +61,26 @@ function normalizeDriveVideoUrl(inputUrl) {
   return buildDrivePreviewUrl(meta.fileId, meta.resourceKey);
 }
 
-function migrateLegacyDriveStructureItem(item) {
-  if (!item || typeof item !== 'object') return false;
-
-  const beforePreview = String(item.preview || '');
-  const beforeVideoUrl = String(item.content && item.content.videoUrl || '');
-
-  const normalizedPreview = normalizeDriveVideoUrl(beforePreview);
-  const normalizedVideoUrl = normalizeDriveVideoUrl(beforeVideoUrl);
-
-  let changed = false;
-
-  if (beforePreview && normalizedPreview && beforePreview !== normalizedPreview) {
-    item.preview = normalizedPreview;
-    changed = true;
-  }
-
-  if (item.content && typeof item.content === 'object' && !Array.isArray(item.content)) {
-    if (beforeVideoUrl && normalizedVideoUrl && beforeVideoUrl !== normalizedVideoUrl) {
-      item.content.videoUrl = normalizedVideoUrl;
-      changed = true;
-    }
-  }
-
-  return changed;
-}
-
 function migrateSectionLesson(lesson) {
   if (!lesson || typeof lesson !== 'object') return false;
 
   const beforeVideoUrl = String(lesson.videoUrl || '');
+  const beforePreview = String(lesson.preview || '');
   const beforeContentVideoUrl = String(lesson.content && lesson.content.videoUrl || '');
 
   const normalizedVideoUrl = normalizeDriveVideoUrl(beforeVideoUrl);
+  const normalizedPreview = normalizeDriveVideoUrl(beforePreview);
   const normalizedContentVideoUrl = normalizeDriveVideoUrl(beforeContentVideoUrl);
 
   let changed = false;
 
   if (beforeVideoUrl && normalizedVideoUrl && beforeVideoUrl !== normalizedVideoUrl) {
     lesson.videoUrl = normalizedVideoUrl;
+    changed = true;
+  }
+
+  if (beforePreview && normalizedPreview && beforePreview !== normalizedPreview) {
+    lesson.preview = normalizedPreview;
     changed = true;
   }
 
@@ -121,36 +102,18 @@ async function run() {
   const courses = await Course.find({});
 
   let touchedCourses = 0;
-  let touchedLegacyLessons = 0;
-  let touchedStructuredLessons = 0;
+  let touchedLessons = 0;
 
   for (const course of courses) {
     let changedCourse = false;
 
-    if (Array.isArray(course.driveStructure)) {
-      for (const section of course.driveStructure) {
-        if (!section || !Array.isArray(section.videos)) continue;
+    for (const section of Array.isArray(course.sections) ? course.sections : []) {
+      if (!section || !Array.isArray(section.lessons)) continue;
 
-        for (const item of section.videos) {
-          const changed = migrateLegacyDriveStructureItem(item);
-          if (changed) {
-            changedCourse = true;
-            touchedLegacyLessons += 1;
-          }
-        }
-      }
-    }
-
-    if (Array.isArray(course.sections)) {
-      for (const section of course.sections) {
-        if (!section || !Array.isArray(section.lessons)) continue;
-
-        for (const lesson of section.lessons) {
-          const changed = migrateSectionLesson(lesson);
-          if (changed) {
-            changedCourse = true;
-            touchedStructuredLessons += 1;
-          }
+      for (const lesson of section.lessons) {
+        if (migrateSectionLesson(lesson)) {
+          changedCourse = true;
+          touchedLessons += 1;
         }
       }
     }
@@ -167,8 +130,7 @@ async function run() {
   }
 
   console.log(`[migration:drive-urls] courses touched: ${touchedCourses}`);
-  console.log(`[migration:drive-urls] legacy lessons updated: ${touchedLegacyLessons}`);
-  console.log(`[migration:drive-urls] structured lessons updated: ${touchedStructuredLessons}`);
+  console.log(`[migration:drive-urls] lessons updated: ${touchedLessons}`);
   console.log('[migration:drive-urls] completed');
 
   await mongoose.disconnect();

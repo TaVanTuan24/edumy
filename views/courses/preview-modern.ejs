@@ -3,8 +3,8 @@
 <link rel="stylesheet" href="/stylesheets/course-pages.css">
 
 <%
-  const sections = Array.isArray(course.driveStructure) ? course.driveStructure : [];
-  const totalLessons = sections.reduce((sum, section) => sum + ((section.videos || []).length), 0);
+  const sections = Array.isArray(course.sections) ? course.sections : [];
+  const totalLessons = sections.reduce((sum, section) => sum + ((section.lessons || []).length), 0);
   const totalReviews = Array.isArray(course.reviews) ? course.reviews.length : 0;
   const averageRating = totalReviews
     ? (course.reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / totalReviews).toFixed(1)
@@ -117,10 +117,10 @@
                         >
                           <div>
                             <div class="small text-uppercase text-muted fw-semibold">Section <%= sectionIndex + 1 %></div>
-                            <h4 class="mb-0"><%= section.section || ('Section ' + (sectionIndex + 1)) %></h4>
+                            <h4 class="mb-0"><%= section.title || ('Section ' + (sectionIndex + 1)) %></h4>
                           </div>
                           <div class="preview-section-meta">
-                            <span class="badge rounded-pill text-bg-light"><%= (section.videos || []).length %> lessons</span>
+                            <span class="badge rounded-pill text-bg-light"><%= (section.lessons || []).length %> lessons</span>
                             <span class="preview-section-arrow" aria-hidden="true">⌄</span>
                           </div>
                         </button>
@@ -131,15 +131,15 @@
                           data-bs-parent="#previewCurriculumAccordion"
                         >
                           <div class="preview-section-body">
-                            <% if (!section.videos || !section.videos.length) { %>
+                            <% if (!section.lessons || !section.lessons.length) { %>
                               <p class="text-muted mb-0">Chưa có lesson trong section này.</p>
                             <% } else { %>
                               <div class="preview-lesson-list">
-                                <% (section.videos || []).forEach((item, lessonIndex) => { %>
+                                <% (section.lessons || []).forEach((item, lessonIndex) => { %>
                                   <div class="preview-lesson-item">
                                     <div>
                                       <div class="small text-muted fw-semibold mb-1"><%= itemTypeLabel(item) %> <%= lessonIndex + 1 %></div>
-                                      <div class="fw-semibold"><%= item.name || ('Lesson ' + (lessonIndex + 1)) %></div>
+                                      <div class="fw-semibold"><%= item.title || ('Lesson ' + (lessonIndex + 1)) %></div>
                                     </div>
                                     <span class="badge rounded-pill text-bg-secondary"><%= itemTypeLabel(item) %></span>
                                   </div>

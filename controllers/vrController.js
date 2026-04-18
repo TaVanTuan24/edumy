@@ -48,123 +48,40 @@ function isUserEnrolledInCourse(userDoc, courseId) {
 function getOrderedLessonsFromSections(sections) {
   const safeSections = Array.isArray(sections) ? sections : [];
 
-  const sortedSections = safeSections
+  return safeSections
     .slice()
-    .sort((a, b) => Number(a && a.order) - Number(b && b.order));
+    .sort((a, b) => Number(a && a.order) - Number(b && b.order))
+    .flatMap((section) => {
+      const sectionTitle = String((section && section.title) || 'Course Content');
+      const sectionOrder = Number.isFinite(Number(section && section.order))
+        ? Number(section.order)
+        : null;
+      const sectionLessons = Array.isArray(section && section.lessons) ? section.lessons.slice() : [];
 
-  const lessons = [];
-  for (const section of sortedSections) {
-    const sectionTitle = String(
-      (section && (section.sectionTitle || section.sectionName || section.title || section.name))
-      || 'Nội dung khóa học'
-    );
-
-    const sectionOrder = Number.isFinite(Number(section && section.order))
-      ? Number(section.order)
-      : null;
-
-    const sectionLessons = Array.isArray(section && section.lessons) ? section.lessons.slice() : [];
-    sectionLessons.sort((a, b) => Number(a && a.order) - Number(b && b.order));
-
-    for (const lesson of sectionLessons) {
-      lessons.push({
-        ...lesson,
-        sectionTitle,
-        sectionOrder
-      });
-    }
-  }
-
-  return lessons;
-}
-
-function getOrderedLessonsFromDriveStructure(driveStructure) {
-  const safeSections = Array.isArray(driveStructure) ? driveStructure : [];
-  const lessons = [];
-
-  for (const section of safeSections) {
-    const sectionTitle = String(
-      (section && (section.sectionTitle || section.sectionName || section.section || section.title || section.name))
-      || 'Nội dung khóa học'
-    );
-
-    const sectionOrder = Number.isFinite(Number(section && section.order))
-      ? Number(section.order)
-      : null;
-
-    const sectionItems = Array.isArray(section && section.videos) ? section.videos.slice() : [];
-    sectionItems.sort((a, b) => Number(a && a.order) - Number(b && b.order));
-
-    for (const item of sectionItems) {
-      lessons.push({
-        ...item,
-        sectionTitle,
-        sectionOrder
-      });
-    }
-  }
-
-  return lessons;
-}
-
-function getCourseLessons(courseDoc) {
-  const sectionLessons = getOrderedLessonsFromSections(courseDoc && courseDoc.sections);
-  if (sectionLessons.length > 0) {
-    return sectionLessons.map((lesson) => ({
-      id: String(lesson && lesson._id),
-      title: String((lesson && lesson.title) || 'Untitled Lesson'),
-      type: String((lesson && lesson.type) || ''),
-      duration: lesson && lesson.duration ? lesson.duration : null,
-      order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : null,
-      sectionTitle: String((lesson && lesson.sectionTitle) || 'Nội dung khóa học'),
-      sectionOrder: Number.isFinite(Number(lesson && lesson.sectionOrder)) ? Number(lesson.sectionOrder) : null,
-      content: lesson && lesson.content ? lesson.content : null,
-      quiz: Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [],
-      questions: Array.isArray(lesson && lesson.questions) ? lesson.questions : [],
-      videoUrl: lesson && lesson.videoUrl ? lesson.videoUrl : ''
-    }));
-  }
-
-  const legacyLessons = getOrderedLessonsFromDriveStructure(courseDoc && courseDoc.driveStructure);
-  return legacyLessons.map((item, idx) => ({
-    id: String((item && (item._id || item.refId)) || `legacy_lesson_${idx + 1}`),
-    title: String((item && (item.title || item.name)) || 'Untitled Lesson'),
-    type: String((item && item.type) || ''),
-    duration: (item && item.duration) || (item && item.content && item.content.duration) || null,
-    order: Number.isFinite(Number(item && item.order)) ? Number(item.order) : idx + 1,
-    sectionTitle: String((item && item.sectionTitle) || 'Nội dung khóa học'),
-    sectionOrder: Number.isFinite(Number(item && item.sectionOrder)) ? Number(item.sectionOrder) : null,
-    content: item && item.content ? item.content : null,
-    quiz: Array.isArray(item && item.quiz) ? item.quiz : [],
-    questions: Array.isArray(item && item.questions) ? item.questions : [],
-    videoUrl: item && item.preview ? item.preview : ''
-  }));
-}
-
-function getCourseLessons(courseDoc) {
-  const sections = getCanonicalSections(courseDoc);
-  const lessons = [];
-
-  sections.forEach((section, sectionIndex) => {
-    const sectionLessons = Array.isArray(section && section.lessons) ? section.lessons : [];
-    sectionLessons.forEach((lesson, lessonIndex) => {
-      lessons.push({
-        id: String((lesson && lesson._id) || `lesson_${sectionIndex + 1}_${lessonIndex + 1}`),
-        title: String((lesson && lesson.title) || 'Untitled Lesson'),
-        type: String((lesson && lesson.type) || ''),
-        duration: lesson && lesson.duration ? lesson.duration : null,
-        order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : lessonIndex,
-        sectionTitle: String((section && section.title) || 'Course Content'),
-        sectionOrder: Number.isFinite(Number(section && section.order)) ? Number(section.order) : sectionIndex,
-        content: lesson && lesson.content ? lesson.content : null,
-        quiz: Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [],
-        questions: Array.isArray(lesson && lesson.content && lesson.content.questions) ? lesson.content.questions : [],
-        videoUrl: lesson && (lesson.videoUrl || lesson.preview || lesson.refId) ? (lesson.videoUrl || lesson.preview || lesson.refId) : ''
-      });
+      return sectionLessons
+        .sort((a, b) => Number(a && a.order) - Number(b && b.order))
+        .map((lesson) => ({
+          ...lesson,
+          sectionTitle,
+          sectionOrder
+        }));
     });
-  });
+}
 
-  return lessons;
+function getCourseLessons(courseDoc) {
+  return getOrderedLessonsFromSections(getCanonicalSections(courseDoc)).map((lesson, lessonIndex) => ({
+    id: String((lesson && lesson._id) || `lesson_${lessonIndex + 1}`),
+    title: String((lesson && lesson.title) || 'Untitled Lesson'),
+    type: String((lesson && lesson.type) || ''),
+    duration: lesson && lesson.duration ? lesson.duration : null,
+    order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : lessonIndex,
+    sectionTitle: String((lesson && lesson.sectionTitle) || 'Course Content'),
+    sectionOrder: Number.isFinite(Number(lesson && lesson.sectionOrder)) ? Number(lesson.sectionOrder) : null,
+    content: lesson && lesson.content ? lesson.content : null,
+    quiz: Array.isArray(lesson && lesson.quiz) ? lesson.quiz : [],
+    questions: Array.isArray(lesson && lesson.content && lesson.content.questions) ? lesson.content.questions : [],
+    videoUrl: lesson && (lesson.videoUrl || lesson.preview || lesson.refId) ? (lesson.videoUrl || lesson.preview || lesson.refId) : ''
+  }));
 }
 
 function hasPlayableVideoSource(lesson) {
@@ -694,7 +611,7 @@ module.exports.getVrCourses = async (req, res) => {
 
   const [courses, progressDocs] = await Promise.all([
     Course.find({ _id: { $in: objectIds } })
-      .select('title description images sections driveStructure')
+      .select('title description images sections')
       .lean(),
     UserCourseProgress.find({ user: req.user._id, course: { $in: objectIds } })
       .select('course completedLessons completionRate')
@@ -753,7 +670,7 @@ module.exports.getVrCourseLessons = async (req, res) => {
       .select('enrolledCourses enrolledCourseIds')
       .lean(),
     Course.findById(courseId)
-      .select('sections driveStructure')
+      .select('sections')
       .lean(),
     UserCourseProgress.findOne({ user: req.user._id, course: courseId })
       .select('completedLessons')
@@ -890,7 +807,7 @@ module.exports.updateVrCourseProgress = async (req, res) => {
       .select('enrolledCourses enrolledCourseIds')
       .lean(),
     Course.findById(courseId)
-      .select('sections driveStructure')
+      .select('sections')
       .lean()
   ]);
 

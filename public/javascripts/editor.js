@@ -126,13 +126,11 @@
         return source.map(function(section, sectionIndex) {
             const rawLessons = Array.isArray(section && section.lessons)
                 ? section.lessons
-                : Array.isArray(section && section.videos)
-                    ? section.videos
-                    : [];
+                : [];
 
             return {
                 _id: section && section._id ? String(section._id) : ('section-' + sectionIndex),
-                title: String((section && (section.title || section.section)) || 'Untitled Section'),
+                title: String((section && section.title) || 'Untitled Section'),
                 order: Number.isFinite(Number(section && section.order)) ? Number(section.order) : sectionIndex,
                 lessons: rawLessons.map(function(lesson, lessonIndex) {
                     return normalizeEditorLesson(lesson, lessonIndex);
@@ -154,7 +152,7 @@
 
         return {
             _id: lesson && lesson._id ? String(lesson._id) : ('lesson-' + Date.now() + '-' + lessonIndex),
-            title: String((lesson && (lesson.title || lesson.name)) || 'Untitled'),
+            title: String((lesson && lesson.title) || 'Untitled'),
             type: type,
             videoUrl: String((lesson && (lesson.videoUrl || lesson.preview)) || (content && content.videoUrl) || ''),
             preview: String((lesson && lesson.preview) || (lesson && lesson.videoUrl) || (content && content.videoUrl) || ''),

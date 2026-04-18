@@ -4,71 +4,10 @@ const { isLoggedIn, isAdmin } = require('../../middleware');
 const Course = require('../../models/course');
 const ContentLibrary = require('../../models/contentLibrary');
 const {
-    applyLegacyDriveStructure,
-    normalizeCourseContent,
     syncCourseContent
 } = require('../../utils/courseContentAdapter');
 
 const VALID_LESSON_TYPES = new Set(['video', 'slide', 'quiz']);
-
-function normalizeLegacyType(rawType, fallbackItem = {}) {
-    const type = String(rawType || '').trim().toLowerCase();
-    if (type === 'lecture') return 'video';
-    if (VALID_LESSON_TYPES.has(type)) return type;
-
-    if (Array.isArray(fallbackItem.questions) && fallbackItem.questions.length > 0) return 'quiz';
-    if (Array.isArray(fallbackItem.slides) && fallbackItem.slides.length > 0) return 'slide';
-    if (typeof fallbackItem.content === 'string' && fallbackItem.content.trim().length > 0) return 'slide';
-    if (fallbackItem.content && typeof fallbackItem.content === 'object' && Array.isArray(fallbackItem.content.slides) && fallbackItem.content.slides.length > 0) return 'slide';
-
-    return 'video';
-}
-
-function normalizeDriveStructure(input) {
-    if (!Array.isArray(input)) return [];
-
-    return input.map((section, sectionIndex) => {
-        const normalizedSection = {
-            _id: section?._id,
-            section: String(section?.section || '').trim(),
-            videos: []
-        };
-
-        const videos = Array.isArray(section?.videos) ? section.videos : [];
-        normalizedSection.videos = videos.map((item, itemIndex) => {
-            const normalizedType = normalizeLegacyType(item?.type, item);
-            const rawContent = item?.content;
-            const contentObject = (rawContent && typeof rawContent === 'object' && !Array.isArray(rawContent)) ? rawContent : {};
-            const legacySlides = Array.isArray(item?.slides) ? item.slides : [];
-            const contentSlides = Array.isArray(contentObject.slides) ? contentObject.slides : [];
-
-            const normalizedSlides = normalizedType === 'slide'
-                ? (contentSlides.length > 0 ? contentSlides : legacySlides)
-                : legacySlides;
-
-            return {
-                _id: item?._id,
-                type: normalizedType,
-                name: String(item?.name || '').trim(),
-                preview: String(item?.preview || '').trim(),
-                refId: String(item?.refId || '').trim(),
-                content: normalizedType === 'slide'
-                    ? {
-                        ...contentObject,
-                        slides: normalizedSlides
-                    }
-                    : contentObject,
-                slides: normalizedSlides,
-                questions: Array.isArray(item?.questions) ? item.questions : [],
-                order: Number.isFinite(item?.order) ? item.order : itemIndex
-            };
-        });
-
-        // Keep incoming section order when present, otherwise preserve list order.
-        normalizedSection.order = Number.isFinite(section?.order) ? section.order : sectionIndex;
-        return normalizedSection;
-    });
-}
 
 router.use(isLoggedIn, isAdmin);
 
@@ -121,29 +60,6 @@ function reindexSections(course) {
         return section;
     });
 }
-
-// Legacy course editor uses driveStructure and saves the whole array.
-router.post('/course/reorder', async (req, res) => {
-    try {
-        const { courseId, driveStructure } = req.body;
-        if (!courseId) {
-            return res.status(400).json({ success: false, error: 'Missing courseId' });
-        }
-
-        const course = await loadCourseForEditing(courseId);
-        if (!course) {
-            return res.status(404).json({ success: false, error: 'Course not found' });
-        }
-
-        applyLegacyDriveStructure(course, normalizeDriveStructure(driveStructure));
-        await saveCourseContent(course);
-
-        res.json({ success: true, driveStructure: course.driveStructure });
-    } catch (err) {
-        console.error('Legacy course reorder save error:', err);
-        res.status(500).json({ success: false, error: 'Failed to save course structure' });
-    }
-});
 
 // ==================== SECTION ROUTES ====================
 
@@ -602,7 +518,6 @@ router.post('/lesson/from-library', async (req, res) => {
     }
 });
 
-// Add library item to legacy driveStructure course
 router.post('/course/add-item', async (req, res) => {
     try {
         const { courseId, sectionId, type, refId } = req.body;
@@ -656,11 +571,7 @@ router.post('/course/add-item', async (req, res) => {
         reindexSections(course);
         await saveCourseContent(course);
 
-        const normalized = normalizeCourseContent(course);
-        const legacySection = normalized.driveStructure.find((entry) => String(entry._id) === String(section._id));
-        const newItem = legacySection && Array.isArray(legacySection.videos)
-            ? legacySection.videos[legacySection.videos.length - 1]
-            : null;
+        const newItem = section.lessons[section.lessons.length - 1] || null;
 
         res.json({ success: true, item: newItem });
     } catch (err) {

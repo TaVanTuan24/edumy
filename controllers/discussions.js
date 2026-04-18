@@ -197,7 +197,7 @@ module.exports.listQuestions = async (req, res) => {
 module.exports.renderAskForm = async (req, res) => {
   const { courseId } = req.params;
   const lessonId = String(req.query.lessonId || '');
-  const course = await Course.findById(courseId).select('title sections driveStructure');
+  const course = await Course.findById(courseId).select('title sections');
   syncCourseContent(course);
 
   res.render('discussions/new', { course, lessonId });
@@ -465,7 +465,7 @@ module.exports.generateAiAnswer = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Question not found' });
     }
 
-    const course = await Course.findById(courseId).select('title sections driveStructure').lean();
+    const course = await Course.findById(courseId).select('title sections').lean();
     if (!course) {
       return res.status(404).json({ success: false, error: 'Course not found' });
     }

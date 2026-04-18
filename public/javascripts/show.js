@@ -39,19 +39,11 @@ function storageKey(suffix) {
 }
 
 function normalizeSections(course) {
-  if (Array.isArray(course.sections) && course.sections.length) {
-    return course.sections.map((section, sIndex) => ({
-      _id: String(section._id || ('section-' + sIndex)),
-      title: section.title || ('Section ' + (sIndex + 1)),
-      items: normalizeSectionItems(Array.isArray(section.items) ? section.items : section.lessons, sIndex)
-    }));
-  }
-
-  const drive = Array.isArray(course.driveStructure) ? course.driveStructure : [];
-  return drive.map((section, sIndex) => ({
+  const sections = Array.isArray(course.sections) ? course.sections : [];
+  return sections.map((section, sIndex) => ({
     _id: String(section._id || ('section-' + sIndex)),
-    title: section.section || ('Section ' + (sIndex + 1)),
-    items: normalizeSectionItems(section.videos || [], sIndex)
+    title: section.title || ('Section ' + (sIndex + 1)),
+    items: normalizeSectionItems(Array.isArray(section.lessons) ? section.lessons : [], sIndex)
   }));
 }
 
@@ -86,7 +78,7 @@ function normalizeLesson(item, sectionIndex, index) {
     _id: lessonId,
     sectionIndex,
     type,
-    title: item.name || item.title || 'Untitled Lesson',
+    title: item.title || 'Untitled Lesson',
     preview: item.preview || '',
     content: {
       videoUrl,

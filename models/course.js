@@ -108,56 +108,6 @@ const interactiveVideoQuizSchema = new Schema({
     }
 }, { _id: true })
 
-// Legacy driveStructure item schema kept temporarily for backward compatibility.
-const driveItemSchema = new Schema({
-    type: {
-        type: String,
-        enum: ['video', 'quiz', 'slide'],
-        required: true
-    },
-    name: {
-        type: String,
-        trim: true,
-        default: ''
-    },
-    preview: {
-        type: String,
-        default: ''
-    },
-    refId: {
-        type: String,
-        default: ''
-    },
-    content: {
-        type: Object,
-        required: true,
-        default: {}
-    },
-    questions: {
-        type: [Schema.Types.Mixed],
-        default: []
-    },
-    interactiveQuizzes: {
-        type: [interactiveVideoQuizSchema],
-        default: []
-    },
-    order: {
-        type: Number,
-        default: 0
-    }
-}, { _id: true })
-
-const driveSectionSchema = new Schema({
-    section: {
-        type: String,
-        default: ''
-    },
-    videos: {
-        type: [driveItemSchema],
-        default: []
-    }
-}, { _id: true })
-
 // Lesson schema - supports video, slide, or quiz
 const lessonSchema = new Schema({
     title: {
@@ -216,7 +166,16 @@ const sectionSchema = new Schema({
         type: String,
         default: ''
     },
-    lessons: [lessonSchema],
+    lessons: {
+        type: [lessonSchema],
+        default: [],
+        validate: {
+            validator(value) {
+                return Array.isArray(value)
+            },
+            message: 'Section lessons must be an array'
+        }
+    },
     order: {
         type: Number,
         default: 0
@@ -237,13 +196,16 @@ const CourseSchema = new Schema({
     }],
     description: String,
     driveLink: String,
-    // Legacy structure - kept for backward compatibility
-    driveStructure: {
-        type: [driveSectionSchema],
-        default: []
+    sections: {
+        type: [sectionSchema],
+        default: [],
+        validate: {
+            validator(value) {
+                return Array.isArray(value)
+            },
+            message: 'Course sections must be an array'
+        }
     },
-    // New structured content
-    sections: [sectionSchema],
     topic: {
         type: String,
         enum: ['Software', 'Hardware', 'AI', 'Network', 'Language', 'Security', 'Other'],
@@ -279,20 +241,6 @@ const CourseSchema = new Schema({
         ref: 'Review'
     }]
 }, opts)
-
-function inferLegacyItemType(item) {
-    if (!item || typeof item !== 'object') return 'video'
-
-    const currentType = typeof item.type === 'string' ? item.type.trim().toLowerCase() : ''
-    if (currentType === 'lecture') return 'video'
-    if (['video', 'slide', 'quiz'].includes(currentType)) return currentType
-
-    if (Array.isArray(item.questions) && item.questions.length > 0) return 'quiz'
-    if (typeof item.content === 'string' && item.content.trim().length > 0) return 'slide'
-    if (item.content && typeof item.content === 'object' && Array.isArray(item.content.slides) && item.content.slides.length > 0) return 'slide'
-
-    return 'video'
-}
 
 function inferLessonType(lesson) {
     if (!lesson || typeof lesson !== 'object') return 'video'
@@ -351,61 +299,6 @@ function normalizeInteractiveQuizzes(rawQuizzes) {
 
 CourseSchema.pre('validate', function(next) {
     syncCourseContent(this)
-
-    if (Array.isArray(this.driveStructure)) {
-        this.driveStructure.forEach((section) => {
-            if (!section || !Array.isArray(section.videos)) return
-
-            section.videos.forEach((item) => {
-                item.type = inferLegacyItemType(item)
-
-                if (item.type === 'slide') {
-                    const contentObj = (item.content && typeof item.content === 'object' && !Array.isArray(item.content))
-                        ? item.content
-                        : {}
-
-                    const slidesFromContent = Array.isArray(contentObj.slides) ? contentObj.slides : []
-                    const legacyTextSlide = (typeof item.content === 'string' && item.content.trim().length > 0)
-                        ? [{
-                            id: `slide-${item._id || Date.now()}`,
-                            elements: [{
-                                id: `el-${item._id || Date.now()}`,
-                                type: 'text',
-                                x: 80,
-                                y: 80,
-                                text: item.content.trim(),
-                                fontSize: 28,
-                                color: '#1c1d1f',
-                                align: 'left',
-                                bold: false
-                            }]
-                        }]
-                        : []
-                    const normalizedSlides = slidesFromContent.length > 0 ? slidesFromContent : legacyTextSlide
-
-                    item.content = {
-                        ...contentObj,
-                        slides: normalizedSlides
-                    }
-                }
-
-                if (item.type === 'video') {
-                    const contentObj = (item.content && typeof item.content === 'object' && !Array.isArray(item.content))
-                        ? item.content
-                        : {}
-                    const fromContent = Array.isArray(contentObj.interactiveQuizzes) ? contentObj.interactiveQuizzes : []
-                    const fromRoot = Array.isArray(item.interactiveQuizzes) ? item.interactiveQuizzes : []
-                    const normalizedInteractive = normalizeInteractiveQuizzes(fromContent.length ? fromContent : fromRoot)
-
-                    item.interactiveQuizzes = normalizedInteractive
-                    item.content = {
-                        ...contentObj,
-                        interactiveQuizzes: normalizedInteractive
-                    }
-                }
-            })
-        })
-    }
 
     if (Array.isArray(this.sections)) {
         this.sections.forEach((section) => {

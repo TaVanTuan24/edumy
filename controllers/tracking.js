@@ -153,7 +153,7 @@ module.exports.trackQuiz = async (req, res) => {
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType || 'quiz');
 
-    const course = await Course.findById(courseId).select('sections driveStructure').lean();
+    const course = await Course.findById(courseId).select('sections').lean();
     const expectedTotal = getQuizQuestionCount(course, lessonId);
     const rawTotal = Math.max(0, Number(total) || 0);
     const totalValue = expectedTotal > 0 ? expectedTotal : rawTotal;

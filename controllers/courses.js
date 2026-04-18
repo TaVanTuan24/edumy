@@ -22,7 +22,7 @@ function countCourseLessons(course) {
 
 function sanitizeCourseInput(rawCourse) {
   const source = rawCourse && typeof rawCourse === 'object' ? rawCourse : {};
-  const allowedFields = ['title', 'description', 'driveLink', 'topic', 'driveStructure', 'sections'];
+  const allowedFields = ['title', 'description', 'driveLink', 'topic', 'sections'];
 
   return allowedFields.reduce((acc, key) => {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
@@ -110,7 +110,7 @@ module.exports.createCourse = async (req, res) => {
     const folderId = match[1];
     try {
       const structure = await scanDriveStructure(folderId);
-      course.driveStructure = structure.reverse();
+      course.sections = structure.reverse();
     } catch (err) {
       console.error("Lỗi khi quét Google Drive:", err.message);
       req.flash('error', 'Không thể quét nội dung Drive. Vui lòng kiểm tra link!');
@@ -169,7 +169,7 @@ module.exports.showCourses = async (req, res) => {
     };
   });
 
-  const sectionNotes = Array(course.driveStructure.length).fill('');
+  const sectionNotes = Array(Array.isArray(course.sections) ? course.sections.length : 0).fill('');
   notes.forEach(n => {
     sectionNotes[n.sectionIndex] = n.content;
   });
@@ -279,7 +279,7 @@ module.exports.updateProgress = async (req, res) => {
         progressDoc.watchTime = Number(progressDoc.watchTime || 0) + watchDelta;
       }
 
-      const course = await Course.findById(courseObjectId).select('sections driveStructure');
+      const course = await Course.findById(courseObjectId).select('sections');
       const totalLessons = countCourseLessons(course);
       progressDoc.completionRate = totalLessons
         ? Math.round((progressDoc.completedLessons.length / totalLessons) * 100)

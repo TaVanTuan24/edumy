@@ -72,12 +72,7 @@
         state.sectionNotes = Array.isArray(window.sectionNotes) ? window.sectionNotes : [];
 
         const structuredSections = Array.isArray(raw.sections) ? raw.sections : [];
-        if (structuredSections.length) {
-            state.sections = structuredSections.map(normalizeStructuredSection);
-        } else {
-            const driveStructure = Array.isArray(raw.driveStructure) ? raw.driveStructure : [];
-            state.sections = driveStructure.map(normalizeSection);
-        }
+        state.sections = structuredSections.map(normalizeStructuredSection);
         state.flatLessons = state.sections.flatMap(function(section) { return section.lessons; });
     }
 
@@ -89,38 +84,6 @@
             lessons: lessons.map(function(item, lessonIndex) {
                 return normalizeStructuredLesson(item, index, lessonIndex);
             })
-        };
-    }
-
-    function normalizeSection(section, index) {
-        const lessons = Array.isArray(section && section.videos) ? section.videos : [];
-        return {
-            id: section && section._id ? String(section._id) : 'section-' + index,
-            title: (section && section.section) ? String(section.section) : ('Section ' + (index + 1)),
-            lessons: lessons.map(function(item, lessonIndex) {
-                return normalizeLesson(item, index, lessonIndex);
-            })
-        };
-    }
-
-    function normalizeLesson(item, sectionIndex, lessonIndex) {
-        const originalType = String((item && item.type) || 'lecture').toLowerCase();
-        const type = originalType === 'video' ? 'lecture' : (originalType === 'slide' ? 'slide' : originalType === 'quiz' ? 'quiz' : 'lecture');
-
-        const slides = normalizeSlides(item);
-        const questions = normalizeQuestions(item);
-
-        return {
-            _id: item && item._id ? String(item._id) : ('lesson-' + sectionIndex + '-' + lessonIndex),
-            sectionIndex: sectionIndex,
-            lessonIndex: lessonIndex,
-            title: (item && item.name) ? String(item.name) : 'Untitled Lesson',
-            type: type,
-            content: {
-                videoUrl: (item && item.preview) ? String(item.preview) : '',
-                slides: slides,
-                questions: questions
-            }
         };
     }
 
@@ -143,8 +106,12 @@
     }
 
     function normalizeSlides(item) {
-        if (Array.isArray(item && item.slides) && item.slides.length > 0) {
-            return item.slides.map(function(slide, idx) {
+        const source = Array.isArray(item && item.content && item.content.slides)
+            ? item.content.slides
+            : [];
+
+        if (source.length > 0) {
+            return source.map(function(slide, idx) {
                 return {
                     title: slide && slide.title ? String(slide.title) : ('Slide ' + (idx + 1)),
                     content: slide && slide.content ? String(slide.content) : '',
@@ -153,19 +120,15 @@
             });
         }
 
-        if (typeof (item && item.content) === 'string' && item.content.trim()) {
-            return [{
-                title: item.name || 'Slide',
-                content: item.content,
-                elements: []
-            }];
-        }
-
         return [];
     }
 
     function normalizeQuestions(item) {
-        const source = Array.isArray(item && item.questions) ? item.questions : Array.isArray(item && item.quiz) ? item.quiz : [];
+        const source = Array.isArray(item && item.quiz)
+            ? item.quiz
+            : Array.isArray(item && item.content && item.content.questions)
+                ? item.content.questions
+                : [];
 
         return source.map(function(q) {
             const optionSource = Array.isArray(q && q.options) ? q.options : [];

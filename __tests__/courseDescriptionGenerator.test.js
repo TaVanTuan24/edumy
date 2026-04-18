@@ -4,14 +4,14 @@ const {
 } = require('../utils/courseDescriptionGenerator');
 
 describe('courseDescriptionGenerator', () => {
-  test('buildCurriculumOutline extracts section and lesson names from driveStructure', () => {
+  test('buildCurriculumOutline extracts section and lesson names from sections.lessons', () => {
     const outline = buildCurriculumOutline({
-      driveStructure: [
+      sections: [
         {
-          section: 'Getting Started',
-          videos: [
-            { type: 'video', name: 'Introduction to Unity UI' },
-            { type: 'slide', name: 'UI Layout Principles' }
+          title: 'Getting Started',
+          lessons: [
+            { type: 'video', title: 'Introduction to Unity UI' },
+            { type: 'slide', title: 'UI Layout Principles' }
           ]
         }
       ]
@@ -28,7 +28,7 @@ describe('courseDescriptionGenerator', () => {
     ]);
   });
 
-  test('buildCurriculumOutline prefers canonical sections.lessons when present', () => {
+  test('buildCurriculumOutline uses canonical sections.lessons', () => {
     const outline = buildCurriculumOutline({
       sections: [
         {
@@ -36,14 +36,6 @@ describe('courseDescriptionGenerator', () => {
           lessons: [
             { type: 'video', title: 'Welcome to VR Learning' },
             { type: 'quiz', title: 'Comfort and Safety Check' }
-          ]
-        }
-      ],
-      driveStructure: [
-        {
-          section: 'Old Structure',
-          videos: [
-            { type: 'video', name: 'Legacy Lesson' }
           ]
         }
       ]
@@ -64,18 +56,18 @@ describe('courseDescriptionGenerator', () => {
     const description = buildFallbackDescription({
       title: 'Unity UI Fundamentals',
       topic: 'Software',
-      driveStructure: [
+      sections: [
         {
-          section: 'Foundations',
-          videos: [
-            { type: 'video', name: 'Canvas and Event System' },
-            { type: 'quiz', name: 'UI Basics Checkpoint' }
+          title: 'Foundations',
+          lessons: [
+            { type: 'video', title: 'Canvas and Event System' },
+            { type: 'quiz', title: 'UI Basics Checkpoint' }
           ]
         },
         {
-          section: 'Layout Systems',
-          videos: [
-            { type: 'slide', name: 'Anchors and Responsive Layouts' }
+          title: 'Layout Systems',
+          lessons: [
+            { type: 'slide', title: 'Anchors and Responsive Layouts' }
           ]
         }
       ]

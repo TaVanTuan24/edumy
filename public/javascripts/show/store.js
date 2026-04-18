@@ -31,22 +31,12 @@
   }
 
   function normalizeSections(course) {
-    if (Array.isArray(course.sections) && course.sections.length) {
-      return course.sections.map(function(section, sectionIndex) {
-        return {
-          _id: String(section && section._id ? section._id : 'section-' + sectionIndex),
-          title: section && section.title ? section.title : ('Section ' + (sectionIndex + 1)),
-          items: normalizeItems(section && (section.items || section.lessons), sectionIndex)
-        };
-      });
-    }
-
-    const legacy = Array.isArray(course.driveStructure) ? course.driveStructure : [];
-    return legacy.map(function(section, sectionIndex) {
+    const sections = Array.isArray(course.sections) ? course.sections : [];
+    return sections.map(function(section, sectionIndex) {
       return {
         _id: String(section && section._id ? section._id : 'section-' + sectionIndex),
-        title: section && section.section ? section.section : ('Section ' + (sectionIndex + 1)),
-        items: normalizeItems(section && section.videos, sectionIndex)
+        title: section && section.title ? section.title : ('Section ' + (sectionIndex + 1)),
+        items: normalizeItems(section && section.lessons, sectionIndex)
       };
     });
   }
@@ -67,7 +57,7 @@
       _id: String(item && item._id ? item._id : ('lesson-' + sectionIndex + '-' + index)),
       sectionIndex: sectionIndex,
       type: type,
-      title: item && (item.title || item.name) ? (item.title || item.name) : 'Untitled Lesson',
+      title: item && item.title ? item.title : 'Untitled Lesson',
       preview: item && item.preview ? item.preview : '',
       content: {
         videoUrl: content.videoUrl || (item && (item.videoUrl || item.preview)) || '',

@@ -5,7 +5,7 @@
   <header class="video-settings-header">
     <div>
       <p class="video-settings-kicker mb-1">Advanced Video Settings</p>
-      <h1 class="video-settings-title mb-1"><%= lesson.name || 'Video Lesson' %></h1>
+      <h1 class="video-settings-title mb-1"><%= lesson.title || 'Video Lesson' %></h1>
       <p class="text-muted mb-0"><%= course.title %></p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
@@ -132,7 +132,7 @@
     courseId: String(course._id),
     sectionIndex: Number(sectionIndex),
     lessonIndex: Number(lessonIndex),
-    lessonName: lesson.name || '',
+    lessonName: lesson.title || '',
     videoUrl: videoUrl || '',
     videoId: videoId || '',
     interactiveQuizzes: interactiveQuizzes || []
