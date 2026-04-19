@@ -4,6 +4,15 @@
 <%
   const topics = Object.keys(groupedCourses || {});
   const totalCourses = topics.reduce((sum, topic) => sum + groupedCourses[topic].length, 0);
+  const searchCourses = topics.flatMap((topic) =>
+    groupedCourses[topic].map((course) => ({
+      id: String(course._id),
+      title: course.title,
+      url: `/explore/${course._id}/preview`,
+      thumbnailUrl: course.images && course.images.length ? course.images[0].url : '/default.png',
+      topic
+    }))
+  );
 %>
 
 <div class="course-discovery-page">
@@ -46,10 +55,54 @@
       <section class="topic-section">
         <div class="alert alert-light border">Chưa có khóa học nào để hiển thị.</div>
       </section>
+    <% } else { %>
+      <section class="topic-section">
+        <div class="topic-head">
+          <div>
+            <h2 class="topic-title">Tìm khóa học phù hợp nhanh hơn</h2>
+            <div class="topic-meta">Gợi ý xuất hiện theo từng ký tự và chỉ tìm trong danh sách Explore hiện tại</div>
+          </div>
+
+          <div
+            class="course-search-shell course-search-shell-wide"
+            data-course-search-root
+            data-search-data-id="explore-courses-search-data"
+            data-search-card-selector="[data-course-card]"
+            data-search-section-selector="[data-search-section]"
+            data-search-empty-selector="#exploreCoursesSearchEmpty"
+            data-search-no-results="No matching courses"
+          >
+            <label class="visually-hidden" for="exploreCoursesSearchInput">Search courses</label>
+            <div class="course-search-input-wrap">
+              <span class="course-search-icon" aria-hidden="true">⌕</span>
+              <input
+                id="exploreCoursesSearchInput"
+                class="course-search-input"
+                type="search"
+                placeholder="Search courses..."
+                autocomplete="off"
+                spellcheck="false"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                data-course-search-input
+              >
+            </div>
+            <div class="course-search-dropdown" data-course-search-dropdown hidden></div>
+          </div>
+        </div>
+
+        <div
+          class="alert alert-light border course-search-empty-state"
+          id="exploreCoursesSearchEmpty"
+          hidden
+        >
+          Không tìm thấy khóa học phù hợp.
+        </div>
+      </section>
     <% } %>
 
     <% topics.forEach((topic) => { %>
-      <section class="topic-section">
+      <section class="topic-section" data-search-section>
         <div class="topic-head">
           <div>
             <h2 class="topic-title"><%= topic %></h2>
@@ -59,7 +112,12 @@
 
         <div class="course-card-grid">
           <% groupedCourses[topic].forEach((course) => { %>
-            <article class="course-discovery-card">
+            <article
+              class="course-discovery-card"
+              data-course-card
+              data-search-title="<%= course.title %>"
+              data-search-topic="<%= topic %>"
+            >
               <div class="course-card-media">
                 <img src="<%= course.images[0]?.url || '/default.png' %>" alt="<%= course.title %>">
                 <span class="course-card-badge">Preview available</span>
@@ -97,3 +155,6 @@
     <% }) %>
   </div>
 </div>
+
+<script id="explore-courses-search-data" type="application/json"><%- JSON.stringify(searchCourses) %></script>
+<script src="/javascripts/course-search.js"></script>

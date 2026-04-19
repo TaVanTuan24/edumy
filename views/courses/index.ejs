@@ -4,6 +4,13 @@
 <%
   const totalCourses = Array.isArray(courses) ? courses.length : 0;
   const topicMap = new Map();
+  const searchCourses = (courses || []).map((course) => ({
+    id: String(course._id),
+    title: course.title,
+    url: `/courses/${course._id}`,
+    thumbnailUrl: course.images && course.images.length ? course.images[0].url : '/default.png',
+    topic: course.topic || 'Course'
+  }));
   (courses || []).forEach((course) => {
     const topic = course.topic || 'Course';
     topicMap.set(topic, (topicMap.get(topic) || 0) + 1);
@@ -50,14 +57,55 @@
           <h2 class="topic-title">Khóa học đã đăng ký</h2>
           <div class="topic-meta"><%= totalCourses %> khóa học trong thư viện học tập của bạn</div>
         </div>
+
+        <% if (totalCourses) { %>
+          <div
+            class="course-search-shell"
+            data-course-search-root
+            data-search-data-id="my-courses-search-data"
+            data-search-card-selector="[data-course-card]"
+            data-search-empty-selector="#myCoursesSearchEmpty"
+            data-search-no-results="No matching courses"
+          >
+            <label class="visually-hidden" for="myCoursesSearchInput">Search your courses</label>
+            <div class="course-search-input-wrap">
+              <span class="course-search-icon" aria-hidden="true">⌕</span>
+              <input
+                id="myCoursesSearchInput"
+                class="course-search-input"
+                type="search"
+                placeholder="Search your courses..."
+                autocomplete="off"
+                spellcheck="false"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                data-course-search-input
+              >
+            </div>
+            <div class="course-search-dropdown" data-course-search-dropdown hidden></div>
+          </div>
+        <% } %>
       </div>
 
       <% if (!totalCourses) { %>
         <div class="alert alert-light border">Bạn chưa đăng ký khóa học nào.</div>
       <% } else { %>
+        <div
+          class="alert alert-light border course-search-empty-state"
+          id="myCoursesSearchEmpty"
+          hidden
+        >
+          Không tìm thấy khóa học phù hợp.
+        </div>
+
         <div class="course-card-grid course-card-grid-library">
           <% courses.forEach((course) => { %>
-            <article class="course-discovery-card course-library-card">
+            <article
+              class="course-discovery-card course-library-card"
+              data-course-card
+              data-search-title="<%= course.title %>"
+              data-search-topic="<%= course.topic || 'Course' %>"
+            >
               <div class="course-card-media">
                 <img src="<%= course.images && course.images.length ? course.images[0].url : '/default.png' %>" alt="<%= course.title %>">
               </div>
@@ -84,6 +132,5 @@
   </div>
 </div>
 
-<script>
-  const courses = { features: <%- JSON.stringify(courses) %> };
-</script>
+<script id="my-courses-search-data" type="application/json"><%- JSON.stringify(searchCourses) %></script>
+<script src="/javascripts/course-search.js"></script>
