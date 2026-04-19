@@ -36,6 +36,7 @@
   let driveLastTickAt = 0;
   let playbackTimeBadge = null;
   const SHOW_PLAYBACK_TIME_BADGE = false;
+  let playerViewportStateBound = false;
   let interactiveDebugPanel = null;
   let interactiveDebugSnapshot = {
     provider: '',
@@ -308,8 +309,9 @@
     }
 
     if (isYouTubeUrl(url)) {
-      if (html5) html5.style.display = 'none';
-      if (iframe) iframe.style.display = 'block';
+      deactivateHtml5Element(html5);
+      activateIframeElement(iframe);
+      bindPlayerViewportStateHandlers();
       stopDriveTimer();
       teardownHtml5Player();
       const videoId = getYouTubeId(url);
@@ -339,6 +341,7 @@
       setProviderNotice('Timed quizzes are running in precise mode (YouTube API).', 'success');
       setPlaybackState(false);
       if (player) player.style.display = 'block';
+      updatePlayerViewportState();
       if (typeof window.__updateContext === 'function') {
         window.__updateContext({
           lessonId: String(lesson._id || ''),
@@ -352,11 +355,9 @@
     if (isDirectVideoFileUrl(url)) {
       stopDriveTimer();
       teardownYouTubePlayer();
-      if (iframe) {
-        iframe.style.display = 'none';
-        iframe.src = '';
-      }
-      if (html5) html5.style.display = 'block';
+      deactivateIframeElement(iframe);
+      activateHtml5Element(html5);
+      bindPlayerViewportStateHandlers();
       setupHtml5Player(url, lesson);
       startInteractiveQuizzes(lesson, interactiveQuizzes, createHtml5Provider(), 'html5');
       setPlaybackTimeBadgeVisible(true);
@@ -364,6 +365,7 @@
       setProviderNotice('Timed quizzes are running in precise mode (HTML5 video).', 'success');
 
       if (player) player.style.display = 'block';
+      updatePlayerViewportState();
       if (typeof window.__updateContext === 'function') {
         window.__updateContext({
           lessonId: String(lesson._id || ''),
@@ -376,10 +378,12 @@
 
     teardownYouTubePlayer();
     teardownHtml5Player();
-    if (html5) html5.style.display = 'none';
-    if (iframe) iframe.style.display = 'block';
+    deactivateHtml5Element(html5);
+    activateIframeElement(iframe);
+    bindPlayerViewportStateHandlers();
     setVideoIframeSourceWithFallback(iframe, url, rawUrl);
     if (player) player.style.display = 'block';
+    updatePlayerViewportState();
     startInteractiveQuizzes(lesson, interactiveQuizzes, createFallbackProvider(), 'drive-iframe');
     startDriveTimer();
     setPlaybackTimeBadgeVisible(true);
@@ -1083,6 +1087,7 @@
   function showInteractiveQuizModal(quiz, anchorRect) {
     const modal = document.getElementById('interactiveQuizModal');
     if (!modal) return;
+    const isMobileInlineQuiz = window.matchMedia('(max-width: 767.98px)').matches;
 
     const questionEl = modal.querySelector('[data-iq-question]');
     const optionsEl = modal.querySelector('[data-iq-options]');
@@ -1094,6 +1099,7 @@
     if (questionEl) questionEl.textContent = quiz.question;
     if (stampEl) stampEl.textContent = 'Checkpoint at ' + formatQuizTime(quiz.triggerTimeSec);
     modal.classList.add('inline-quiz-mode');
+    modal.classList.toggle('is-mobile', isMobileInlineQuiz);
     if (feedbackEl) {
       feedbackEl.className = 'interactive-quiz-feedback';
       feedbackEl.textContent = '';
@@ -1188,7 +1194,13 @@
       container.appendChild(modal);
     }
 
-    if (container && anchorRect) {
+    if (container && isMobileInlineQuiz) {
+      modal.style.display = 'block';
+      modal.style.left = '50%';
+      modal.style.top = '';
+      modal.style.bottom = '10px';
+      modal.style.display = '';
+    } else if (container && anchorRect) {
       const containerRect = container.getBoundingClientRect();
       const gap = 10;
 
@@ -1196,6 +1208,7 @@
       modal.style.display = 'block';
       modal.style.left = '0px';
       modal.style.top = '0px';
+      modal.style.bottom = '';
 
       const popupWidth = Math.min(340, Math.max(250, modal.offsetWidth || 320));
       const popupHeight = Math.max(170, modal.offsetHeight || 220);
@@ -1228,8 +1241,10 @@
     if (!modal) return;
     modal.classList.remove('show');
     modal.classList.remove('inline-quiz-mode');
+    modal.classList.remove('is-mobile');
     modal.style.left = '';
     modal.style.top = '';
+    modal.style.bottom = '';
     modal.setAttribute('aria-hidden', 'true');
   }
 
@@ -1281,6 +1296,7 @@
     teardownHtml5PlayerListeners();
 
     html5VideoPlayer = player;
+    activateHtml5Element(html5VideoPlayer);
     html5VideoPlayer.src = String(url || '');
 
     html5PlayHandler = function() {
@@ -1321,6 +1337,8 @@
 
     html5VideoPlayer.load();
     setPlaybackState(true);
+    bindPlayerViewportStateHandlers();
+    updatePlayerViewportState();
   }
 
   function teardownHtml5PlayerListeners() {
@@ -1344,10 +1362,11 @@
       html5VideoPlayer.pause();
       html5VideoPlayer.removeAttribute('src');
       html5VideoPlayer.load();
-      html5VideoPlayer.style.display = 'none';
+      deactivateHtml5Element(html5VideoPlayer);
     }
     html5VideoPlayer = null;
     setPlaybackTimeBadgeVisible(false);
+    updatePlayerViewportState();
   }
 
   function createFallbackProvider() {
@@ -1452,6 +1471,7 @@
     url.searchParams.set('origin', window.location.origin);
     url.searchParams.set('rel', '0');
     url.searchParams.set('playsinline', '1');
+    url.searchParams.set('fs', '0');
     url.searchParams.set('modestbranding', '1');
     url.searchParams.set('iv_load_policy', '3');
     url.searchParams.set('showinfo', '0');
@@ -1952,11 +1972,29 @@
     iframe = document.createElement('iframe');
     iframe.id = 'videoIframe';
     iframe.src = '';
-    iframe.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
-    iframe.allowFullscreen = true;
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
     container.appendChild(iframe);
     return iframe;
+  }
+
+  function activateIframeElement(iframe) {
+    if (!iframe) return;
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    iframe.removeAttribute('allowfullscreen');
+    iframe.hidden = false;
+    iframe.setAttribute('aria-hidden', 'false');
+    iframe.style.display = 'block';
+    iframe.style.pointerEvents = 'auto';
+  }
+
+  function deactivateIframeElement(iframe) {
+    if (!iframe) return;
+    iframe.hidden = true;
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.display = 'none';
+    iframe.style.pointerEvents = 'none';
+    iframe.src = '';
   }
 
   function ensureHtml5VideoPlayer() {
@@ -1970,12 +2008,74 @@
     video.id = 'html5VideoPlayer';
     video.controls = true;
     video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', 'true');
+    video.setAttribute('controlslist', 'nofullscreen noremoteplayback');
+    video.disablePictureInPicture = true;
+    video.disableRemotePlayback = true;
     video.style.width = '100%';
     video.style.height = '100%';
     video.style.background = '#000';
     video.style.display = 'none';
     container.appendChild(video);
     return video;
+  }
+
+  function activateHtml5Element(video) {
+    if (!video) return;
+    video.hidden = false;
+    video.setAttribute('aria-hidden', 'false');
+    video.controls = true;
+    video.setAttribute('controlslist', 'nofullscreen noremoteplayback');
+    video.disablePictureInPicture = true;
+    video.disableRemotePlayback = true;
+    video.style.display = 'block';
+    video.style.pointerEvents = 'auto';
+  }
+
+  function deactivateHtml5Element(video) {
+    if (!video) return;
+    video.pause();
+    video.controls = false;
+    video.hidden = true;
+    video.setAttribute('aria-hidden', 'true');
+    video.style.display = 'none';
+    video.style.pointerEvents = 'none';
+  }
+
+  function isMobilePlayerViewport() {
+    return Boolean(window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches);
+  }
+
+  function isLandscapePlayerViewport() {
+    return Boolean(window.matchMedia && window.matchMedia('(orientation: landscape)').matches);
+  }
+
+  function updatePlayerViewportState() {
+    const container = document.getElementById('videoPlayerContainer');
+    if (!container) return;
+
+    const isMobile = isMobilePlayerViewport();
+    const isLandscape = isLandscapePlayerViewport();
+    const isPortraitInline = isMobile && !isLandscape;
+    const isLandscapeInline = isMobile && isLandscape;
+
+    container.classList.toggle('is-mobile-viewport', isMobile);
+    container.classList.add('is-player-inline');
+    container.classList.toggle('is-mobile-portrait-inline', isPortraitInline);
+    container.classList.toggle('is-mobile-landscape-inline', isLandscapeInline);
+  }
+
+  function bindPlayerViewportStateHandlers() {
+    if (playerViewportStateBound) return;
+
+    const handleViewportStateChange = function() {
+      updatePlayerViewportState();
+    };
+
+    window.addEventListener('resize', handleViewportStateChange);
+    window.addEventListener('orientationchange', handleViewportStateChange);
+    playerViewportStateBound = true;
   }
 
   function ensureYouTubeApi() {

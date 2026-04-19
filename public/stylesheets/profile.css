@@ -390,3 +390,43 @@
     align-items: flex-start;
   }
 }
+
+@media (max-width: 767.98px) {
+  .profile-page {
+    padding-inline: 0.25rem;
+  }
+
+  .profile-header-card,
+  .profile-card {
+    border-radius: 14px;
+  }
+
+  .profile-header-card {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .profile-name {
+    font-size: 24px;
+  }
+
+  .profile-actions .btn,
+  .profile-actions .profile-vr-button {
+    width: 100%;
+  }
+
+  .badge-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .badge-item {
+    align-items: center;
+  }
+
+  .stat-list li,
+  .level-row,
+  .badge-head {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}

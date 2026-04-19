@@ -26,12 +26,16 @@
       </div>
     </div>
 
-    <div id="videoPlayerContainer" class="ratio ratio-16x9 mb-3" style="display: none;">
-      <iframe id="videoIframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
-      <video id="html5VideoPlayer" controls playsinline style="display:none; width:100%; height:100%; background:#000;"></video>
-      <button id="interactiveQuizHotspot" class="interactive-quiz-hotspot" type="button" aria-label="Open interactive quiz" style="display:none;">
-        ?
-      </button>
+    <div class="lesson-video-shell">
+      <div class="lesson-video-frame">
+        <div id="videoPlayerContainer" class="video-player-shell mb-3" style="display: none;">
+          <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          <video id="html5VideoPlayer" controls playsinline webkit-playsinline="true" controlslist="nofullscreen noremoteplayback" disablepictureinpicture style="display:none; width:100%; height:100%; background:#000;"></video>
+          <button id="interactiveQuizHotspot" class="interactive-quiz-hotspot" type="button" aria-label="Open interactive quiz" style="display:none;">
+            ?
+          </button>
+        </div>
+      </div>
     </div>
     <div id="videoProviderNotice" class="small mb-3" style="display:none;"></div>
 

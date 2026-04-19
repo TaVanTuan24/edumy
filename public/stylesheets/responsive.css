@@ -1,0 +1,361 @@
+:root {
+  --app-shell-max: 1280px;
+  --app-space-1: 0.5rem;
+  --app-space-2: 0.75rem;
+  --app-space-3: 1rem;
+  --app-space-4: 1.25rem;
+  --app-space-5: 1.5rem;
+  --app-radius-lg: 1rem;
+  --app-navbar-bg: #111827;
+}
+
+html {
+  overflow-x: clip;
+}
+
+body.app-shell {
+  min-width: 320px;
+  overflow-x: clip;
+  background: #f8fafc;
+}
+
+.app-main {
+  width: 100%;
+  min-width: 0;
+}
+
+.app-content {
+  width: min(100%, var(--app-shell-max));
+  margin: 0 auto;
+}
+
+.app-content-full {
+  width: 100%;
+}
+
+.app-flash {
+  width: min(100%, var(--app-shell-max));
+  margin: 0 auto;
+  padding-inline: var(--app-space-3);
+}
+
+.app-flash .alert {
+  margin-top: var(--app-space-3);
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+iframe {
+  border: 0;
+}
+
+.app-navbar {
+  background: linear-gradient(135deg, #111827, #1f2937);
+  padding-block: 0.5rem;
+}
+
+.app-navbar .navbar-shell {
+  align-items: center;
+  gap: 0.75rem;
+  padding-inline: var(--app-space-3);
+}
+
+.app-navbar .navbar-brand {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+}
+
+.app-navbar .navbar-toggler {
+  border-color: rgba(255, 255, 255, 0.2);
+  padding: 0.45rem 0.65rem;
+}
+
+.app-navbar .navbar-toggler:focus {
+  box-shadow: 0 0 0 0.2rem rgba(148, 163, 184, 0.3);
+}
+
+.app-navbar .navbar-collapse {
+  margin-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.75rem;
+}
+
+.app-navbar .navbar-nav {
+  gap: 0.15rem;
+}
+
+.app-navbar .nav-link {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.85rem;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+}
+
+.app-navbar .nav-link:hover,
+.app-navbar .nav-link:focus,
+.app-navbar .nav-link.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-navbar .navbar-actions {
+  padding-top: 0.25rem;
+}
+
+.app-navbar .notification-dropdown {
+  width: 100%;
+}
+
+.app-navbar .notification-dropdown .nav-link {
+  justify-content: flex-start;
+}
+
+.app-navbar .notification-menu {
+  width: min(100vw - 2rem, 360px);
+  max-width: 360px;
+}
+
+.app-footer {
+  background: #111827;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.app-footer .footer-inner {
+  width: min(100%, var(--app-shell-max));
+  margin: 0 auto;
+  padding-inline: var(--app-space-3);
+}
+
+.btn,
+.form-control,
+.form-select,
+.btn-close,
+.dropdown-item {
+  min-height: 44px;
+}
+
+.btn-group > .btn {
+  min-height: 42px;
+}
+
+.form-control,
+.form-select {
+  font-size: 1rem;
+}
+
+.table-responsive {
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-dialog {
+  margin: 0.75rem;
+}
+
+.modal-content {
+  border-radius: 1rem;
+}
+
+.dropdown-menu {
+  max-width: min(100vw - 1rem, 420px);
+}
+
+.course-tabs,
+.nav-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.course-tabs .tab-btn,
+.nav-tabs .nav-link {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.auth-page {
+  padding: 1rem;
+}
+
+.auth-shell {
+  width: min(100%, 460px);
+  margin: 0 auto;
+}
+
+.auth-card {
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.auth-card .card-img-top {
+  aspect-ratio: 16 / 8;
+  object-fit: cover;
+}
+
+.auth-submit {
+  width: 100%;
+}
+
+.analytics-grid,
+.profile-grid,
+.badge-grid,
+.streak-row,
+.leaderboard-grid,
+.leaderboard-podium {
+  min-width: 0;
+}
+
+.discussion-shell,
+.profile-page,
+.leaderboard-shell,
+.discovery-shell,
+.learning-root {
+  min-width: 0;
+}
+
+.slide-wrapper {
+  padding: 0.75rem;
+}
+
+#slide-stage {
+  width: min(100%, 1003px);
+  height: auto;
+  aspect-ratio: 1003 / 563;
+}
+
+#slide-canvas {
+  min-height: 100%;
+}
+
+.slide-nav,
+.interactive-quiz-actions,
+.quiz-controls,
+.quiz-nav,
+.lesson-nav,
+.slide-controls {
+  flex-wrap: wrap;
+}
+
+.ai-chat-popup {
+  width: min(100vw - 1rem, 360px);
+  max-width: calc(100vw - 1rem);
+  right: 0.5rem;
+  bottom: 5rem;
+}
+
+.ai-chat-toggle {
+  right: 0.75rem;
+  bottom: 0.75rem;
+}
+
+@media (min-width: 992px) {
+  .app-navbar {
+    padding-block: 0.25rem;
+  }
+
+  .app-navbar .navbar-shell {
+    padding-inline: 1.25rem;
+  }
+
+  .app-navbar .navbar-collapse {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .app-navbar .navbar-actions {
+    padding-top: 0;
+  }
+
+  .app-navbar .navbar-nav-main {
+    margin-left: 1rem;
+  }
+
+  .app-navbar .navbar-actions,
+  .app-navbar .notification-dropdown {
+    width: auto;
+  }
+
+  .modal-dialog {
+    margin: 1.75rem auto;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .learning-layout {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+  }
+
+  .learning-content,
+  .learning-sidebar {
+    height: auto;
+    min-height: 0;
+  }
+
+  .learning-sidebar {
+    border-left: 0;
+    border-top: 1px solid #dbe2ea;
+  }
+
+  .learning-sidebar-inner {
+    padding-bottom: 1rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .app-content,
+  .app-flash,
+  .app-footer .footer-inner {
+    padding-inline: 0.875rem;
+  }
+
+  .modal-footer {
+    justify-content: stretch;
+  }
+
+  .modal-footer > * {
+    flex: 1 1 auto;
+  }
+
+  .analytics-header,
+  .discussion-head,
+  .table-header,
+  .badge-head {
+    align-items: flex-start;
+  }
+
+  .quiz-controls > .btn,
+  .lesson-nav > .btn,
+  .slide-controls .btn {
+    flex: 1 1 100%;
+  }
+
+  .slide-controls > div {
+    width: 100%;
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .ai-chat-popup {
+    left: 0.5rem;
+    right: 0.5rem;
+    width: auto;
+    height: min(70dvh, 520px);
+  }
+
+  .notification-menu {
+    position: static;
+  }
+}

@@ -135,6 +135,52 @@ body {
     transition: opacity 0.2s ease;
 }
 
+.video-player-shell {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    margin-inline: auto;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+}
+
+.video-player-shell iframe,
+.video-player-shell video {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #000;
+}
+
+.video-player-shell iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #000;
+}
+
+.video-player-shell video {
+    position: relative;
+    display: block;
+    object-fit: contain;
+}
+
+.lesson-video-shell {
+    width: 100%;
+}
+
+.lesson-video-frame {
+    width: 100%;
+    max-width: 100%;
+    flex: 0 0 auto;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .loading-spinner {
     display: flex;
     justify-content: center;
@@ -235,6 +281,7 @@ body {
 .quiz-nav {
     display: flex;
     justify-content: space-between;
+    gap: 10px;
 }
 
 .quiz-feedback {
@@ -312,8 +359,9 @@ body {
 .learning-layout {
     display: grid;
     grid-template-columns: 1fr 420px;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    min-height: min(100vh, 100dvh);
+    height: auto;
 }
 
 .learning-root {
@@ -329,6 +377,7 @@ body {
     padding: 0;
     overflow-y: auto;
     background: #f9fafb;
+    min-width: 0;
 }
 
 .learning-sidebar {
@@ -338,6 +387,7 @@ body {
     max-width: none;
     height: 100%;
     overflow-y: auto;
+    min-width: 0;
 }
 
 .analytics-header {
@@ -753,6 +803,7 @@ body {
     z-index: 55;
     display: none;
     width: min(340px, calc(100% - 16px));
+    max-width: calc(100% - 16px);
     padding: 0;
     pointer-events: auto;
 }
@@ -777,6 +828,7 @@ body {
 
 .interactive-quiz-modal.inline-quiz-mode .interactive-quiz-body {
     padding: 10px 12px;
+    overflow-y: auto;
 }
 
 .interactive-quiz-modal.inline-quiz-mode .interactive-quiz-question {
@@ -852,6 +904,7 @@ body {
 @media (max-width: 992px) {
     .learning-layout {
         grid-template-columns: 1fr;
+        min-height: auto;
     }
 
     .learning-sidebar {
@@ -860,5 +913,178 @@ body {
         height: auto;
         border-left: 0;
         border-top: 1px solid #ddd;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .notification-menu {
+        min-width: 0;
+    }
+
+    .video-player-shell {
+        max-width: 100%;
+    }
+
+    .lesson-video-shell {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .lesson-video-frame {
+        width: min(92vw, 420px);
+        max-width: min(92vw, 420px);
+    }
+
+    .lesson {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .course-tabs {
+        gap: 14px;
+        padding-bottom: 2px;
+    }
+
+    .tab-pane {
+        padding: 16px 0;
+    }
+
+    .quiz-nav,
+    .interactive-quiz-actions {
+        flex-direction: column;
+    }
+
+    .quiz-nav > *,
+    .interactive-quiz-actions > * {
+        width: 100%;
+    }
+
+    .slide-nav {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        transform: none;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .slide-wrapper {
+        align-items: flex-start;
+        padding: 12px;
+    }
+
+    .quiz-shell,
+    .quiz-result {
+        max-width: none;
+    }
+
+    .option-btn,
+    .interactive-quiz-option {
+        padding: 14px;
+    }
+
+    .interactive-quiz-hotspot {
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.34);
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile {
+        width: min(88vw, 320px);
+        max-width: calc(100% - 20px);
+        left: 50% !important;
+        right: auto;
+        top: auto !important;
+        bottom: 10px;
+        transform: translateX(-50%);
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-dialog {
+        max-height: min(50vh, 320px);
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-head {
+        padding: 9px 10px;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-body {
+        max-height: min(24vh, 150px);
+        padding: 8px 10px;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-question {
+        font-size: 13px;
+        margin-bottom: 8px;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-option {
+        padding: 8px 9px;
+        font-size: 12px;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-actions {
+        padding: 8px 10px 10px;
+        gap: 8px;
+    }
+}
+
+@media (max-width: 767.98px) and (orientation: landscape) {
+    .learning-root,
+    .learning-content,
+    .lesson-video-shell {
+        overflow-x: hidden;
+    }
+
+    .lesson-video-shell {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        width: 100%;
+    }
+
+    .lesson-video-frame {
+        width: min(82vw, calc(48dvh * (16 / 9)), 620px);
+        max-width: min(82vw, calc(48dvh * (16 / 9)), 620px);
+        flex: 0 0 auto;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .lesson-video-frame .video-player-shell {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 48dvh;
+    }
+
+    .lesson-video-frame iframe,
+    .lesson-video-frame video {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile {
+        width: min(46vw, 300px);
+        max-width: calc(100% - 18px);
+        bottom: 8px;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-dialog {
+        max-height: min(54vh, 240px);
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-head {
+        padding: 8px 10px;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-body {
+        max-height: min(24vh, 110px);
+        padding: 7px 9px;
+    }
+
+    .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-option {
+        padding: 7px 8px;
+        font-size: 12px;
     }
 }

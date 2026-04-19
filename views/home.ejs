@@ -3,19 +3,20 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Edumy</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/5.0.0-alpha1/css/bootstrap.min.css"
     integrity="sha384-r4NyP46KrjDleawBgD5tp8Y7UzmLA05oM1iAEQ17CSuDqnUK2+k9luXQOfXJCJ4I" crossorigin="anonymous">
     <link rel="stylesheet" href="/stylesheets/home.css">
+    <link rel="stylesheet" href="/stylesheets/responsive.css">
 </head>
 
-<body class="d-flex text-center text-white bg-dark">
-    <div class="cover-container d-flex w-100 h-100 p-3 mx-auto flex-column">
+<body class="home-page d-flex text-center text-white bg-dark">
+    <div class="cover-container d-flex w-100 min-vh-100 p-3 mx-auto flex-column">
         <header class="mb-auto">
-            <div >
-                <!-- <h3 class="float-md-left mb-0">Marathon</h3> -->
-                <nav class="nav nav-masthead justify-content-center float-md-right">
+            <div class="home-header-shell">
+                <a href="/" class="home-brand text-white text-decoration-none">Edumy</a>
+                <nav class="nav nav-masthead justify-content-center">
                     <a href="#" class="nav-link active" aria-current="page">Home</a>
                     <a href="/courses" class="nav-link">Courses</a>
                     <!-- <a href="/video-models" class="nav-link">AI Video Models</a> -->
@@ -28,11 +29,11 @@
                 </nav>
             </div>
         </header>
-        <main class="px-3">
+        <main class="px-3 home-hero-copy">
             <h1>Edumy Education</h1>
             <p class="lead"> Step into a world of endless learning and self-growth. <br> Explore a wide variety of courses, share your own knowledge, and engage with a vibrant community of learners. <br>
-                Start your journey today — because learning never stops.</p>
-            <a href="/courses" class="btn btn-lg btn-secondary font-weight-bold border-white bg-white">View
+                Start your journey today because learning never stops.</p>
+            <a href="/courses" class="btn btn-lg btn-secondary font-weight-bold border-white bg-white home-cta">View
                 Courses</a>
         </main>
 

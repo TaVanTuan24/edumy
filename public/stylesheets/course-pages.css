@@ -881,6 +881,21 @@
         padding: 0 16px;
     }
 
+    .course-search-dropdown {
+        top: calc(100% + 8px);
+        border-radius: 16px;
+        max-height: min(60vh, 360px);
+    }
+
+    .course-card-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .course-card-footer .btn {
+        width: 100%;
+    }
+
     .course-card-grid {
         grid-template-columns: 1fr;
     }

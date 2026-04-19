@@ -346,7 +346,7 @@
         }
 
         // Handle save course button
-        if (e.target.closest('.top-bar .btn-primary')) {
+        if (e.target.closest('#saveCourseBtn')) {
             saveCourse();
             return;
         }
@@ -1054,11 +1054,13 @@
                     <div class="item-meta">${itemLabel}</div>
                 </div>
                 <div class="item-actions">
-                    <button class="edit-btn" data-id="${escapeAttribute(video._id || '')}" data-type="${type}" data-section-index="${sectionIndex}" data-lesson-index="${lessonIndex}" title="Edit">
+                    <button class="edit-btn editor-inline-action" type="button" data-id="${escapeAttribute(video._id || '')}" data-type="${type}" data-section-index="${sectionIndex}" data-lesson-index="${lessonIndex}" title="Edit ${itemLabel}">
                         <i class="fa-solid fa-pen-to-square"></i>
+                        <span>Edit</span>
                     </button>
-                    <button class="delete-item-btn" title="Delete">
+                    <button class="delete-item-btn editor-inline-action editor-inline-action-danger" type="button" title="Delete ${itemLabel}">
                         <i class="fa-solid fa-trash"></i>
+                        <span>Delete</span>
                     </button>
                 </div>
             </div>
@@ -1145,7 +1147,7 @@
 
     function buildVideoEditorHTML(sectionIndex, lessonIndex, itemId, itemName) {
         return `
-            <div class="card">
+            <div class="card editor-card-shell">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Edit Video</h5>
                     <span class="badge bg-secondary">Section: ${sectionIndex}, Lesson: ${lessonIndex}</span>
@@ -1164,8 +1166,8 @@
                         <label class="form-label">Video URL</label>
                         <input type="text" class="form-control" id="lesson-url" placeholder="Enter video URL">
                     </div>
-                    <div class="mb-3">
-                        <button class="btn btn-primary save-lesson-btn">
+                    <div class="editor-card-actions">
+                        <button class="btn btn-primary save-lesson-btn" type="button">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
                         <a href="/admin/courses/${courseId}/video-settings?section=${sectionIndex}&lesson=${lessonIndex}" class="btn btn-outline-primary">
@@ -1179,7 +1181,7 @@
 
     function buildSlideEditorHTML(sectionIndex, lessonIndex, itemId, itemName) {
         return `
-            <div class="card">
+            <div class="card editor-card-shell">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Edit Slide</h5>
                     <span class="badge bg-secondary">Section: ${sectionIndex}, Lesson: ${lessonIndex}</span>
@@ -1194,11 +1196,11 @@
                         <label class="form-label">Slide Name</label>
                         <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
                     </div>
-                    <div class="mb-3">
-                        <button class="btn btn-primary save-lesson-btn">
+                    <div class="editor-card-actions">
+                        <button class="btn btn-primary save-lesson-btn" type="button">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
-                        <a href="/admin/courses/${courseId}/slide-editor?section=${sectionIndex}&lesson=${lessonIndex}" class="btn btn-secondary">
+                        <a href="/admin/courses/${courseId}/slide-editor?section=${sectionIndex}&lesson=${lessonIndex}" class="btn btn-outline-secondary">
                             <i class="fas fa-edit"></i> Advanced Edit
                         </a>
                     </div>
@@ -1209,7 +1211,7 @@
 
     function buildQuizEditorHTML(sectionIndex, lessonIndex, itemId, itemName) {
         return `
-            <div class="card">
+            <div class="card editor-card-shell">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Edit Quiz</h5>
                     <span class="badge bg-secondary">Section: ${sectionIndex}, Lesson: ${lessonIndex}</span>
@@ -1224,12 +1226,12 @@
                         <label class="form-label">Quiz Name</label>
                         <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
                     </div>
-                    <div class="mb-3">
-                        <button class="btn btn-primary save-lesson-btn">
+                    <div class="editor-card-actions">
+                        <button class="btn btn-primary save-lesson-btn" type="button">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
                         
-                        <a href="/admin/course/${courseId}/quiz/${sectionIndex}/${lessonIndex}" class="btn btn-info">
+                        <a href="/admin/course/${courseId}/quiz/${sectionIndex}/${lessonIndex}" class="btn btn-outline-primary">
                             <i class="fas fa-question"></i> Quiz Editor
                         </a>
                     </div>
