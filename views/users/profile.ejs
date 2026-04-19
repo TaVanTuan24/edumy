@@ -27,6 +27,16 @@
       <h1 class="profile-name"><%= user.username %></h1>
       <p class="profile-email mb-1"><%= user.email %></p>
       <p class="profile-meta mb-0">Tham gia từ <%= new Date(user.createdAt || Date.now()).toLocaleDateString('vi-VN') %></p>
+      <div class="profile-actions mt-3">
+        <button
+          type="button"
+          class="btn btn-primary profile-vr-button"
+          data-bs-toggle="modal"
+          data-bs-target="#vrPairingModal"
+        >
+          Login VR
+        </button>
+      </div>
 
       <% if (recentBadges.length) { %>
         <div class="profile-highlight-badges">
@@ -150,6 +160,38 @@
       </div>
     <% } %>
   </section>
+</div>
+
+<div class="modal fade profile-vr-modal" id="vrPairingModal" tabindex="-1" aria-labelledby="vrPairingModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content profile-modal-shell">
+      <div class="modal-header">
+        <h5 class="modal-title" id="vrPairingModalLabel">Pair VR Device</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="vrPairingForm">
+        <div class="modal-body">
+          <label class="form-label fw-semibold" for="vrPairingCodeInput">5-digit pairing PIN</label>
+          <input
+            id="vrPairingCodeInput"
+            class="form-control form-control-lg text-center profile-vr-code-input"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="5"
+            pattern="[0-9]{5}"
+            placeholder="00000"
+          >
+          <p class="text-muted small mb-0 mt-2">Open the VR app, request a login code, then enter it here.</p>
+          <div id="vrPairingMessage" class="alert d-none mt-3 mb-0" role="alert"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" id="vrPairingSubmit" class="btn btn-primary" disabled>Confirm</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <script src="/javascripts/profile.js" defer></script>

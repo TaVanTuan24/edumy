@@ -32,6 +32,7 @@ const videoRoutes = require('./routes/videos');
 const trackRoutes = require('./routes/track');
 const discussionRoutes = require('./routes/discussions');
 const vrRoutes = require('./routes/vr');
+const vrAuthRoutes = require('./routes/vrAuth');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionSecret = String(process.env.SESSION_SECRET || '').trim() || 'dev-session-secret-change-me';
@@ -251,6 +252,7 @@ app.use('/videos', videoRoutes);
 app.use('/track', trackRoutes);
 app.use('/courses/:courseId/discussions', discussionRoutes);
 app.use('/api/vr', cors(vrCorsOptions), vrRoutes);
+app.use('/api/vr-auth', cors(vrCorsOptions), vrAuthRoutes);
 
 app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'images', 'picture.png'));
