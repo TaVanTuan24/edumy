@@ -8,6 +8,7 @@
     lessonsById: new Map(),
     currentLesson: null,
     currentSectionIndex: 0,
+    openSectionIndexes: new Set(),
     progress: {}
   };
 
@@ -22,10 +23,15 @@
     store.sections = normalizeSections(store.course);
     store.lessons = flattenLessons(store.course);
     store.lessonsById = new Map();
+    store.openSectionIndexes = new Set();
 
     store.lessons.forEach(function(lesson) {
       store.lessonsById.set(String(lesson._id), lesson);
     });
+
+    if (store.sections[0]) {
+      store.openSectionIndexes.add(0);
+    }
 
     hydrateProgress(Array.isArray(completedVideosPayload) ? completedVideosPayload : []);
   }
@@ -180,6 +186,29 @@
     return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
   }
 
+  function isSectionOpen(sectionIndex) {
+    return store.openSectionIndexes.has(Number(sectionIndex));
+  }
+
+  function setSectionOpen(sectionIndex, isOpen) {
+    const idx = Number(sectionIndex);
+    if (!Number.isFinite(idx)) return false;
+
+    if (isOpen) {
+      store.openSectionIndexes.add(idx);
+      return true;
+    }
+
+    store.openSectionIndexes.delete(idx);
+    return false;
+  }
+
+  function toggleSectionOpen(sectionIndex) {
+    const idx = Number(sectionIndex);
+    if (!Number.isFinite(idx)) return false;
+    return setSectionOpen(idx, !isSectionOpen(idx));
+  }
+
   window.LearningStore = {
     store: store,
     STORAGE_SUFFIX: STORAGE_SUFFIX,
@@ -197,6 +226,9 @@
     writeJson: writeJson,
     normalizeMediaKey: normalizeMediaKey,
     escapeHtml: escapeHtml,
-    capitalize: capitalize
+    capitalize: capitalize,
+    isSectionOpen: isSectionOpen,
+    setSectionOpen: setSectionOpen,
+    toggleSectionOpen: toggleSectionOpen
   };
 })();

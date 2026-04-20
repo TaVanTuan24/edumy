@@ -2,6 +2,7 @@ const Course = require('../models/course');
 const User = require('../models/user');
 const { generateCourseDescription } = require('../utils/courseDescriptionGenerator');
 const { syncCourseContent } = require('../utils/courseContentAdapter');
+const { buildStoredCourseStats } = require('../utils/courseStats');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -40,10 +41,12 @@ module.exports.previewCourse = async (req, res) => {
         });
     if (!course) return res.redirect('/explore');
     syncCourseContent(course);
+    const previewStats = buildStoredCourseStats(course);
+
     const user = await User.findById(req.user._id).select('enrolledCourses enrolledCourseIds');
     const generatedDescription = await generateCourseDescription(course);
     const isEnrolled = !!(user && typeof user.findEnrollment === 'function' && user.findEnrollment(course._id));
-    res.render('courses/preview-modern', { course, generatedDescription, isEnrolled });
+    res.render('courses/preview-modern', { course, generatedDescription, isEnrolled, previewStats });
 };
 
 module.exports.enrollCourse = async (req, res) => {

@@ -1,0 +1,97 @@
+<%
+  const thumbnailModeValue = (thumbnailMode || 'upload') === 'url' ? 'url' : 'upload';
+  const thumbnailUrlValue = typeof imageUrl === 'string' ? imageUrl : '';
+  const thumbnailErrorValue = typeof thumbnailError === 'string' ? thumbnailError : '';
+  const previewImageUrl = thumbnailModeValue === 'url' && thumbnailUrlValue ? thumbnailUrlValue : '';
+%>
+
+<section class="course-thumbnail-field" data-course-thumbnail-field>
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+    <div>
+      <label class="form-label mb-1">Course Thumbnail</label>
+      <div class="form-text">Choose one source. Uploaded files take priority if both are provided.</div>
+    </div>
+    <div class="course-thumbnail-mode-switch" role="tablist" aria-label="Thumbnail source">
+      <input
+        type="radio"
+        class="btn-check"
+        name="course[thumbnailMode]"
+        id="thumbnailModeUpload"
+        value="upload"
+        autocomplete="off"
+        data-thumbnail-mode-input
+        <%= thumbnailModeValue === 'upload' ? 'checked' : '' %>
+      >
+      <label class="btn btn-outline-secondary" for="thumbnailModeUpload">Upload from device</label>
+
+      <input
+        type="radio"
+        class="btn-check"
+        name="course[thumbnailMode]"
+        id="thumbnailModeUrl"
+        value="url"
+        autocomplete="off"
+        data-thumbnail-mode-input
+        <%= thumbnailModeValue === 'url' ? 'checked' : '' %>
+      >
+      <label class="btn btn-outline-secondary" for="thumbnailModeUrl">Use image URL</label>
+    </div>
+  </div>
+
+  <div
+    class="course-thumbnail-panel <%= thumbnailModeValue === 'upload' ? '' : 'd-none' %>"
+    data-thumbnail-panel="upload"
+  >
+    <label for="formFile" class="form-label">Upload image</label>
+    <input
+      class="form-control"
+      type="file"
+      id="formFile"
+      name="image"
+      accept="image/*"
+      multiple
+      data-thumbnail-file-input
+    >
+    <div class="form-text">Select one or more images from your device.</div>
+  </div>
+
+  <div
+    class="course-thumbnail-panel <%= thumbnailModeValue === 'url' ? '' : 'd-none' %>"
+    data-thumbnail-panel="url"
+  >
+    <label for="thumbnailUrlInput" class="form-label">Image URL</label>
+    <input
+      class="form-control <%= thumbnailErrorValue ? 'is-invalid' : '' %>"
+      type="url"
+      id="thumbnailUrlInput"
+      name="course[imageUrl]"
+      value="<%= thumbnailUrlValue %>"
+      placeholder="https://example.com/path/to/thumbnail"
+      inputmode="url"
+      data-thumbnail-url-input
+      aria-describedby="thumbnailUrlHelp thumbnailUrlError"
+    >
+    <div id="thumbnailUrlHelp" class="form-text">Use a public `http` or `https` image URL. Query strings and CDN image links are allowed.</div>
+    <div id="thumbnailUrlError" class="invalid-feedback" data-thumbnail-url-error>
+      <%= thumbnailErrorValue || 'Enter a valid image URL.' %>
+    </div>
+  </div>
+
+  <div class="course-thumbnail-preview-card mt-3" data-thumbnail-preview-card>
+    <div class="course-thumbnail-preview-frame">
+      <img
+        src="<%= previewImageUrl || '/default.png' %>"
+        alt="Course thumbnail preview"
+        class="course-thumbnail-preview-image <%= previewImageUrl ? '' : 'is-placeholder' %>"
+        data-thumbnail-preview-image
+      >
+    </div>
+    <div class="course-thumbnail-preview-meta">
+      <div class="fw-semibold">Thumbnail preview</div>
+      <div class="text-muted small" data-thumbnail-preview-caption>
+        <%= previewImageUrl ? 'Loaded from image URL' : 'No thumbnail selected yet' %>
+      </div>
+      <div class="small text-danger d-none" data-thumbnail-preview-error></div>
+    </div>
+  </div>
+</section>

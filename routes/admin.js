@@ -11,6 +11,7 @@ const {
     getCanonicalSections,
     syncCourseContent
 } = require('../utils/courseContentAdapter');
+const { prepareLessonForWrite, syncCourseAggregateFields } = require('../utils/courseStats');
 
 router.use(isLoggedIn, isAdmin);
 router.use('/courses/:courseId/analytics', adminAnalyticsRoutes);
@@ -37,6 +38,7 @@ async function saveEditableCourse(course) {
         }))
     ))
     syncCourseContent(course)
+    syncCourseAggregateFields(course)
     await course.save()
     console.log('[CourseEditor] canonical sections after save:', JSON.stringify(
         (course.sections || []).map((section) => ({
@@ -747,6 +749,7 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
         lesson.title = String(title || 'Slide Lesson').trim()
         lesson.content = { ...(lesson.content || {}), slides: normalizedSlides }
         lesson.aiGenerated = false
+        await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: false })
         course.markModified('sections')
 
         await saveEditableCourse(course)
@@ -806,6 +809,8 @@ lesson.content = {
     interactiveQuizzes: normalizedInteractiveQuizzes
 }
 
+await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: true })
+
 await saveEditableCourse(course)
 
 res.send("updated")
@@ -859,6 +864,8 @@ router.put('/course/:id/lesson/add', async (req, res) => {
             content: itemType === 'video' ? { videoUrl: url } : {},
             order: videos.length
         }
+
+        await prepareLessonForWrite(newItem, { debug: true, allowDriveLookup: true })
 
         videos.push(newItem)
 
@@ -947,6 +954,10 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
                     order: idx
                 }
             })
+
+            for (const lesson of course.sections[parsedSectionIndex].lessons) {
+                await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: true })
+            }
             reindexCanonicalSections(course)
             await saveEditableCourse(course)
             return res.json({ success: true })
@@ -1070,6 +1081,8 @@ router.post("/course/:id/quiz/add", async (req, res) => {
             order: videos.length
         }
 
+        await prepareLessonForWrite(newItem, { debug: true, allowDriveLookup: false })
+
         videos.push(newItem)
 
         reindexCanonicalSections(course)
@@ -1110,6 +1123,8 @@ router.post("/course/:id/slide/add", async (req, res) => {
             },
             order: videos.length
         }
+
+        await prepareLessonForWrite(newItem, { debug: true, allowDriveLookup: false })
 
         videos.push(newItem)
 

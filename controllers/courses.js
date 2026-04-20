@@ -32,6 +32,77 @@ function sanitizeCourseInput(rawCourse) {
   }, {});
 }
 
+function buildCourseFormData(rawCourse = {}) {
+  return {
+    title: String(rawCourse.title || '').trim(),
+    description: String(rawCourse.description || '').trim(),
+    driveLink: String(rawCourse.driveLink || '').trim(),
+    topic: String(rawCourse.topic || '').trim(),
+    imageUrl: String(rawCourse.imageUrl || '').trim(),
+    thumbnailMode: String(rawCourse.thumbnailMode || '').trim().toLowerCase() === 'url' ? 'url' : 'upload'
+  };
+}
+
+function isSafeExternalImageUrl(rawValue) {
+  const value = String(rawValue || '').trim();
+  if (!value) {
+    return { ok: true, value: '' };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { ok: false, message: 'Thumbnail URL must be a valid absolute URL.' };
+  }
+
+  const protocol = String(parsed.protocol || '').toLowerCase();
+  if (!['http:', 'https:'].includes(protocol)) {
+    return { ok: false, message: 'Thumbnail URL must use http or https.' };
+  }
+
+  return { ok: true, value: parsed.toString() };
+}
+
+function buildExternalImageEntry(imageUrl) {
+  return {
+    url: imageUrl,
+    filename: `external-url-${Date.now()}`
+  };
+}
+
+function getUploadedImageEntries(files) {
+  return Array.isArray(files)
+    ? files.map((file) => ({ url: file.path, filename: file.filename }))
+    : [];
+}
+
+function resolveCourseImages({ files, imageUrl, thumbnailMode }) {
+  const uploadedImages = getUploadedImageEntries(files);
+  if (uploadedImages.length > 0) {
+    return { ok: true, images: uploadedImages, source: 'upload' };
+  }
+
+  if (thumbnailMode === 'upload') {
+    return { ok: true, images: [], source: 'none' };
+  }
+
+  const validation = isSafeExternalImageUrl(imageUrl);
+  if (!validation.ok) {
+    return { ok: false, images: [], source: 'url', message: validation.message };
+  }
+
+  if (!validation.value) {
+    return { ok: true, images: [], source: 'none' };
+  }
+
+  return {
+    ok: true,
+    images: [buildExternalImageEntry(validation.value)],
+    source: 'url'
+  };
+}
+
 function getEnrolledCourseIds(user) {
   if (!user || typeof user.getEnrolledCourseIdSet !== 'function') return [];
 
@@ -96,12 +167,29 @@ module.exports.index = async (req, res) => {
 };
 
 module.exports.renderNewForm = (req, res) => {
-  res.render('courses/new');
+  res.render('courses/new', {
+    formData: {},
+    thumbnailError: ''
+  });
 };
 
 module.exports.createCourse = async (req, res) => {
+  const formData = buildCourseFormData(req.body.course);
+  const imageResult = resolveCourseImages({
+    files: req.files,
+    imageUrl: formData.imageUrl,
+    thumbnailMode: formData.thumbnailMode
+  });
+
+  if (!imageResult.ok) {
+    return res.status(400).render('courses/new', {
+      formData,
+      thumbnailError: imageResult.message
+    });
+  }
+
   const course = new Course(sanitizeCourseInput(req.body.course));
-  course.images = req.files ? req.files.map(f => ({ url: f.path, filename: f.filename })) : [];
+  course.images = imageResult.images;
   course.author = req.user._id;
 
   const driveLink = String(course.driveLink || '');
@@ -200,9 +288,24 @@ module.exports.updateCourse = async (req, res) => {
     return res.redirect('/courses');
   }
 
-  const imgs = Array.isArray(req.files) ? req.files.map(f => ({ url: f.path, filename: f.filename })) : [];
+  const imageResult = resolveCourseImages({
+    files: req.files,
+    imageUrl: req.body && req.body.course ? req.body.course.imageUrl : '',
+    thumbnailMode: req.body && req.body.course ? req.body.course.thumbnailMode : 'upload'
+  });
+  if (!imageResult.ok) {
+    req.flash('error', imageResult.message);
+    return res.redirect(`/courses/${req.params.id}/edit`);
+  }
+
+  const imgs = imageResult.source === 'upload'
+    ? imageResult.images
+    : getUploadedImageEntries(req.files);
+
   if (imgs.length) {
     course.images.push(...imgs);
+  } else if (imageResult.source === 'url' && imageResult.images.length) {
+    course.images.push(...imageResult.images);
   }
   await course.save();
   req.flash('success', 'Successfully updated course!');

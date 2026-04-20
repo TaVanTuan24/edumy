@@ -1,21 +1,11 @@
 const { google } = require('googleapis');
+const { buildDrivePreviewUrl } = require('./driveVideoMetadata');
+const { prepareLessonForWrite } = require('./courseStats');
 
 const drive = google.drive({
   version: 'v3',
   auth: process.env.GOOGLE_API_KEY
 });
-
-function buildDrivePreviewUrl(fileId, resourceKey) {
-  const safeId = String(fileId || '').trim();
-  if (!safeId) return '';
-
-  const url = new URL(`https://drive.google.com/file/d/${safeId}/preview`);
-  if (resourceKey) {
-    url.searchParams.set('resourcekey', String(resourceKey));
-  }
-  url.searchParams.set('usp', 'drivesdk');
-  return url.toString();
-}
 
 async function scanDriveStructure(folderId) {
   const sections = [];
@@ -34,8 +24,7 @@ async function scanDriveStructure(folderId) {
         if (nestedSection.lessons.length > 0) sections.push(nestedSection);
       } else if (file.mimeType.startsWith('video/')) {
         const videoUrl = buildDrivePreviewUrl(file.id, file.resourceKey);
-
-        lessons.push({
+        const lesson = {
           title: file.name,
           type: 'video',
           videoUrl,
@@ -46,7 +35,23 @@ async function scanDriveStructure(folderId) {
             resourceKey: file.resourceKey || '',
             webViewLink: file.webViewLink || ''
           }
+        };
+
+        const durationResult = await prepareLessonForWrite(lesson, {
+          debug: true,
+          allowDriveLookup: true
         });
+
+        lessons.push(lesson);
+
+        if (!durationResult.ok) {
+          console.log('[drive-scan] video duration unavailable', {
+            fileId: file.id,
+            mimeType: file.mimeType,
+            metadataFound: durationResult.metadataFound,
+            skipReason: durationResult.skipReason
+          });
+        }
       }
     }
 

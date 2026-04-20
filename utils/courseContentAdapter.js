@@ -3,6 +3,53 @@ function clonePlainObject(value) {
   return { ...value };
 }
 
+function parseDurationValue(rawDuration) {
+  if (typeof rawDuration === 'number') {
+    return Number.isFinite(rawDuration) && rawDuration > 0 ? Math.floor(rawDuration) : null;
+  }
+
+  if (typeof rawDuration !== 'string') return null;
+
+  const normalized = rawDuration.trim();
+  if (!normalized) return null;
+
+  if (/^\d+(\.\d+)?$/.test(normalized)) {
+    const numericValue = Number(normalized);
+    return Number.isFinite(numericValue) && numericValue > 0 ? Math.floor(numericValue) : null;
+  }
+
+  if (!/^\d{1,3}:\d{1,2}(:\d{1,2})?$/.test(normalized)) return null;
+
+  const parts = normalized.split(':').map((part) => Number(part));
+  if (parts.some((part) => !Number.isInteger(part) || part < 0)) return null;
+
+  if (parts.length === 2) {
+    const [minutes, seconds] = parts;
+    if (seconds >= 60) return null;
+    return minutes * 60 + seconds;
+  }
+
+  if (parts.length === 3) {
+    const [hours, minutes, seconds] = parts;
+    if (minutes >= 60 || seconds >= 60) return null;
+    return (hours * 3600) + (minutes * 60) + seconds;
+  }
+
+  return null;
+}
+
+function formatDurationValue(totalSeconds) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '';
+
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes <= 0) return '1 min';
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours} hr ${String(minutes).padStart(2, '0')} min`;
+}
+
 function normalizeOrder(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -153,7 +200,18 @@ function normalizeLessonContent(lesson, fallbackTitle) {
       || (lesson && lesson.refId)
       || ''
     ).trim(),
-    interactiveQuizzes
+    interactiveQuizzes,
+    durationSeconds: parseDurationValue(
+      contentObject.durationSeconds != null
+        ? contentObject.durationSeconds
+        : (lesson && lesson.durationSeconds)
+    ),
+    durationFormatted: String(contentObject.durationFormatted || (lesson && lesson.durationFormatted) || '').trim(),
+    durationSyncPending: Boolean(
+      contentObject.durationSyncPending != null
+        ? contentObject.durationSyncPending
+        : (lesson && lesson.durationSyncPending)
+    )
   };
 }
 
@@ -161,6 +219,15 @@ function normalizeCanonicalLesson(lesson, lessonIndex) {
   const type = normalizeLessonType(lesson && lesson.type, lesson);
   const title = String(lesson && lesson.title || '').trim() || `Lesson ${lessonIndex + 1}`;
   const content = normalizeLessonContent(lesson, title);
+  const durationSeconds = parseDurationValue(
+    lesson && lesson.durationSeconds != null
+      ? lesson.durationSeconds
+      : (
+        lesson && lesson.duration != null
+          ? lesson.duration
+          : (content && content.duration)
+      )
+  );
   const quiz = normalizeQuizQuestions(
     Array.isArray(lesson && lesson.quiz) ? lesson.quiz : content.questions
   );
@@ -183,6 +250,9 @@ function normalizeCanonicalLesson(lesson, lessonIndex) {
     refId: String(lesson && lesson.refId || '').trim(),
     description: String(lesson && lesson.description || '').trim(),
     duration: lesson && lesson.duration != null ? lesson.duration : null,
+    durationSeconds,
+    durationFormatted: String(lesson && lesson.durationFormatted || '').trim() || formatDurationValue(durationSeconds),
+    durationSyncPending: Boolean(lesson && lesson.durationSyncPending),
     aiGenerated: Boolean(lesson && lesson.aiGenerated),
     content,
     quiz,

@@ -423,15 +423,13 @@
     }
 
     function handleAddImage() {
-        const fromUrl = window.prompt('Enter image URL:', '');
+        const slide = getActiveSlide();
+        if (!slide) return;
 
-        if (fromUrl && fromUrl.trim()) {
-            addImageElement(fromUrl.trim());
-            return;
-        }
-
-        els.imageUploadInput.value = '';
-        els.imageUploadInput.click();
+        const item = createImageElement('');
+        slide.elements.push(item);
+        state.selectedElementId = item.id;
+        renderAll();
     }
 
     function onLocalImagePicked(event) {
@@ -461,17 +459,12 @@
         const imageProbe = new Image();
         imageProbe.onload = function() {
             const fitted = fitImageSizeToCanvas(imageProbe.naturalWidth, imageProbe.naturalHeight);
-
-            const item = {
-                id: uid('el'),
-                type: 'image',
+            const item = createImageElement(candidateSrc, {
                 x: Math.round((BASE_WIDTH - fitted.width) / 2),
                 y: Math.round((BASE_HEIGHT - fitted.height) / 2),
                 width: fitted.width,
-                height: fitted.height,
-                src: candidateSrc,
-                styles: {}
-            };
+                height: fitted.height
+            });
 
             slide.elements.push(item);
             state.selectedElementId = item.id;
@@ -484,6 +477,19 @@
         };
 
         imageProbe.src = candidateSrc;
+    }
+
+    function createImageElement(src, overrides) {
+        return Object.assign({
+            id: uid('el'),
+            type: 'image',
+            x: 420,
+            y: 180,
+            width: 320,
+            height: 220,
+            src: String(src || '').trim(),
+            styles: {}
+        }, overrides || {});
     }
 
     function addSlide() {
@@ -575,8 +581,10 @@
 
         const nextSrc = String(els.propImageSrc.value || '').trim();
         if (!nextSrc) {
-            showToast('Image URL is empty.');
-            els.propImageSrc.value = selected.src || '';
+            selected.src = '';
+            renderCanvas();
+            renderLayersList();
+            renderProperties();
             return;
         }
 
@@ -731,13 +739,7 @@
             node.style.overflow = 'hidden';
 
             if (element.type === 'image') {
-                const image = document.createElement('img');
-                image.src = element.src || '';
-                image.alt = 'Slide image';
-                image.style.width = '100%';
-                image.style.height = '100%';
-                image.style.objectFit = 'contain';
-                node.appendChild(image);
+                appendImageContent(node, element, true);
                 els.previewCanvas.appendChild(node);
                 return;
             }
@@ -855,17 +857,7 @@
             syncElementNode(item, node);
 
             if (item.type === 'image') {
-                const image = document.createElement('img');
-                image.src = item.src || '';
-                image.alt = 'Slide image';
-                image.loading = 'lazy';
-                image.style.width = '100%';
-                image.style.height = '100%';
-                image.style.objectFit = 'contain';
-                image.addEventListener('error', function() {
-                    console.error('[SlideEditor] Invalid image URL:', item.src || '');
-                }, { once: true });
-                node.appendChild(image);
+                appendImageContent(node, item, false);
             } else {
                 fitTextElementToBounds(item);
                 node.style.fontSize = (item.styles.fontSize || 28) + 'px';
@@ -950,6 +942,39 @@
         };
         els.propImagePreview.classList.add('is-visible');
         els.propImagePreviewEmpty.classList.remove('is-visible');
+    }
+
+    function appendImageContent(node, item, isPreview) {
+        if (!node || !item) return;
+
+        const candidateSrc = String(item.src || '').trim();
+        if (!candidateSrc) {
+            node.appendChild(createImagePlaceholderNode(isPreview));
+            return;
+        }
+
+        const image = document.createElement('img');
+        image.src = candidateSrc;
+        image.alt = 'Slide image';
+        image.loading = 'lazy';
+        image.style.width = '100%';
+        image.style.height = '100%';
+        image.style.objectFit = 'contain';
+        image.addEventListener('error', function() {
+            console.error('[SlideEditor] Invalid image URL:', candidateSrc);
+            image.remove();
+            if (!node.querySelector('.se-image-placeholder')) {
+                node.insertBefore(createImagePlaceholderNode(isPreview), node.firstChild || null);
+            }
+        }, { once: true });
+        node.appendChild(image);
+    }
+
+    function createImagePlaceholderNode(isPreview) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'se-image-placeholder' + (isPreview ? ' se-image-placeholder-preview' : '');
+        placeholder.innerHTML = '<span class="se-image-placeholder-icon"><i class="fa-regular fa-image"></i></span><span class="se-image-placeholder-label">Image</span><span class="se-image-placeholder-hint">Set the image URL or upload a file from the properties panel</span>';
+        return placeholder;
     }
 
     function resizeHandles() {

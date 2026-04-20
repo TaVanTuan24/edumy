@@ -6,6 +6,7 @@ const ContentLibrary = require('../../models/contentLibrary');
 const {
     syncCourseContent
 } = require('../../utils/courseContentAdapter');
+const { prepareLessonForWrite, syncCourseAggregateFields } = require('../../utils/courseStats');
 
 const VALID_LESSON_TYPES = new Set(['video', 'slide', 'quiz']);
 
@@ -33,6 +34,7 @@ async function saveCourseContent(course) {
         }))
     ));
     syncCourseContent(course);
+    syncCourseAggregateFields(course);
     await course.save();
     console.log('[CourseEditor][API] canonical sections after save:', JSON.stringify(
         (course.sections || []).map((section) => ({
@@ -208,6 +210,8 @@ router.post('/lesson', async (req, res) => {
             newLesson.content.videoUrl = newLesson.videoUrl;
         }
 
+        await prepareLessonForWrite(newLesson, { debug: true, allowDriveLookup: true });
+
         section.lessons.push(newLesson);
         reindexSections(course);
         await saveCourseContent(course);
@@ -259,6 +263,8 @@ router.put('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
             lesson.content = lesson.content || {};
             lesson.content.questions = lesson.quiz;
         }
+
+        await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: true });
 
         await saveCourseContent(course);
 
@@ -502,6 +508,8 @@ router.post('/lesson/from-library', async (req, res) => {
             order: section.lessons.length
         };
 
+        await prepareLessonForWrite(newLesson, { debug: true, allowDriveLookup: true });
+
         section.lessons.push(newLesson);
         
         // Increment usage count
@@ -563,6 +571,8 @@ router.post('/course/add-item', async (req, res) => {
             newLesson.content = { questions: quiz };
             newLesson.quiz = quiz;
         }
+
+        await prepareLessonForWrite(newLesson, { debug: true, allowDriveLookup: true });
 
         section.lessons.push(newLesson);
 

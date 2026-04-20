@@ -151,6 +151,7 @@ app.use(helmet.contentSecurityPolicy({
       "'self'",
       "blob:",
       "data:",
+      "https:",
       "https://res.cloudinary.com/dwxy9oepm/",
       "https://images.unsplash.com/",
       "https://i.ytimg.com",

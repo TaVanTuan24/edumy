@@ -161,10 +161,13 @@
 
     const activeSectionIndex = Number.isFinite(Number(sectionIndex)) ? Number(sectionIndex) : store.currentSectionIndex;
     store.currentSectionIndex = activeSectionIndex;
+    deps.setSectionOpen(activeSectionIndex, true);
 
     const html = store.sections.map(function(section, idx) {
       const items = Array.isArray(section.items) ? section.items : [];
-      const isOpen = idx === store.currentSectionIndex;
+      const isOpen = deps.isSectionOpen(idx);
+      const bodyId = 'learning-section-body-' + idx;
+      const headerId = 'learning-section-header-' + idx;
 
       const lessonsHtml = items.length
         ? items.map(function(item) {
@@ -186,11 +189,11 @@
 
       return '' +
         '<section class="learning-section' + (isOpen ? ' open' : '') + '" data-section-index="' + idx + '">' +
-          '<button class="section-header" type="button" data-section-index="' + idx + '">' +
+          '<button class="section-header" id="' + headerId + '" type="button" data-section-index="' + idx + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '" aria-controls="' + bodyId + '">' +
             '<span>' + deps.escapeHtml(section.title || ('Section ' + (idx + 1))) + '</span>' +
             '<span class="section-count">' + items.length + '</span>' +
           '</button>' +
-          '<div class="section-body">' +
+          '<div class="section-body" id="' + bodyId + '" role="region" aria-labelledby="' + headerId + '">' +
             '<ul class="lesson-list">' + lessonsHtml + '</ul>' +
           '</div>' +
         '</section>';
@@ -206,7 +209,11 @@
 
     document.querySelectorAll('.learning-section').forEach(function(sectionEl) {
       const index = Number(sectionEl.dataset.sectionIndex);
-      sectionEl.classList.toggle('open', index === store.currentSectionIndex);
+      sectionEl.classList.toggle('open', deps.isSectionOpen(index));
+      const header = sectionEl.querySelector('.section-header');
+      if (header) {
+        header.setAttribute('aria-expanded', deps.isSectionOpen(index) ? 'true' : 'false');
+      }
     });
 
     document.querySelectorAll('.lesson-item').forEach(function(el) {
@@ -214,7 +221,15 @@
       if (currentId && String(el.dataset.id) === currentId) {
         el.classList.add('active');
         const parentSection = el.closest('.learning-section');
-        if (parentSection) parentSection.classList.add('open');
+        if (parentSection) {
+          parentSection.classList.add('open');
+          const parentIndex = Number(parentSection.dataset.sectionIndex);
+          deps.setSectionOpen(parentIndex, true);
+          const header = parentSection.querySelector('.section-header');
+          if (header) {
+            header.setAttribute('aria-expanded', 'true');
+          }
+        }
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     });
@@ -225,6 +240,7 @@
     const store = deps.store;
 
     store.currentSectionIndex = Number(sectionIndex) || 0;
+    deps.setSectionOpen(store.currentSectionIndex, true);
     localStorage.setItem(deps.storageKey(deps.STORAGE_SUFFIX.lastSection), String(store.currentSectionIndex));
 
     renderLessonList(store.currentSectionIndex);
@@ -242,24 +258,21 @@
     if (!Number.isFinite(idx) || !store.sections[idx]) return;
 
     const sectionEl = document.querySelector('.learning-section[data-section-index="' + idx + '"]');
-    if (!sectionEl) {
-      showSection(idx);
-      return;
-    }
-
-    const willOpen = !sectionEl.classList.contains('open');
-    document.querySelectorAll('.learning-section').forEach(function(el) {
-      el.classList.remove('open');
-    });
-
-    if (willOpen) {
-      sectionEl.classList.add('open');
-      showSection(idx);
-      return;
-    }
-
     store.currentSectionIndex = idx;
     localStorage.setItem(deps.storageKey(deps.STORAGE_SUFFIX.lastSection), String(idx));
+    const isOpen = deps.toggleSectionOpen(idx);
+
+    if (!sectionEl) {
+      renderLessonList(idx);
+      updateSidebarUI();
+      return;
+    }
+
+    sectionEl.classList.toggle('open', isOpen);
+    const header = sectionEl.querySelector('.section-header');
+    if (header) {
+      header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
   }
 
   function renderContent() {

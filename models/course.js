@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 const review = require('./review');
 const { syncCourseContent } = require('../utils/courseContentAdapter');
+const { formatDuration, parseDurationToSeconds } = require('../utils/duration');
+const { extractDriveFileMeta } = require('../utils/driveVideoMetadata');
+const { syncCourseAggregateFields } = require('../utils/courseStats');
 const Schema = mongoose.Schema;
 
 const opts = { toJSON: { virtuals: true }, timestamps: true }
@@ -140,6 +143,19 @@ const lessonSchema = new Schema({
         type: Schema.Types.Mixed,
         default: null
     },
+    durationSeconds: {
+        type: Number,
+        min: 0,
+        default: null
+    },
+    durationFormatted: {
+        type: String,
+        default: ''
+    },
+    durationSyncPending: {
+        type: Boolean,
+        default: false
+    },
     aiGenerated: {
         type: Boolean,
         default: false
@@ -205,6 +221,30 @@ const CourseSchema = new Schema({
             },
             message: 'Course sections must be an array'
         }
+    },
+    totalDurationSeconds: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+    totalDurationFormatted: {
+        type: String,
+        default: ''
+    },
+    totalVideoCount: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+    totalLessonCount: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+    totalSectionCount: {
+        type: Number,
+        min: 0,
+        default: 0
     },
     topic: {
         type: String,
@@ -319,13 +359,43 @@ CourseSchema.pre('validate', function(next) {
                     const fromContent = Array.isArray(lesson.content.interactiveQuizzes) ? lesson.content.interactiveQuizzes : []
                     const fromRoot = Array.isArray(lesson.interactiveQuizzes) ? lesson.interactiveQuizzes : []
                     const normalizedInteractive = normalizeInteractiveQuizzes(fromContent.length ? fromContent : fromRoot)
+                    const parsedDurationSeconds = parseDurationToSeconds(
+                        lesson.durationSeconds != null
+                            ? lesson.durationSeconds
+                            : (lesson.duration != null ? lesson.duration : lesson.content.duration)
+                    )
 
                     lesson.interactiveQuizzes = normalizedInteractive
                     lesson.content.interactiveQuizzes = normalizedInteractive
+                    lesson.durationSeconds = Number.isFinite(parsedDurationSeconds) && parsedDurationSeconds > 0
+                        ? parsedDurationSeconds
+                        : null
+                    lesson.durationFormatted = lesson.durationSeconds
+                        ? formatDuration(lesson.durationSeconds)
+                        : ''
+                    lesson.durationSyncPending = !lesson.durationSeconds
+                        && Boolean(extractDriveFileMeta(String(lesson.videoUrl || '').trim()))
+
+                    if (!lesson.content || typeof lesson.content !== 'object' || Array.isArray(lesson.content)) {
+                        lesson.content = {}
+                    }
+
+                    lesson.content.durationSeconds = lesson.durationSeconds
+                    lesson.content.durationFormatted = lesson.durationFormatted
+                    lesson.content.durationSyncPending = lesson.durationSyncPending
+                } else {
+                    lesson.durationSeconds = null
+                    lesson.durationFormatted = ''
+                    lesson.durationSyncPending = false
+                    lesson.content.durationSeconds = null
+                    lesson.content.durationFormatted = ''
+                    lesson.content.durationSyncPending = false
                 }
             })
         })
     }
+
+    syncCourseAggregateFields(this)
 
     next()
 })

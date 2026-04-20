@@ -1,49 +1,83 @@
-<% layout('/layouts/boilerplate')%>
-    <div class="row">
-        <h1 class="text-center">New Course</h1>
-        <div class="col-6 offset-3">
-            <form action="/courses" method="POST" novalidate class="validated-form" enctype="multipart/form-data">
-                <div class="mb-3">
-                    <label class="form-label" for="title">Title</label>
-                    <input class="form-control" type="text" id="title" name="course[title]" required>
-                    <div class="valid-feedback">
-                        Valid!
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="driveLink">Drive Link</label>
-                    <input class="form-control" type="text" id="driveLink" name="course[driveLink]" required>
-                    <div class="valid-feedback">
-                        Valid!
-                    </div>
-                </div>
-                <label for="topic">Chủ đề:</label>
-                <select name="course[topic]" class="form-control" required>
-                    <option>Software</option>
-                    <option>Hardware</option>
-                    <option>AI</option>
-                    <option>Network</option>
-                    <option>Language</option>
-                    <option>Security</option>
-                    <option>Other</option>
-                </select>
+<% layout('/layouts/boilerplate') %>
 
-                <div class="mb-3">
-                    <label for="formFile" class="form-label">Add Image</label>
-                    <input class="form-control" type="file" id="formFile" name="image" multiple>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="description">Description</label>
-                    <textarea class="form-control" type="text" id="description" name="course[description]"
-                        required></textarea>
-                    <div class="valid-feedback">
-                        Valid!
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <button href="/courses" class="btn btn-info">Create Course</button>
-                </div>
-            </form>
+<%
+  const courseForm = formData || {};
+  const thumbnailMode = courseForm.thumbnailMode || 'upload';
+  const imageUrl = courseForm.imageUrl || '';
+%>
+
+<div class="course-form-page py-4">
+  <div class="row g-4 justify-content-center">
+    <div class="col-12 col-xl-8">
+      <div class="card border-0 shadow-sm course-form-card">
+        <div class="card-body p-4 p-lg-5">
+          <div class="mb-4">
+            <h1 class="h3 mb-2">New Course</h1>
+            <p class="text-muted mb-0">Create a course and choose a thumbnail from your device or an external image URL.</p>
+          </div>
+
+          <form action="/courses" method="POST" novalidate class="validated-form" enctype="multipart/form-data">
+            <div class="mb-3">
+              <label class="form-label" for="title">Title</label>
+              <input
+                class="form-control"
+                type="text"
+                id="title"
+                name="course[title]"
+                value="<%= courseForm.title || '' %>"
+                required
+              >
+              <div class="valid-feedback">Valid!</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="driveLink">Drive Link</label>
+              <input
+                class="form-control"
+                type="text"
+                id="driveLink"
+                name="course[driveLink]"
+                value="<%= courseForm.driveLink || '' %>"
+                required
+              >
+              <div class="valid-feedback">Valid!</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="topic">Chủ đề</label>
+              <select name="course[topic]" id="topic" class="form-control" required>
+                <% ['Software', 'Hardware', 'AI', 'Network', 'Language', 'Security', 'Other'].forEach((topic) => { %>
+                  <option value="<%= topic %>" <%= courseForm.topic === topic ? 'selected' : '' %>><%= topic %></option>
+                <% }) %>
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <%- include('../partials/courseThumbnailField', {
+                thumbnailMode,
+                imageUrl,
+                thumbnailError
+              }) %>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="description">Description</label>
+              <textarea
+                class="form-control"
+                id="description"
+                name="course[description]"
+                required
+              ><%= courseForm.description || '' %></textarea>
+              <div class="valid-feedback">Valid!</div>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-info" type="submit">Create Course</button>
+              <a href="/courses" class="btn btn-outline-secondary">Back to Courses</a>
+            </div>
+          </form>
         </div>
-        </h1>
+      </div>
     </div>
+  </div>
+</div>

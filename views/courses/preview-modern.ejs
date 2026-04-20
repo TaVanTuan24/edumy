@@ -4,7 +4,11 @@
 
 <%
   const sections = Array.isArray(course.sections) ? course.sections : [];
-  const totalLessons = sections.reduce((sum, section) => sum + ((section.lessons || []).length), 0);
+  const stats = previewStats || {};
+  const totalLessons = Number(stats.totalLessonCount || 0);
+  const totalSections = Number(stats.totalSectionCount || sections.length || 0);
+  const totalVideos = Number(stats.totalVideoCount || 0);
+  const totalDurationLabel = stats.formattedDuration || 'Duration unavailable';
   const totalReviews = Array.isArray(course.reviews) ? course.reviews.length : 0;
   const averageRating = totalReviews
     ? (course.reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / totalReviews).toFixed(1)
@@ -28,12 +32,31 @@
           <p class="show-course-description"><%= generatedDescription || course.description %></p>
 
           <div class="show-course-pills">
-            <span class="show-course-pill"><%= sections.length %> sections</span>
+            <span class="show-course-pill"><%= totalSections %> sections</span>
             <span class="show-course-pill"><%= totalLessons %> lessons</span>
+            <span class="show-course-pill"><%= totalDurationLabel %></span>
             <span class="show-course-pill"><%= totalReviews %> learner reviews</span>
             <% if (averageRating) { %>
               <span class="show-course-pill">Rating <strong><%= averageRating %>/5</strong></span>
             <% } %>
+          </div>
+
+          <div class="preview-stats-grid mt-4">
+            <div class="preview-stat-card">
+              <span class="preview-stat-label">Total course duration</span>
+              <strong class="preview-stat-value"><%= totalDurationLabel %></strong>
+              <span class="preview-stat-subtext"><%= stats.hasDuration ? 'Loaded from stored course totals' : 'Duration unavailable until synced' %></span>
+            </div>
+            <div class="preview-stat-card">
+              <span class="preview-stat-label">Sections</span>
+              <strong class="preview-stat-value"><%= totalSections %></strong>
+              <span class="preview-stat-subtext">Structured learning modules</span>
+            </div>
+            <div class="preview-stat-card">
+              <span class="preview-stat-label">Video lessons</span>
+              <strong class="preview-stat-value"><%= totalVideos %></strong>
+              <span class="preview-stat-subtext"><%= totalLessons %> total lessons in preview</span>
+            </div>
           </div>
 
           <div class="mt-4 d-flex flex-wrap gap-2">
@@ -52,7 +75,7 @@
           <h3>Tóm tắt nhanh</h3>
           <div class="show-course-summary-stats">
             <div class="show-course-summary-stat">
-              <strong><%= sections.length %></strong>
+              <strong><%= totalSections %></strong>
               <span>Section trong khóa học</span>
             </div>
             <div class="show-course-summary-stat">
@@ -60,8 +83,8 @@
               <span>Bài học có thể xem trước</span>
             </div>
             <div class="show-course-summary-stat">
-              <strong><%= averageRating || 'New' %></strong>
-              <span><%= averageRating ? 'Đánh giá trung bình từ học viên' : 'Chưa có đánh giá' %></span>
+              <strong><%= totalDurationLabel %></strong>
+              <span><%= stats.hasDuration ? 'Tổng thời lượng đã được đồng bộ trước đó' : 'Thời lượng chưa khả dụng' %></span>
             </div>
           </div>
         </div>
@@ -187,8 +210,10 @@
             <div class="card-body py-3">
               <h6 class="mb-3">Highlights</h6>
               <div class="d-grid gap-2 preview-highlights-list">
-                <div class="show-course-pill justify-content-between">Sections <strong><%= sections.length %></strong></div>
+                <div class="show-course-pill justify-content-between">Sections <strong><%= totalSections %></strong></div>
+                <div class="show-course-pill justify-content-between">Duration <strong><%= totalDurationLabel %></strong></div>
                 <div class="show-course-pill justify-content-between">Lessons <strong><%= totalLessons %></strong></div>
+                <div class="show-course-pill justify-content-between">Videos <strong><%= totalVideos %></strong></div>
                 <div class="show-course-pill justify-content-between">Reviews <strong><%= totalReviews %></strong></div>
               </div>
             </div>
