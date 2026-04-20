@@ -26,7 +26,7 @@
     <div class="profile-header-copy">
       <h1 class="profile-name"><%= user.username %></h1>
       <p class="profile-email mb-1"><%= user.email %></p>
-      <p class="profile-meta mb-0">Tham gia từ <%= new Date(user.createdAt || Date.now()).toLocaleDateString('vi-VN') %></p>
+      <p class="profile-meta mb-0">Tham gia từ <%= new Date(user.createdAt || user._id.getTimestamp()).toLocaleDateString('vi-VN') %></p>
       <div class="profile-actions mt-3">
         <button
           type="button"

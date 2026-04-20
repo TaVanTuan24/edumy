@@ -121,6 +121,7 @@ const styleSrcUrls = [
   "https://stackpath.bootstrapcdn.com/",
   "https://fonts.googleapis.com/",
   "https://use.fontawesome.com/",
+  "https://cdnjs.cloudflare.com/",
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
 ];
 const connectSrcUrls = [
@@ -129,7 +130,7 @@ const connectSrcUrls = [
   "https://www.youtube.com",
   "https://www.youtube-nocookie.com"
 ];
-const fontSrcUrls = [];
+const fontSrcUrls = ["https://cdnjs.cloudflare.com/"];
 app.use(helmet.contentSecurityPolicy({
   directives: {
     upgradeInsecureRequests: null,

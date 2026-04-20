@@ -1,102 +1,129 @@
 <% layout('/layouts/boilerplate')%>
-<div class="app-content py-4 px-3">
-    <h1 class="mb-4">Course Manager</h1>
+<link rel="stylesheet" href="/stylesheets/admin.css">
 
-    <div class="accordion" id="courseAccordion">
+<div class="container-fluid py-4 px-lg-4">
+    
+    <!-- Header with Action -->
+    <div class="admin-header-row">
+        <div>
+            <h1 class="mb-1" style="font-weight: 700; color: var(--admin-text-main);">Admin Dashboard</h1>
+            <p class="mb-0 text-muted">Manage your platform courses, analytics, and content.</p>
+        </div>
+        <div>
+            <a href="/courses/new" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm">
+                <i class="fa-solid fa-plus"></i> Create Course
+            </a>
+        </div>
+    </div>
 
-        <% courses.forEach((course, courseIndex)=> { %>
+    <!-- Quick Stats -->
+    <div class="admin-stats-row">
+        <div class="admin-stat-card">
+            <h3>Total Courses</h3>
+            <div class="stat-value"><%= stats.totalCourses %></div>
+        </div>
+        <div class="admin-stat-card">
+            <h3>Registered Users</h3>
+            <div class="stat-value"><%= stats.totalUsers %></div>
+        </div>
+        <div class="admin-stat-card">
+            <h3>Total Enrollments</h3>
+            <div class="stat-value"><%= stats.totalEnrollments %></div>
+        </div>
+    </div>
 
-            <div class="accordion-item">
+    <!-- Toolbar / Search / Filter (Optional UX enhancement placeholder) -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--admin-text-main); margin: 0;">All Courses</h3>
+        <!-- You can expand this section later with a search input or dropdowns -->
+    </div>
 
-                <h2 class="accordion-header d-flex flex-column flex-md-row align-items-stretch align-items-md-center justify-content-md-between gap-2 p-3">
-
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#course<%=courseIndex%>">
-
-                        <%= course.title %>
-                    </button>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a class="btn btn-primary" href="/admin/courses/<%= course._id %>/editor">Edit</a>
-                        <a class="btn btn-sm btn-outline-primary" href="/admin/courses/<%= course._id %>/analytics">View</a>
-                    </div>
-
-
-                </h2>
-
-                <div id="course<%=courseIndex%>" class="accordion-collapse collapse" data-bs-parent="#courseAccordion">
-
-                    <div class="accordion-body">
-
-
-                        <!-- Sections -->
-
-                        <div class="accordion" id="sectionAccordion<%=courseIndex%>">
-
-                            <% (course.sections || []).forEach((section, sectionIndex)=>{ %>
-
-                                <div class="accordion-item">
-
-                                    <h2 class="accordion-header">
-
-                                        <button class="accordion-button collapsed" type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#section<%=courseIndex%><%=sectionIndex%>">
-
-                                            <%= section.title %>
-
-                                        </button>
-
-                                    </h2>
-
-                                    <div id="section<%=courseIndex%><%=sectionIndex%>"
-                                        class="accordion-collapse collapse">
-
-                                        <div class="accordion-body">
-
-
-                                            <!-- Lessons -->
-
-                                            <ul class="list-group">
-
-                                                <% (section.lessons || []).forEach((video, videoIndex)=>{ %>
-
-                                                    <li class="list-group-item">
-
-                                                        <b>
-                                                            <%= video.title %>
-                                                        </b>
-
-                                                        <br>
-
-                                                        <a href="<%= video.preview %>" target="_blank">
-
-                                                            <%= video.preview %>
-
-                                                        </a>
-
-                                                    </li>
-
-                                                    <% }) %>
-
-                                            </ul>
-
-                                        </div>
-
-                                    </div>
-
-                                </div>
-
-                                <% }) %>
-
+    <!-- Course Grid -->
+    <% if (courses && courses.length > 0) { %>
+        <div class="row g-4">
+            <% courses.forEach(course => { 
+                // Calculate lessons sum
+                let lessonCount = 0;
+                if (course.sections && course.sections.length) {
+                    course.sections.forEach(sec => {
+                        if (sec.lessons) lessonCount += sec.lessons.length;
+                    });
+                }
+                
+                // Calculate average rating locally if reviews are populated or calculate from reviewEntries (we'll just use reviewEntries if available)
+                let avgRating = 0;
+                let reviewCount = 0;
+                if (course.reviewEntries && course.reviewEntries.length > 0) {
+                    reviewCount = course.reviewEntries.length;
+                    const sum = course.reviewEntries.reduce((a, b) => a + (b.rating || 0), 0);
+                    avgRating = (sum / reviewCount).toFixed(1);
+                }
+            %>
+                <div class="col-sm-6 col-lg-4 col-xl-3">
+                    <div class="card course-card border-0">
+                        <!-- Thumbnail -->
+                        <img 
+                          src="<%= course.images && course.images.length ? course.images[0].url : '/images/default-course.jpg' %>" 
+                          alt="<%= course.title %>"
+                          class="course-thumbnail"
+                          onerror="this.onerror=null; this.src='/images/default-course.jpg';"
+                        />
+                        
+                        <div class="card-body">
+                            <!-- Badge -->
+                            <span class="course-topic-badge"><%= course.topic || 'General' %></span>
+                            
+                            <!-- Texts -->
+                            <h4 class="course-title" title="<%= course.title %>"><%= course.title %></h4>
+                            <div class="course-author"><i class="fa-solid fa-chalkboard-user"></i> <%= course.author && course.author.username ? course.author.username : 'Instructor' %></div>
+                            
+                            <!-- Stats Row -->
+                            <div class="course-stats-row align-items-center">
+                                <span title="Total Lessons"><i class="fa-solid fa-list-check"></i> <%= lessonCount %></span>
+                                <span title="Ratings" class="ms-auto" style="font-size: 0.8rem;">
+                                    <% if (avgRating > 0) {
+                                        const fullStars = Math.floor(avgRating);
+                                        const halfStar = (avgRating - fullStars) >= 0.5 ? 1 : 0;
+                                        const emptyStars = 5 - fullStars - halfStar;
+                                        for(let i=0; i<fullStars; i++) { %><i class="fa-solid fa-star text-warning"></i><% }
+                                        if (halfStar) { %><i class="fa-solid fa-star-half-stroke text-warning"></i><% }
+                                        for(let i=0; i<emptyStars; i++) { %><i class="fa-regular fa-star text-warning"></i><% }
+                                    %>
+                                        <span class="ms-1 text-muted">(<%= reviewCount %>)</span>
+                                    <% } else { %>
+                                        <span class="badge bg-secondary">New</span>
+                                    <% } %>
+                                </span>
+                            </div>
                         </div>
 
+                        <!-- Actions -->
+                        <div class="card-footer d-flex gap-2 align-items-center">
+                            <a href="/admin/courses/<%= course._id %>/editor" class="btn btn-primary flex-grow-1 p-1">
+                                <i class="fa-solid fa-pen-to-square"></i> Edit
+                            </a>
+                            <a href="/admin/courses/<%= course._id %>/analytics" class="btn btn-outline-secondary p-1" title="View Analytics">
+                                <i class="fa-solid fa-chart-line"></i> View
+                            </a>
+                            <form action="/courses/<%= course._id %>?_method=DELETE" method="POST" class="m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this course forever? This action cannot be undone.');">
+                                <button type="submit" class="btn btn-outline-danger p-1" title="Delete Course">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
                     </div>
-
                 </div>
-
-            </div>
-
             <% }) %>
-
-    </div>
+        </div>
+    <% } else { %>
+        <!-- Empty State -->
+        <div class="text-center py-5" style="background: var(--admin-card-bg); border-radius: 12px; border: 1px dashed var(--admin-border);">
+            <div style="font-size: 3rem; color: var(--admin-text-muted); margin-bottom: 1rem;">
+                <i class="fa-solid fa-box-open"></i>
+            </div>
+            <h3 style="color: var(--admin-text-main);">No courses found.</h3>
+            <p class="text-muted">You haven't created any courses yet. Start building your platform!</p>
+            <a href="/courses/new" class="btn btn-primary mt-3 px-4 py-2"><i class="fa-solid fa-plus me-2"></i> Create Your First Course</a>
+        </div>
+    <% } %>
 </div>

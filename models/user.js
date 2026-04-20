@@ -71,7 +71,7 @@ const UserSchema = new Schema({
             completedLessonsCount: { type: Number, default: 0 }
         }
     }
-});
+}, { timestamps: true });
 
 UserSchema.methods.getEnrolledCourseIdSet = function() {
     const ids = (this.enrolledCourses || []).map((entry) => {

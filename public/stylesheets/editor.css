@@ -142,7 +142,7 @@ body {
 
 .editor-layout {
     display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: minmax(350px, 1fr) 2fr;
     gap: 16px;
     min-height: calc(100vh - 100px);
     padding: 16px;

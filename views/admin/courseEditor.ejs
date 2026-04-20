@@ -105,7 +105,7 @@
                                              data-name="<%= video.title || '' %>"
                                              data-url="<%= video.preview || video.videoUrl || video.refId || '' %>"
                                              data-ref-id="<%= video.refId || '' %>">
-                                            <span class="drag-handle"><i class="fa-solid fa-grip-vertical">≡</i></span>
+                                            <span class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></span>
                                             <div class="item-icon <%= video.type %>">
                                                 <i class="fas <%= (video.type === 'video' || video.type === 'lecture') ? 'fa-play' : video.type === 'slide' ? 'fa-file-alt' : video.type === 'quiz' ? 'fa-question' : 'fa-play' %>"></i>
                                             </div>
@@ -118,6 +118,10 @@
                                                 </div>
                                             </div>
                                             <div class="item-actions">
+                                                <button class="edit-btn editor-inline-action" type="button" data-id="<%= video._id %>" data-type="<%= video.type === 'lecture' ? 'video' : video.type %>" data-section-index="<%= sIndex %>" data-lesson-index="<%= vIndex %>" title="Edit lesson">
+                                                    <i class="fa-solid fa-pen-to-square"></i>
+                                                    <span>Edit</span>
+                                                </button>
                                                 <button class="delete-item-btn editor-inline-action editor-inline-action-danger" type="button" title="Delete lesson">
                                                     <i class="fa-solid fa-trash"></i>
                                                     <span>Delete</span>
@@ -254,6 +258,34 @@
                             <i class="fas fa-trash-can me-2"></i>Delete Course
                         </button>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Section Modal -->
+    <div class="modal fade" id="addSectionModal" tabindex="-1" aria-labelledby="addSectionModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0 pb-2">
+                    <div>
+                        <h5 class="modal-title" id="addSectionModalLabel">Add New Section</h5>
+                        <p class="modal-subtitle mb-0 text-muted">Create a new module for your course curriculum.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-0">
+                    <form id="addSectionForm" novalidate>
+                        <div class="mb-3">
+                            <label for="addSectionTitle" class="form-label fw-bold">Section Title</label>
+                            <input type="text" class="form-control" id="addSectionTitle" placeholder="e.g. Chapter 1: Introduction" maxlength="150" required>
+                            <div class="invalid-feedback">Please enter a valid title.</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0 pt-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="addSectionSubmitBtn">Create Section</button>
                 </div>
             </div>
         </div>

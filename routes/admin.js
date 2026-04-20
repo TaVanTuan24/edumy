@@ -6,12 +6,14 @@ const Course = require('../models/course');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const Video = require('../models/video');
+const adminAnalyticsRoutes = require('./adminAnalytics');
 const {
     getCanonicalSections,
     syncCourseContent
 } = require('../utils/courseContentAdapter');
 
 router.use(isLoggedIn, isAdmin);
+router.use('/courses/:courseId/analytics', adminAnalyticsRoutes);
 
 async function loadEditableCourse(courseId) {
     const course = await Course.findById(courseId)
@@ -407,11 +409,26 @@ function averageQuizPercent(quizResults) {
 }
 
 router.get('/', async (req, res) => {
+    try {
+        const courses = await Course.find({}).populate('author', 'username email');
+        
+        let totalEnrollments = 0;
+        const totalCourses = courses.length;
+        const totalUsers = await User.countDocuments();
+        
+        const users = await User.find({}).select('enrolledCourseIds enrolledCourses').lean();
+        users.forEach(u => {
+            totalEnrollments += (u.enrolledCourseIds?.length || 0) + (u.enrolledCourses?.length || 0);
+        });
 
-    const courses = await Course.find({});
-
-    res.render('admin/courseManager', { courses });
-
+        res.render('admin/courseManager', { 
+            courses, 
+            stats: { totalCourses, totalUsers, totalEnrollments } 
+        });
+    } catch (err) {
+        console.error("Dashboard Load Error:", err);
+        res.status(500).send("Internal Server Error");
+    }
 });
 
 router.get('/ai/quiz', async (req, res) => {

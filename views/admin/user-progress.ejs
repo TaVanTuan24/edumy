@@ -1,34 +1,76 @@
 <% layout('/layouts/boilerplate')%>
+<link rel="stylesheet" href="/stylesheets/analytics.css">
 
-<h2 class="mb-3">User Progress</h2>
-
-<div class="card mb-3">
-  <div class="card-body">
-    <h5 class="card-title mb-1"><%= course.title %></h5>
-    <p class="text-muted mb-0">User progress details</p>
-  </div>
-</div>
-
-<div class="card mb-3">
-  <div class="card-body">
-    <h4>Progress: <%= completed %> / <%= totalLessons %></h4>
-    <div class="progress mt-2" role="progressbar" aria-valuenow="<%= completed %>" aria-valuemin="0" aria-valuemax="<%= totalLessons %>">
-      <div class="progress-bar" style="width: <%= totalLessons ? Math.round((completed / totalLessons) * 100) : 0 %>%"></div>
+<div class="analytics-container" style="max-width: 1000px;">
+    <div class="dashboard-header mb-4">
+        <div>
+            <a href="/admin/courses/<%= course._id %>/analytics" class="detail-btn" style="display:inline-block; margin-bottom: 1rem;">
+                <i class="fa-solid fa-arrow-left"></i> Back to Analytics
+            </a>
+            <h2 style="font-weight: 700; color: var(--dark);"><%= progress.user ? (progress.user.username || progress.user.email) : 'Learner' %></h2>
+            <p class="text-muted"><%= course.title %> &mdash; Individual Progress Report</p>
+        </div>
     </div>
-  </div>
-</div>
 
-<div class="card">
-  <div class="card-body">
-    <h5 class="mb-3">Quiz Scores</h5>
-    <% if (quizResults && quizResults.length) { %>
-      <ul class="list-group">
-        <% quizResults.forEach(q => { %>
-          <li class="list-group-item">Quiz <%= q.quizId %>: <%= q.score %> / <%= q.total %></li>
-        <% }) %>
-      </ul>
-    <% } else { %>
-      <p class="text-muted mb-0">No quiz results yet.</p>
-    <% } %>
-  </div>
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">Course Progress</div>
+            <div class="kpi-value"><%= percent %>%</div>
+            <div class="kpi-subtext"><%= completed %> / <%= totalLessons %> lessons completed</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Total Watch Time</div>
+            <div class="kpi-value"><%= progress.watchTime ? Math.floor((progress.watchTime / 60000) / 60) + 'h ' + Math.round((progress.watchTime / 60000) % 60) + 'm' : '0m' %></div>
+            <div class="kpi-subtext">Active lesson engagement</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Last Active</div>
+            <div class="kpi-value" style="font-size: 1.25rem;"><%= progress.lastAccessed ? new Date(progress.lastAccessed).toLocaleDateString() : 'Never' %></div>
+            <div class="kpi-subtext">Latest interaction timestamp</div>
+        </div>
+    </div>
+
+    <div class="charts-grid mt-4">
+        <div class="chart-card col-span-12">
+            <div class="chart-header">
+                <h5>Quiz Results History</h5>
+            </div>
+            <% if (quizResults && quizResults.length) { %>
+                <div style="overflow-x: auto;">
+                    <table class="learners-table" style="box-shadow: none; border: none;">
+                        <thead>
+                            <tr>
+                                <th>Quiz Name / ID</th>
+                                <th>Score</th>
+                                <th>Total</th>
+                                <th>Accuracy</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% quizResults.forEach(q => { %>
+                                <tr>
+                                    <td>
+                                        <div style="font-weight: 500; color: var(--dark)"><%= q.title %></div>
+                                        <div style="font-family: monospace; font-size: 0.75rem; color: var(--gray-500);"><%= q.quizId %></div>
+                                    </td>
+                                    <td><span style="font-weight: 600; color: var(--dark);"><%= q.score %></span></td>
+                                    <td><%= q.total %></td>
+                                    <td>
+                                        <% let acc = q.total ? Math.round((q.score/q.total)*100) : 0; %>
+                                        <span class="status-badge <%= acc >= 80 ? 'status-Completed' : (acc >= 50 ? 'status-Progress' : 'status-Started') %>">
+                                            <%= acc %>%
+                                        </span>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } else { %>
+                <div style="padding: 2rem; text-align: center; color: var(--gray-500); background: var(--gray-100); border-radius: 8px;">
+                    This learner hasn't attempted any quizzes yet.
+                </div>
+            <% } %>
+        </div>
+    </div>
 </div>

@@ -553,24 +553,60 @@
 
     // ==================== SECTION FUNCTIONS ====================
     async function addSection() {
-        const title = prompt('Section title:');
-        if (!title) return;
-
-        try {
-            const res = await fetch('/api/admin/section', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    courseId,
-                    title
-                })
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success || !data.section) throw new Error(data.error || 'Failed to add section');
-            location.reload();
-        } catch {
-            alert('Failed to add section');
+        const modalEl = document.getElementById('addSectionModal');
+        if (!modalEl || !window.bootstrap) {
+            showToast('Modal environment not loaded. Please refresh.', 'danger');
+            return;
         }
+
+        const modal = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl, { keyboard: true });
+        const form = document.getElementById('addSectionForm');
+        const input = document.getElementById('addSectionTitle');
+        const submitBtn = document.getElementById('addSectionSubmitBtn');
+
+        input.value = '';
+        input.classList.remove('is-invalid');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Create Section';
+        
+        modal.show();
+
+        const handleSubmit = async () => {
+            const title = input.value.trim();
+            if (!title) {
+                input.classList.add('is-invalid');
+                return;
+            }
+
+            input.classList.remove('is-invalid');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Creating...';
+
+            try {
+                const res = await fetch('/api/admin/section', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courseId, title })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success || !data.section) throw new Error(data.error || 'Failed to add section');
+                
+                modal.hide();
+                location.reload();
+            } catch (err) {
+                showToast(err.message || 'Failed to add section', 'danger');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Create Section';
+            }
+        };
+
+        submitBtn.onclick = handleSubmit;
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            handleSubmit();
+        };
+
+        modalEl.addEventListener('shown.bs.modal', () => input.focus(), { once: true });
     }
 
     async function editSection(sectionCtx, newTitle) {
@@ -600,7 +636,7 @@
             const titleEl = sectionCard?.querySelector('.section-title') || document.getElementById('title-' + sectionId);
             if (titleEl) titleEl.textContent = trimmedTitle;
         } catch {
-            alert('Failed to update section title');
+            showToast('Failed to update section title', 'danger');
         }
     }
 
@@ -650,7 +686,7 @@
             if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete section');
             location.reload();
         } catch {
-            alert('Failed to delete section');
+            showToast('Failed to delete section', 'danger');
         }
     }
 
@@ -669,7 +705,7 @@
                 location.reload();
             }
         } catch {
-            alert('Failed to save');
+            showToast('Failed to save', 'danger');
         }
     }
 
@@ -1086,7 +1122,7 @@
 
     function editItem(type, id, sectionIndex, lessonIndex) {
         if (sectionIndex === undefined || lessonIndex === undefined) {
-            alert('Item not found. Please reload.');
+            showToast('Item not found. Please reload.', 'warning');
             return;
         }
         
@@ -1116,7 +1152,7 @@
             });
             renderSections();
         } catch {
-            alert('Delete failed');
+            showToast('Delete failed', 'danger');
         }
     }
 
@@ -1395,12 +1431,12 @@
         const options = Array.from(document.querySelectorAll('.interactiveQuizOption')).map((input) => String(input.value || '').trim());
 
         if (!question) {
-            alert('Please enter a question for the timed quiz.');
+            showToast('Please enter a question for the timed quiz.', 'warning');
             return;
         }
 
         if (options.filter(Boolean).length < 4) {
-            alert('Please fill all 4 answer options.');
+            showToast('Please fill all 4 answer options.', 'warning');
             return;
         }
 
@@ -1547,13 +1583,13 @@
             });
             
             if (res.ok) {
-                alert('Saved successfully!');
+                showToast('Saved successfully!', 'success');
                 location.reload();
             } else {
-                alert('Failed to save');
+                showToast('Failed to save', 'danger');
             }
         } catch (err) {
-            alert('Error occurred: ' + err.message);
+            showToast('Error occurred: ' + err.message, 'danger');
         }
     }
 
@@ -1599,7 +1635,7 @@
         }
 
         if (!itemId || !itemType) {
-            alert('Invalid library item data.');
+            showToast('Invalid library item data.', 'danger');
             return;
         }
 
@@ -1628,12 +1664,12 @@
             const data = await res.json();
             if (!data.success) {
                 console.error('[CourseEditor] Failed to add library item', data);
-                alert('Failed to add item');
+                showToast('Failed to add item', 'danger');
                 return;
             }
             location.reload();
         } catch {
-            alert('Failed to add item');
+            showToast('Failed to add item', 'danger');
         }
     }
 
@@ -1859,7 +1895,7 @@
 
             const data = await res.json();
             if (!data.success) {
-                alert(data.error || 'Delete failed');
+                showToast(data.error || 'Delete failed', 'danger');
                 return;
             }
 
@@ -1867,13 +1903,13 @@
                 itemEl.remove();
             }
         } catch {
-            alert('Delete failed');
+            showToast('Delete failed', 'danger');
         }
     }
 
     // ==================== SAVE COURSE ====================
     function saveCourse() {
-        alert('Course saved!');
+        showToast('Course saved!', 'success');
     }
 
     // ==================== UTILITY ====================
@@ -1924,6 +1960,43 @@
         if (targetLesson) {
             targetLesson.classList.add('is-active');
         }
+    }
+
+
+    // UI Notification System
+    function showToast(msg, type = 'success') {
+        let container = document.getElementById('editor-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'editor-toast-container';
+            Object.assign(container.style, {
+                position: 'fixed',
+                top: '20px',
+                right: '20px',
+                zIndex: '9999',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+            });
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'alert alert-' + type + ' alert-dismissible fade show shadow-sm';
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = 
+            '<strong>' + (type === 'danger' ? 'Error: ' : type === 'warning' ? 'Warning: ' : 'Success: ') + '</strong> ' + 
+            escapeHtml(msg) + 
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+        
+        container.appendChild(toast);
+        
+        setTimeout(function() {
+            if (toast.parentNode) {
+                toast.classList.remove('show');
+                setTimeout(function() { if (toast.parentNode) toast.remove(); }, 150);
+            }
+        }, 3500);
     }
 
 })();
