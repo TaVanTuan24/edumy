@@ -85,6 +85,13 @@
           </div>
         </div>
       </div>
+      <p class="progress-note mb-0">
+        <% if (gamification.lastActivityDate) { %>
+          Last activity: <strong><%= new Date(gamification.lastActivityDate).toLocaleDateString('vi-VN', { timeZone: gamification.activityTimezone || 'UTC' }) %></strong>
+        <% } else { %>
+          Complete your first learning session to start a streak.
+        <% } %>
+      </p>
     </article>
 
     <article class="profile-card">

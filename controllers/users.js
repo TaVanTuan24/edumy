@@ -149,6 +149,7 @@ module.exports.renderProfile = async (req, res) => {
         progressByCourse[String(doc.course)] = doc;
     });
 
+    res.set('Cache-Control', 'no-store');
     res.render('users/profile', {
         user,
         gamification,
@@ -203,6 +204,7 @@ module.exports.getGamificationProfile = async (req, res) => {
 
     const gamification = buildGamificationViewModel(user);
 
+    res.set('Cache-Control', 'no-store');
     res.json({
         success: true,
         gamification

@@ -5,7 +5,7 @@ const Note = require('../models/note');
 const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const mongoose = require('mongoose');
-const { awardGamification, buildGamificationViewModel } = require('../utils/gamification');
+const { awardGamification, buildGamificationViewModel, recordLearningActivity } = require('../utils/gamification');
 const Discussion = require('../models/discussion');
 const {
   getCanonicalSections,
@@ -109,6 +109,14 @@ function getEnrolledCourseIds(user) {
   return Array.from(user.getEnrolledCourseIdSet())
     .filter((id) => mongoose.isValidObjectId(id))
     .map((id) => new mongoose.Types.ObjectId(id));
+}
+
+async function markUserLearningActivity(userId, activityDate) {
+  const user = await User.findById(userId);
+  if (!user) return null;
+
+  await recordLearningActivity(user, activityDate, { save: true });
+  return user;
 }
 
 async function markCourseSeenForUser(userId, course) {
@@ -234,6 +242,7 @@ module.exports.showCourses = async (req, res) => {
 
     const profileUser = await User.findById(req.user._id);
     if (profileUser) {
+      await recordLearningActivity(profileUser, new Date(), { save: true });
       gamification = buildGamificationViewModel(profileUser);
     }
   }
@@ -390,8 +399,10 @@ module.exports.updateProgress = async (req, res) => {
 
       await progressDoc.save();
 
+      const activityUser = await markUserLearningActivity(userId, progressDoc.lastAccessed);
+
       if (lessonJustCompleted) {
-        const user = await User.findById(userId);
+        const user = activityUser || await User.findById(userId);
         if (user) {
           await awardGamification(user, { action: 'lessonComplete' });
 
@@ -440,6 +451,7 @@ module.exports.saveQuizResult = async (req, res) => {
     progressDoc.lastAccessed = new Date();
 
     await progressDoc.save();
+    await markUserLearningActivity(userId, progressDoc.lastAccessed);
 
     res.json({ success: true });
   } catch (err) {

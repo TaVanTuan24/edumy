@@ -1,8 +1,15 @@
 const UserCourseProgress = require('../models/userCourseProgress');
 const User = require('../models/user');
 const Course = require('../models/course');
-const { awardGamification } = require('../utils/gamification');
+const { awardGamification, recordLearningActivity } = require('../utils/gamification');
 const { getCanonicalSections } = require('../utils/courseContentAdapter');
+
+async function markUserLearningActivity(userId, activityDate) {
+  const user = await User.findById(userId);
+  if (!user) return;
+
+  await recordLearningActivity(user, activityDate, { save: true });
+}
 
 function normalizeLessonTracking(doc, lessonId, lessonType) {
   if (!doc.lessonTracking) doc.lessonTracking = [];
@@ -86,6 +93,7 @@ module.exports.trackEvent = async (req, res) => {
 
     progressDoc.lastAccessed = new Date();
     await progressDoc.save();
+    await markUserLearningActivity(req.user._id, progressDoc.lastAccessed);
 
     res.json({ success: true });
   } catch (err) {
@@ -111,6 +119,7 @@ module.exports.trackWatchTime = async (req, res) => {
     progressDoc.lastAccessed = new Date();
 
     await progressDoc.save();
+    await markUserLearningActivity(req.user._id, progressDoc.lastAccessed);
     res.json({ success: true });
   } catch (err) {
     console.error('[Track WatchTime Error]', err);
@@ -135,6 +144,7 @@ module.exports.trackSlide = async (req, res) => {
 
     progressDoc.lastAccessed = new Date();
     await progressDoc.save();
+    await markUserLearningActivity(req.user._id, progressDoc.lastAccessed);
 
     res.json({ success: true });
   } catch (err) {
@@ -182,6 +192,8 @@ module.exports.trackQuiz = async (req, res) => {
 
     const user = await User.findById(req.user._id);
     if (user) {
+      await recordLearningActivity(user, progressDoc.lastAccessed, { save: true });
+
       const isHighScoreFirstTime = previousPercent < 80 && percent >= 80;
       if (!hadPreviousResult || isHighScoreFirstTime) {
         await awardGamification(user, {

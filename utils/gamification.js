@@ -1,4 +1,11 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
+const APP_TIMEZONE = process.env.APP_TIMEZONE || process.env.TZ || 'UTC';
+const activityDayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: APP_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
 
 const ACTION_XP = {
   lessonComplete: 120,
@@ -158,9 +165,119 @@ const BADGES = [
   }
 ];
 
-function startOfUtcDay(dateValue) {
-  const date = dateValue ? new Date(dateValue) : new Date();
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+function getValidDate(dateValue) {
+  const fallback = new Date();
+  if (!dateValue) return fallback;
+
+  const date = new Date(dateValue);
+  return Number.isNaN(date.getTime()) ? fallback : date;
+}
+
+function getActivityDayParts(dateValue) {
+  const date = getValidDate(dateValue);
+  const parts = activityDayFormatter.formatToParts(date);
+
+  return parts.reduce((acc, part) => {
+    if (part.type === 'year' || part.type === 'month' || part.type === 'day') {
+      acc[part.type] = Number(part.value);
+    }
+    return acc;
+  }, {});
+}
+
+function getActivityDay(dateValue) {
+  const parts = getActivityDayParts(dateValue);
+  const year = Number(parts.year || 0);
+  const month = Number(parts.month || 1);
+  const day = Number(parts.day || 1);
+  const utcTime = Date.UTC(year, month - 1, day);
+
+  return {
+    key: `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    index: Math.floor(utcTime / DAY_MS),
+    date: new Date(utcTime)
+  };
+}
+
+function getDayDifference(leftDate, rightDate) {
+  return getActivityDay(leftDate).index - getActivityDay(rightDate).index;
+}
+
+function getDailyStreakXp(streakState) {
+  if (!streakState || !streakState.isNewActivityDay) return 0;
+  if (Number(streakState.currentStreak || 0) <= 1) return 10;
+
+  return Math.min(20 + (Number(streakState.currentStreak || 0) * 5), 120);
+}
+
+function recordLearningActivity(user, activityDate, options = {}) {
+  ensureGamificationState(user);
+
+  const save = Boolean(options.save);
+  const today = getActivityDay(activityDate);
+  const hasLastActivity = Boolean(user.gamification.lastActivityDate);
+  const previous = hasLastActivity ? getActivityDay(user.gamification.lastActivityDate) : null;
+  const previousStoredTime = hasLastActivity ? getValidDate(user.gamification.lastActivityDate).getTime() : null;
+  const needsCanonicalDate = previous ? previousStoredTime !== previous.date.getTime() : false;
+
+  let isNewActivityDay = false;
+
+  if (!previous) {
+    user.gamification.currentStreak = 1;
+    isNewActivityDay = true;
+  } else {
+    const diffDays = today.index - previous.index;
+
+    if (diffDays === 1) {
+      user.gamification.currentStreak = Math.max(1, Number(user.gamification.currentStreak || 0)) + 1;
+      isNewActivityDay = true;
+    } else if (diffDays > 1) {
+      user.gamification.currentStreak = 1;
+      isNewActivityDay = true;
+    }
+  }
+
+  if (isNewActivityDay || needsCanonicalDate) {
+    user.gamification.lastActivityDate = today.date;
+  }
+
+  if (isNewActivityDay) {
+    user.gamification.longestStreak = Math.max(
+      Number(user.gamification.longestStreak || 0),
+      Number(user.gamification.currentStreak || 0)
+    );
+  }
+
+  if (save && (isNewActivityDay || needsCanonicalDate)) {
+    return user.save().then(() => ({
+      isNewActivityDay,
+      currentStreak: Number(user.gamification.currentStreak || 0),
+      longestStreak: Number(user.gamification.longestStreak || 0),
+      lastActivityDate: user.gamification.lastActivityDate
+    }));
+  }
+
+  return {
+    isNewActivityDay,
+    currentStreak: Number(user.gamification.currentStreak || 0),
+    longestStreak: Number(user.gamification.longestStreak || 0),
+    lastActivityDate: user.gamification.lastActivityDate
+  };
+}
+
+function getCurrentStreakValue(user, referenceDate) {
+  ensureGamificationState(user);
+
+  if (!user.gamification.lastActivityDate) {
+    return 0;
+  }
+
+  const diffDays = getDayDifference(referenceDate || new Date(), user.gamification.lastActivityDate);
+  if (diffDays > 1) {
+    return 0;
+  }
+
+  return Number(user.gamification.currentStreak || 0);
 }
 
 function getLevelInfo(totalXP) {
@@ -179,40 +296,6 @@ function getLevelInfo(totalXP) {
     xpToNextLevel: next ? Math.max(0, next.minXp - xp) : 0,
     progressPercent
   };
-}
-
-function applyDailyStreak(user, activityDate) {
-  const today = startOfUtcDay(activityDate);
-  const last = user.gamification.lastActivityDate ? startOfUtcDay(user.gamification.lastActivityDate) : null;
-
-  let streakXp = 0;
-
-  if (!last) {
-    user.gamification.currentStreak = 1;
-    streakXp = 10;
-  } else {
-    const diffDays = Math.floor((today.getTime() - last.getTime()) / DAY_MS);
-
-    if (diffDays <= 0) {
-      return 0;
-    }
-
-    if (diffDays === 1) {
-      user.gamification.currentStreak = Number(user.gamification.currentStreak || 0) + 1;
-      streakXp = Math.min(20 + (user.gamification.currentStreak * 5), 120);
-    } else {
-      user.gamification.currentStreak = 1;
-      streakXp = 10;
-    }
-  }
-
-  user.gamification.lastActivityDate = today;
-  user.gamification.longestStreak = Math.max(
-    Number(user.gamification.longestStreak || 0),
-    Number(user.gamification.currentStreak || 0)
-  );
-
-  return streakXp;
 }
 
 function ensureGamificationState(user) {
@@ -307,7 +390,8 @@ async function awardGamification(user, options = {}) {
   if (action === 'aiSlideGenerate') baseXp = ACTION_XP.aiSlideGenerate;
   if (action === 'quizResult') baseXp = getQuizXp(Number(meta.percent || 0));
 
-  const streakXp = applyDailyStreak(user, activityDate);
+  const streakState = recordLearningActivity(user, activityDate);
+  const streakXp = getDailyStreakXp(streakState);
   applyActionStats(user, action, meta);
 
   const gainedXp = Math.max(0, baseXp + streakXp);
@@ -333,12 +417,15 @@ function buildGamificationViewModel(user) {
   ensureGamificationState(user);
   const levelInfo = getLevelInfo(user.gamification.totalXP);
   const earnedIds = new Set((user.gamification.earnedBadges || []).map((badge) => badge.id));
+  const displayedCurrentStreak = getCurrentStreakValue(user, new Date());
 
   return {
     totalXP: Number(user.gamification.totalXP || 0),
     currentLevel: Number(user.gamification.currentLevel || 1),
-    currentStreak: Number(user.gamification.currentStreak || 0),
+    currentStreak: displayedCurrentStreak,
     longestStreak: Number(user.gamification.longestStreak || 0),
+    lastActivityDate: user.gamification.lastActivityDate || null,
+    activityTimezone: APP_TIMEZONE,
     completedLessonsCount: Number(user.gamification.stats.completedLessonsCount || user.gamification.stats.lessonsCompleted || 0),
     levelProgress: levelInfo,
     earnedBadges: (user.gamification.earnedBadges || []).sort((a, b) => new Date(a.earnedAt) - new Date(b.earnedAt)),
@@ -366,5 +453,7 @@ module.exports = {
   LEVELS,
   getLevelInfo,
   buildGamificationViewModel,
-  awardGamification
+  awardGamification,
+  recordLearningActivity,
+  getCurrentStreakValue
 };
