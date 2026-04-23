@@ -11,6 +11,7 @@
     const messages = document.getElementById('chatMessages');
     const typing = document.getElementById('chatTyping');
     const status = document.getElementById('aiStatus');
+    const modelSelect = document.getElementById('courseAiModel');
 
     const courseId = popup.dataset.courseId || '';
 
@@ -28,29 +29,30 @@
     }
 
     sendBtn.addEventListener('click', function() {
-      sendMessage(courseId, input, messages, typing, status, sendBtn);
+      sendMessage(courseId, input, messages, typing, status, sendBtn, modelSelect);
     });
 
     input.addEventListener('keydown', function(event) {
       if (event.key === 'Enter') {
         event.preventDefault();
-        sendMessage(courseId, input, messages, typing, status, sendBtn);
+        sendMessage(courseId, input, messages, typing, status, sendBtn, modelSelect);
       }
     });
 
     document.querySelectorAll('[data-ai-quick]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         input.value = btn.dataset.aiQuick || '';
-        sendMessage(courseId, input, messages, typing, status, sendBtn);
+        sendMessage(courseId, input, messages, typing, status, sendBtn, modelSelect);
       });
     });
 
     updateStatusContext(status);
   }
 
-  function sendMessage(courseId, input, messages, typing, status, sendBtn) {
+  function sendMessage(courseId, input, messages, typing, status, sendBtn, modelSelect) {
     const message = String(input.value || '').trim();
     if (!message) return;
+    const model = modelSelect && modelSelect.value ? modelSelect.value : 'llama3.2';
 
     addMessage(messages, 'user', message);
     input.value = '';
@@ -62,17 +64,17 @@
     fetch('/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ courseId: courseId, question: message, context: context })
+      body: JSON.stringify({ courseId: courseId, question: message, context: context, model: model })
     })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         const answer = data && (data.answer || data.reply || data.error) ? (data.answer || data.reply || data.error) : 'Không có phản hồi.';
-        addMessage(messages, 'ai', answer);
+        addMessage(messages, 'ai', answer, data && data.model ? data.model : model);
         refreshGamificationWidget();
       })
       .catch(function(err) {
         console.error('[AI Chat Error]', err);
-        addMessage(messages, 'ai', 'Không thể kết nối AI lúc này.');
+        addMessage(messages, 'ai', 'Không thể kết nối AI lúc này.', model);
       })
       .finally(function() {
         setLoading(false, typing, status, sendBtn);
@@ -80,10 +82,18 @@
       });
   }
 
-  function addMessage(messages, role, text) {
+  function addMessage(messages, role, text, model) {
     const div = document.createElement('div');
     div.className = 'ai-msg ' + role;
-    div.textContent = text;
+    if (role === 'ai' && model) {
+      const meta = document.createElement('span');
+      meta.className = 'ai-msg-model';
+      meta.textContent = model === 'grok' ? 'Grok' : 'llama3.2';
+      div.appendChild(meta);
+      div.appendChild(document.createTextNode(text));
+    } else {
+      div.textContent = text;
+    }
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
   }

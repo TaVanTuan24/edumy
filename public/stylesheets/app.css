@@ -590,6 +590,22 @@ body {
     color: #475569;
 }
 
+.ai-chat-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ai-chat-model-select {
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 8px;
+}
+
 .ai-status {
     font-size: 12px;
     font-weight: 600;
@@ -642,6 +658,18 @@ body {
     color: #111827;
     border: 1px solid #e5e7eb;
     justify-self: start;
+}
+
+.ai-msg-model {
+    display: block;
+    width: fit-content;
+    margin-bottom: 5px;
+    border-radius: 999px;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 7px;
 }
 
 .ai-chat-input {

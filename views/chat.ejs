@@ -1,1099 +1,132 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>AI Chat - EduMy</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        /* CSS Variables for Dark Mode */
-        :root {
-            --bg-primary: #343541;
-            --bg-secondary: #202123;
-            --bg-tertiary: #40414f;
-            --bg-user-message: #0b93f6;
-            --bg-ai-message: #444654;
-            --text-primary: #ececf1;
-            --text-secondary: #acacbe;
-            --border-color: #565869;
-            --accent-color: #19c37d;
-            --accent-hover: #1db954;
-            --danger-color: #ef4444;
-            --hover-bg: #2a2b32;
-        }
-
-        /* Reset & Base */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Söhne', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            height: 100dvh;
-            overflow: hidden;
-        }
-
-        /* Main Layout */
-        .app-container {
-            display: flex;
-            min-height: 100vh;
-            height: 100dvh;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 280px;
-            background: var(--bg-secondary);
-            display: flex;
-            flex-direction: column;
-            border-right: 1px solid var(--border-color);
-            transition: transform 0.3s ease;
-        }
-
-        .sidebar-header {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .new-chat-btn {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            width: 100%;
-            padding: 14px 16px;
-            background: transparent;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .new-chat-btn:hover {
-            background: var(--hover-bg);
-            border-color: var(--text-secondary);
-        }
-
-        /* Chat List */
-        .chat-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-        }
-
-        .chat-list::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .chat-list::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .chat-list::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 3px;
-        }
-
-        .chat-list-header {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 8px 12px;
-            margin-bottom: 4px;
-        }
-
-        .chat-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 14px;
-            margin: 2px 0;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            group: chat-item;
-        }
-
-        .chat-item:hover {
-            background: var(--hover-bg);
-        }
-
-        .chat-item.active {
-            background: var(--bg-tertiary);
-        }
-
-        .chat-item-title {
-            flex: 1;
-            font-size: 14px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: var(--text-primary);
-        }
-
-        .chat-item-actions {
-            display: flex;
-            gap: 4px;
-            opacity: 0;
-            transition: opacity 0.15s ease;
-        }
-
-        .chat-item:hover .chat-item-actions {
-            opacity: 1;
-        }
-
-        .chat-action-btn {
-            padding: 6px;
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            border-radius: 4px;
-            transition: all 0.15s ease;
-        }
-
-        .chat-action-btn:hover {
-            background: var(--bg-primary);
-            color: var(--danger-color);
-        }
-
-        /* Main Chat Area */
-        .main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: var(--bg-primary);
-            position: relative;
-        }
-
-        .main-header {
-            display: none;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--bg-secondary);
-        }
-
-        .mobile-menu-btn {
-            display: none;
-            width: 42px;
-            height: 42px;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            background: transparent;
-            color: var(--text-primary);
-            cursor: pointer;
-        }
-
-        .main-header-title {
-            min-width: 0;
-        }
-
-        .main-header-title strong {
-            display: block;
-            font-size: 14px;
-        }
-
-        .main-header-title span {
-            display: block;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        /* Messages Container */
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 0;
-            scroll-behavior: smooth;
-        }
-
-        .messages::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .messages::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .messages::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-
-        .messages::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-
-        /* Message Styles */
-        .message {
-            display: flex;
-            padding: 24px 0;
-            border-bottom: 1px solid transparent;
-        }
-
-        .message:hover {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .message-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            flex-shrink: 0;
-            margin: 0 20px;
-        }
-
-        .user .message-icon {
-            background: var(--bg-user-message);
-            color: white;
-        }
-
-        .ai .message-icon {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .message-content {
-            flex: 1;
-            max-width: 850px;
-            padding-right: 40px;
-        }
-
-        .message-text {
-            font-size: 16px;
-            line-height: 1.7;
-            color: var(--text-primary);
-        }
-
-        .message-text p {
-            margin-bottom: 16px;
-        }
-
-        .message-text p:last-child {
-            margin-bottom: 0;
-        }
-
-        .message-text code {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Söhne Mono', 'Fira Code', monospace;
-            font-size: 14px;
-        }
-
-        .message-text pre {
-            background: #1e1e1e;
-            border-radius: 8px;
-            padding: 16px;
-            overflow-x: auto;
-            margin: 16px 0;
-        }
-
-        .message-text pre code {
-            background: transparent;
-            padding: 0;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        .message-text ul, .message-text ol {
-            margin: 16px 0;
-            padding-left: 24px;
-        }
-
-        .message-text li {
-            margin: 8px 0;
-        }
-
-        .message-text a {
-            color: #65a3ff;
-            text-decoration: none;
-        }
-
-        .message-text a:hover {
-            text-decoration: underline;
-        }
-
-        .message-text h1, .message-text h2, .message-text h3 {
-            margin: 24px 0 12px;
-            font-weight: 600;
-        }
-
-        .message-text blockquote {
-            border-left: 3px solid var(--border-color);
-            padding-left: 16px;
-            margin: 16px 0;
-            color: var(--text-secondary);
-        }
-
-        /* Input Area */
-        .input-container {
-            padding: 20px 24px 24px;
-            background: var(--bg-primary);
-        }
-
-        .input-wrapper {
-            position: relative;
-            max-width: 850px;
-            margin: 0 auto;
-        }
-
-        .input-box {
-            width: 100%;
-            padding: 16px 50px 16px 20px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            color: var(--text-primary);
-            font-size: 16px;
-            font-family: inherit;
-            resize: none;
-            min-height: 56px;
-            max-height: 200px;
-            outline: none;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .input-box:focus {
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 2px rgba(25, 195, 125, 0.1);
-        }
-
-        .input-box::placeholder {
-            color: var(--text-secondary);
-        }
-
-        .send-btn {
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
-            width: 36px;
-            height: 36px;
-            background: var(--accent-color);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-        }
-
-        .send-btn:hover:not(:disabled) {
-            background: var(--accent-hover);
-            transform: scale(1.05);
-        }
-
-        .send-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .input-shortcuts {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 12px;
-            flex-wrap: wrap;
-        }
-
-        .shortcut {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            background: var(--bg-secondary);
-            border-radius: 6px;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .shortcut kbd {
-            background: var(--bg-tertiary);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: inherit;
-        }
-
-        /* Loading State */
-        .loading {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-            width: fit-content;
-            margin: 8px 0;
-        }
-
-        .loading-dots {
-            display: flex;
-            gap: 4px;
-        }
-
-        .loading-dots span {
-            width: 6px;
-            height: 6px;
-            background: var(--accent-color);
-            border-radius: 50%;
-            animation: bounce 1.4s infinite ease-in-out;
-        }
-
-        .loading-dots span:nth-child(1) {
-            animation-delay: 0s;
-        }
-
-        .loading-dots span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .loading-dots span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes bounce {
-            0%, 80%, 100% {
-                transform: scale(0.6);
-                opacity: 0.5;
-            }
-            40% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        /* Empty State */
-        .empty-state {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-secondary);
-            padding: 40px;
-        }
-
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 24px;
-            opacity: 0.5;
-        }
-
-        .empty-state h2 {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--text-primary);
-        }
-
-        .empty-state p {
-            font-size: 16px;
-            max-width: 400px;
-            text-align: center;
-            line-height: 1.5;
-        }
-
-        /* Error Toast */
-        .error-toast {
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--danger-color);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 1000;
-            animation: slideUp 0.3s ease;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-        }
-
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                z-index: 100;
-                transform: translateX(-100%);
-                width: min(82vw, 320px);
-            }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .sidebar-overlay {
-                display: none;
-                position: fixed;
-                inset: 0;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 99;
-            }
-
-            .sidebar-overlay.open {
-                display: block;
-            }
-
-            .mobile-menu-btn {
-                display: flex;
-            }
-
-             .main-header {
-                display: flex;
-            }
-
-            .message {
-                padding: 16px 0;
-            }
-
-            .message-icon {
-                width: 32px;
-                height: 32px;
-                margin: 0 12px;
-                font-size: 14px;
-            }
-
-            .message-content {
-                padding-right: 16px;
-            }
-
-            .input-container {
-                padding: 12px 16px 16px;
-            }
-
-            .chat-item-actions {
-                opacity: 1;
-            }
-
-            .welcome-screen {
-                padding: 24px 18px;
-            }
-
-            .welcome-title {
-                font-size: 28px;
-            }
-
-            .suggestions {
-                grid-template-columns: 1fr;
-                margin-top: 28px;
-            }
-        }
-
-        /* Fade Animation */
-        .fade-in {
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Welcome Screen */
-        .welcome-screen {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-        }
-
-        .welcome-logo {
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-            color: white;
-            margin-bottom: 24px;
-            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
-        }
-
-        .welcome-title {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .welcome-subtitle {
-            font-size: 16px;
-            color: var(--text-secondary);
-            max-width: 500px;
-            text-align: center;
-            line-height: 1.6;
-        }
-
-        .suggestions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 12px;
-            margin-top: 40px;
-            max-width: 800px;
-            width: 100%;
-        }
-
-        .suggestion-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .suggestion-card:hover {
-            background: var(--hover-bg);
-            border-color: var(--accent-color);
-            transform: translateY(-2px);
-        }
-
-        .suggestion-card h4 {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: var(--text-primary);
-        }
-
-        .suggestion-card p {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-    </style>
-</head>
-
-<body>
-    <div class="app-container">
-        <!-- Sidebar Overlay (Mobile) -->
-        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-
-        <!-- Sidebar -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <button class="new-chat-btn" onclick="newChat()">
-                    <i class="fas fa-plus"></i>
-                    <span>New Chat</span>
+<% layout('/layouts/boilerplate')%>
+<link rel="stylesheet" href="/stylesheets/ai-chat.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+<section
+    class="ai-chat-page"
+    data-default-model="<%= defaultAiModel || 'llama3.2' %>"
+>
+    <aside class="ai-sidebar" id="aiSidebar">
+        <div class="ai-sidebar-brand">
+            <div>
+                <span class="ai-eyebrow">EduMy AI</span>
+                <h1>Learning Copilot</h1>
+            </div>
+            <button class="ai-icon-btn ai-mobile-close" id="closeSidebarBtn" type="button" aria-label="Close history">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <button class="ai-new-chat" id="newChatBtn" type="button">
+            <i class="fa-solid fa-plus"></i>
+            New conversation
+        </button>
+
+        <div class="ai-history-head">
+            <span>Recent chats</span>
+            <small id="chatCountLabel">0</small>
+        </div>
+        <div class="ai-history-list" id="chatList">
+            <div class="ai-history-empty">Loading conversations...</div>
+        </div>
+    </aside>
+
+    <div class="ai-sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <main class="ai-workspace">
+        <header class="ai-topbar">
+            <div class="ai-topbar-left">
+                <button class="ai-icon-btn ai-menu-btn" id="openSidebarBtn" type="button" aria-label="Open history">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div>
+                    <h2 id="currentChatTitle">New conversation</h2>
+                    <span class="ai-chat-subtitle">
+                        <span id="headerModelLabel">llama3.2</span>
+                        <span>Ask, refine, and keep the thread moving.</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="ai-topbar-actions">
+                <label class="ai-model-picker" for="modelSelect">
+                    <span>Model</span>
+                    <select id="modelSelect" aria-label="Choose AI model">
+                        <% (aiModels || []).forEach((model) => { %>
+                            <option
+                                value="<%= model.id %>"
+                                <%= model.id === defaultAiModel ? 'selected' : '' %>
+                                <%= model.enabled ? '' : 'disabled' %>
+                            >
+                                <%= model.label %><%= model.enabled ? '' : ' (disabled)' %>
+                            </option>
+                        <% }) %>
+                    </select>
+                </label>
+                <button class="ai-secondary-btn" id="headerNewChatBtn" type="button">
+                    <i class="fa-regular fa-pen-to-square"></i>
+                    New conversation
                 </button>
             </div>
+        </header>
 
-            <div class="chat-list">
-                <div class="chat-list-header">Recent Chats</div>
-                <div id="chatList"></div>
+        <div class="ai-alert is-hidden" id="errorBanner" role="status"></div>
+
+        <section class="ai-conversation" id="conversationPanel">
+            <div class="ai-message-list" id="messages">
+                <div class="ai-empty-state" id="emptyState">
+                    <div class="ai-empty-icon">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                    <p class="ai-eyebrow">Ready when you are</p>
+                    <h3>Start a focused learning chat.</h3>
+                    <p class="ai-empty-copy">
+                        Pick a prompt, or type your own question below.
+                    </p>
+                    <div class="ai-suggestions">
+                        <button type="button" data-suggestion="Explain this topic like I am new to programming.">
+                            <strong>Explain clearly</strong>
+                            <span>Break down a difficult concept</span>
+                        </button>
+                        <button type="button" data-suggestion="Create a 7-day study plan for learning JavaScript.">
+                            <strong>Build a plan</strong>
+                            <span>Turn a goal into steps</span>
+                        </button>
+                        <button type="button" data-suggestion="Review this code and suggest improvements:">
+                            <strong>Review code</strong>
+                            <span>Find bugs and improvements</span>
+                        </button>
+                    </div>
+                </div>
             </div>
-        </aside>
+        </section>
 
-        <!-- Main Chat Area -->
-        <main class="main">
-            <div class="main-header">
-                <button class="mobile-menu-btn" type="button" onclick="toggleSidebar()" aria-label="Open chat history">
-                    <i class="fas fa-bars"></i>
+        <footer class="ai-composer-wrap">
+            <div class="ai-status-row">
+                <span id="conversationModelLabel">Ready - llama3.2</span>
+                <button class="ai-link-btn" id="regenerateBtn" type="button" disabled>
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Regenerate last reply
                 </button>
-                <div class="main-header-title">
-                    <strong>AI Assistant</strong>
-                    <span>Mobile-ready chat workspace</span>
-                </div>
             </div>
+            <form class="ai-composer" id="chatForm">
+                <textarea
+                    id="messageInput"
+                    rows="1"
+                    maxlength="10000"
+                    placeholder="Message your AI assistant..."
+                    aria-label="Message your AI assistant"
+                ></textarea>
+                <button id="sendBtn" type="submit" aria-label="Send message">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+            <p class="ai-composer-hint">Press Enter to send. Use Shift + Enter for a new line.</p>
+        </footer>
+    </main>
+</section>
 
-            <!-- Welcome Screen (shown when no chat) -->
-            <div class="welcome-screen" id="welcomeScreen">
-                <div class="welcome-logo">
-                    <i class="fas fa-robot"></i>
-                </div>
-                <h1 class="welcome-title">How can I help you today?</h1>
-                <p class="welcome-subtitle">I can help you learn, answer questions, write code, or have conversations on any topic.</p>
-
-                <div class="suggestions">
-                    <div class="suggestion-card" onclick="useSuggestion('Explain quantum computing in simple terms')">
-                        <h4><i class="fas fa-atom"></i> Explain a concept</h4>
-                        <p>Learn about any topic with simple explanations</p>
-                    </div>
-                    <div class="suggestion-card" onclick="useSuggestion('Write a function to reverse a string in JavaScript')">
-                        <h4><i class="fas fa-code"></i> Write code</h4>
-                        <p>Get help with programming and debugging</p>
-                    </div>
-                    <div class="suggestion-card" onclick="useSuggestion('What are the best study techniques for learning programming?')">
-                        <h4><i class="fas fa-lightbulb"></i> Get advice</h4>
-                        <p>Tips for studying and productivity</p>
-                    </div>
-                    <div class="suggestion-card" onclick="useSuggestion('Help me write a creative story about a time traveler')">
-                        <h4><i class="fas fa-pen-fancy"></i> Be creative</h4>
-                        <p>Writing, brainstorming, and creative ideas</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Messages Container -->
-            <div class="messages" id="messages" style="display: none;"></div>
-
-            <!-- Input Area -->
-            <div class="input-container">
-                <div class="input-wrapper">
-                    <textarea 
-                        id="input" 
-                        class="input-box" 
-                        placeholder="Message AI Assistant..."
-                        rows="1"
-                        onkeydown="handleKeyDown(event)"
-                        oninput="autoResize(this)"
-                    ></textarea>
-                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-                <div class="input-shortcuts">
-                    <span class="shortcut"><kbd>Enter</kbd> to send</span>
-                    <span class="shortcut"><kbd>Shift + Enter</kbd> for new line</span>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <script>
-        // State
-        let currentChat = null;
-        let isLoading = false;
-
-        // DOM Elements
-        const messagesDiv = document.getElementById('messages');
-        const input = document.getElementById('input');
-        const sendBtn = document.getElementById('sendBtn');
-        const chatList = document.getElementById('chatList');
-        const welcomeScreen = document.getElementById('welcomeScreen');
-        const sidebar = document.getElementById('sidebar');
-        const sidebarOverlay = document.getElementById('sidebarOverlay');
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadChats();
-            input.focus();
-        });
-
-        // Toggle Sidebar (Mobile)
-        function toggleSidebar() {
-            sidebar.classList.toggle('open');
-            sidebarOverlay.classList.toggle('open');
-        }
-
-        function closeSidebar() {
-            if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
-                toggleSidebar();
-            }
-        }
-
-        // Auto-resize textarea
-        function autoResize(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-        }
-
-        // Handle keyboard shortcuts
-        function handleKeyDown(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-
-        // Use suggestion card
-        function useSuggestion(text) {
-            input.value = text;
-            autoResize(input);
-            input.focus();
-            sendMessage();
-        }
-
-        function escapeHtml(text) {
-            return String(text || '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
-        // Add message to UI
-        function addMessage(text, role, animate = true) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${role} ${animate ? 'fade-in' : ''}`;
-
-            const iconClass = role === 'user' ? 'fa-user' : 'fa-robot';
-            const iconBg = role === 'user' 
-                ? '<i class="fas fa-user"></i>' 
-                : '<i class="fas fa-robot"></i>';
-
-            messageDiv.innerHTML = `
-                <div class="message-icon">${iconBg}</div>
-                <div class="message-content">
-                    <div class="message-text">${marked.parse(escapeHtml(text))}</div>
-                </div>
-            `;
-
-            messagesDiv.appendChild(messageDiv);
-            scrollToBottom();
-        }
-
-        // Add loading indicator
-        function addLoadingIndicator() {
-            const loadingDiv = document.createElement('div');
-            loadingDiv.className = 'message ai fade-in';
-            loadingDiv.id = 'loadingIndicator';
-            loadingDiv.innerHTML = `
-                <div class="message-icon"><i class="fas fa-robot"></i></div>
-                <div class="message-content">
-                    <div class="loading">
-                        <div class="loading-dots">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            messagesDiv.appendChild(loadingDiv);
-            scrollToBottom();
-        }
-
-        // Remove loading indicator
-        function removeLoadingIndicator() {
-            const indicator = document.getElementById('loadingIndicator');
-            if (indicator) {
-                indicator.remove();
-            }
-        }
-
-        // Scroll to bottom
-        function scrollToBottom() {
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        // Show error toast
-        function showError(message) {
-            const existingToast = document.querySelector('.error-toast');
-            if (existingToast) existingToast.remove();
-
-            const toast = document.createElement('div');
-            toast.className = 'error-toast';
-            toast.textContent = message;
-            document.body.appendChild(toast);
-
-            setTimeout(() => toast.remove(), 5000);
-        }
-
-        // Set loading state
-        function setLoading(loading) {
-            isLoading = loading;
-            sendBtn.disabled = loading;
-            input.disabled = loading;
-        }
-
-        // Send message
-        async function sendMessage() {
-            const text = input.value.trim();
-            if (!text || isLoading) return;
-
-            // Show messages area, hide welcome
-            welcomeScreen.style.display = 'none';
-            messagesDiv.style.display = 'block';
-
-            // Add user message
-            addMessage(text, 'user');
-            input.value = '';
-            autoResize(input);
-
-            // Show loading
-            setLoading(true);
-            addLoadingIndicator();
-
-            try {
-                const res = await fetch('/ai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: text,
-                        chatId: currentChat
-                    })
-                });
-
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || 'Failed to get response');
-                }
-
-                // Update current chat
-                currentChat = data.chatId;
-
-                // Remove loading and add AI response
-                removeLoadingIndicator();
-                addMessage(data.reply, 'ai');
-
-                // Reload chat list
-                loadChats();
-
-            } catch (error) {
-                console.error('Error:', error);
-                removeLoadingIndicator();
-                showError(error.message || 'Something went wrong. Please try again.');
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        // New chat
-        function newChat() {
-            currentChat = null;
-            messagesDiv.innerHTML = '';
-            messagesDiv.style.display = 'none';
-            welcomeScreen.style.display = 'flex';
-            input.value = '';
-            input.focus();
-            closeSidebar();
-        }
-
-        // Load chat list
-        async function loadChats() {
-            try {
-                const res = await fetch('/ai/list');
-                const chats = await res.json();
-
-                chatList.innerHTML = '';
-
-                if (chats.length === 0) {
-                    chatList.innerHTML = '<p style="padding: 12px; color: var(--text-secondary); font-size: 13px;">No chats yet</p>';
-                    return;
-                }
-
-                // Sort by most recent
-                chats.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-
-                chats.forEach(chat => {
-                    const item = document.createElement('div');
-                    item.className = `chat-item ${chat._id === currentChat ? 'active' : ''}`;
-                    item.onclick = () => loadChat(chat._id);
-
-                    item.innerHTML = `
-                        <span class="chat-item-title">
-                            <i class="fas fa-comment-alt" style="margin-right: 8px; color: var(--text-secondary);"></i>
-                            ${chat.title || 'New Chat'}
-                        </span>
-                        <div class="chat-item-actions">
-                            <button class="chat-action-btn" onclick="event.stopPropagation(); deleteChat('${chat._id}')" title="Delete">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    `;
-
-                    chatList.appendChild(item);
-                });
-
-            } catch (error) {
-                console.error('Error loading chats:', error);
-            }
-        }
-
-        // Load specific chat
-        async function loadChat(id) {
-            currentChat = id;
-            welcomeScreen.style.display = 'none';
-            messagesDiv.style.display = 'block';
-            messagesDiv.innerHTML = '';
-
-            try {
-                const res = await fetch('/ai/' + id);
-                const chat = await res.json();
-
-                if (!chat || !chat.messages) {
-                    showError('Chat not found');
-                    newChat();
-                    return;
-                }
-
-                // Add messages to UI
-                chat.messages.forEach(msg => {
-                    addMessage(msg.content, msg.role === 'user' ? 'user' : 'ai', false);
-                });
-
-                // Update active state in sidebar
-                loadChats();
-
-                // Close sidebar on mobile
-                closeSidebar();
-
-            } catch (error) {
-                console.error('Error loading chat:', error);
-                showError('Failed to load chat');
-            }
-        }
-
-        // Delete chat
-        async function deleteChat(id) {
-            if (!confirm('Are you sure you want to delete this chat?')) return;
-
-            try {
-                const res = await fetch('/ai/' + id, {
-                    method: 'DELETE'
-                });
-
-                if (res.ok) {
-                    if (currentChat === id) {
-                        newChat();
-                    }
-                    loadChats();
-                } else {
-                    throw new Error('Failed to delete chat');
-                }
-            } catch (error) {
-                console.error('Error deleting chat:', error);
-                showError('Failed to delete chat');
-            }
-        }
-    </script>
-</body>
-
-</html>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+<script src="/javascripts/ai-chat.js"></script>

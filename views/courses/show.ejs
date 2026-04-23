@@ -153,7 +153,13 @@
           <h6 class="mb-0">AI Assistant</h6>
           <small class="text-muted">Tư vấn theo bài học hiện tại</small>
         </div>
-        <button class="ai-chat-close" type="button" data-chat-close>✖</button>
+        <div class="ai-chat-header-actions">
+          <select id="courseAiModel" class="ai-chat-model-select" aria-label="Choose AI model">
+            <option value="llama3.2">llama3.2</option>
+            <option value="grok">Grok</option>
+          </select>
+          <button class="ai-chat-close" type="button" data-chat-close>✖</button>
+        </div>
       </div>
 
       <div class="ai-quick-actions">

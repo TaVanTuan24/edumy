@@ -7,6 +7,7 @@ const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const Video = require('../models/video');
 const adminAnalyticsRoutes = require('./adminAnalytics');
+const grokSetupService = require('../services/ai/grokSetupService')
 const {
     getCanonicalSections,
     syncCourseContent
@@ -15,6 +16,44 @@ const { prepareLessonForWrite, syncCourseAggregateFields } = require('../utils/c
 
 router.use(isLoggedIn, isAdmin);
 router.use('/courses/:courseId/analytics', adminAnalyticsRoutes);
+
+router.get('/ai/grok/status', async (_req, res) => {
+    res.json(await grokSetupService.getStatus())
+})
+
+router.post('/ai/grok/setup', async (_req, res) => {
+    try {
+        const setup = await grokSetupService.startSetup()
+        res.status(202).json({ success: true, setup })
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.publicMessage || error.message })
+    }
+})
+
+router.post('/ai/grok/setup/complete', async (_req, res) => {
+    try {
+        const setup = await grokSetupService.completeLogin()
+        res.json({ success: true, setup })
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.publicMessage || error.message })
+    }
+})
+
+router.post('/ai/grok/enable', async (_req, res) => {
+    try {
+        res.json({ success: true, status: await grokSetupService.setEnabled(true) })
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.publicMessage || error.message })
+    }
+})
+
+router.post('/ai/grok/disable', async (_req, res) => {
+    try {
+        res.json({ success: true, status: await grokSetupService.setEnabled(false) })
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.publicMessage || error.message })
+    }
+})
 
 async function loadEditableCourse(courseId) {
     const course = await Course.findById(courseId)

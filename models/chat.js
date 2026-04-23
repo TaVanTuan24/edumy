@@ -10,6 +10,26 @@ const messageSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    model: {
+        type: String,
+        enum: ["llama3.2", "grok"],
+        default: "llama3.2"
+    },
+    status: {
+        type: String,
+        enum: ["ok", "error"],
+        default: "ok"
+    },
+    error: {
+        code: {
+            type: String,
+            default: null
+        },
+        message: {
+            type: String,
+            default: null
+        }
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -32,6 +52,12 @@ const chatSchema = new mongoose.Schema({
     },
 
     messages: [messageSchema],
+
+    defaultModel: {
+        type: String,
+        enum: ["llama3.2", "grok"],
+        default: "llama3.2"
+    },
 
     createdAt: {
         type: Date,

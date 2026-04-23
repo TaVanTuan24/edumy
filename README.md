@@ -77,3 +77,70 @@ Truy cập tại: [http://localhost:3000](http://localhost:3000)
 
 ##  Giấy phép
 Dự án mang tính học thuật và mở mã nguồn. Bạn có thể fork, cải tiến và sử dụng tự do với ghi nhận tác giả ban đầu.
+
+## AI Chat: llama3.2 and Grok setup
+
+The `/ai` chat page supports two selectable models:
+
+- `llama3.2`: local Ollama, called through `OLLAMA_URL` with the Ollama generate API.
+- `grok`: local browser automation through the bundled `grok-scraper` folder. This is not an official API; it drives a Playwright browser session for `x.com/i/grok`.
+
+### Environment variables
+
+Add these values to `.env` as needed:
+
+```env
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+OLLAMA_TIMEOUT_MS=120000
+
+AI_DEFAULT_MODEL=llama3.2
+GROK_ENABLED=false
+GROK_SCRAPER_PATH=./grok-scraper
+GROK_TIMEOUT_MS=300000
+```
+
+Set `GROK_ENABLED=true` only on a local desktop or remote desktop with a real browser environment. Keep it `false` on headless servers or CI.
+
+### Ollama llama3.2
+
+1. Install and start Ollama.
+2. Pull the model: `ollama pull llama3.2`.
+3. Start this app with `npm run dev` or `npm start`.
+4. Open `/ai`, choose `llama3.2`, and send a message.
+
+### Grok scraper
+
+1. Install scraper dependencies:
+
+```bash
+cd grok-scraper/scripts
+npm install
+npx playwright install chromium
+```
+
+2. Create a browser login session:
+
+```bash
+cd grok-scraper/scripts
+npm run login
+```
+
+3. In the browser that opens, sign in to `x.com` with an account that can use Grok. Return to the terminal and press Enter to save the session.
+4. Enable Grok for the app:
+
+```env
+GROK_ENABLED=true
+GROK_SCRAPER_PATH=./grok-scraper
+```
+
+5. Restart the Node server, open `/ai`, choose `Grok`, and send a message.
+
+The scraper writes results to `grok-scraper/output/latest.md`. If the x.com session expires, the app returns a clear login-required message; repeat `npm run login` from `grok-scraper/scripts`.
+
+### Known Grok limitations
+
+- Grok uses browser automation, so requests are slower than Ollama and are serialized by the server to protect the shared browser profile.
+- It requires a real desktop browser session and will not work reliably in headless CI or a VPS without a GUI.
+- x.com UI changes can break DOM scraping. Check `grok-scraper/output/run.log`, screenshots, and the scraper docs if Grok suddenly stops returning responses.
+- This integration is for local use. Do not expose it as a public multi-user Grok API without considering account/session safety and x.com terms.
