@@ -1,47 +1,34 @@
-const ollamaService = require('./ollamaService')
-const grokService = require('./grokService')
+const aiRouter = require('./aiRouter')
 const { normalizeAiModel, getModelOptions, aiConfig } = require('../../config/ai')
 
-async function generateChatReply({ model, messages }) {
+async function generateChatReply({ model, messages, userId }) {
     const selectedModel = normalizeAiModel(model)
     const prompt = buildConversationPrompt(messages)
-    return generatePromptReply({ model: selectedModel, prompt })
+    return generatePromptReply({ model: selectedModel, prompt, messages, userId })
 }
 
-async function generateChatReplyStream({ model, messages, onToken }) {
+async function generateChatReplyStream({ model, messages, userId, onToken, onEvent, signal }) {
     const selectedModel = normalizeAiModel(model)
     const prompt = buildConversationPrompt(messages)
-    return generatePromptReplyStream({ model: selectedModel, prompt, onToken })
+    return generatePromptReplyStream({
+        model: selectedModel,
+        prompt,
+        messages,
+        userId,
+        options: { signal },
+        onToken,
+        onEvent
+    })
 }
 
-async function generatePromptReply({ model, prompt, options = {} }) {
+async function generatePromptReply({ model, prompt, messages, userId, options = {} }) {
     const selectedModel = normalizeAiModel(model)
-
-    if (selectedModel === 'grok') {
-        return grokService.generate(prompt)
-    }
-
-    return ollamaService.generate(prompt, options)
+    return aiRouter.generate({ userId, model: selectedModel, prompt, messages, options })
 }
 
-async function generatePromptReplyStream({ model, prompt, options = {}, onToken }) {
+async function generatePromptReplyStream({ model, prompt, messages, userId, options = {}, onToken, onEvent }) {
     const selectedModel = normalizeAiModel(model)
-
-    if (selectedModel === 'grok') {
-        const reply = await grokService.generate(prompt)
-        await simulateStream(reply, onToken)
-        return reply
-    }
-
-    return ollamaService.generateStream(prompt, options, onToken)
-}
-
-async function simulateStream(text, onToken) {
-    const tokens = String(text || '').match(/\S+\s*|\n+/g) || []
-    for (const token of tokens) {
-        if (onToken) onToken(token)
-        await new Promise((resolve) => setTimeout(resolve, 18))
-    }
+    return aiRouter.generateStream({ userId, model: selectedModel, prompt, messages, options, onToken, onEvent })
 }
 
 function buildConversationPrompt(messages) {

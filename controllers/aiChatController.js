@@ -1,6 +1,8 @@
 const Chat = require('../models/chat')
 const User = require('../models/user')
+const UserAISettings = require('../models/userAISettings')
 const { awardGamification } = require('../utils/gamification')
+const { encryptKey, decryptKey } = require('../utils/apiKeyCrypto')
 const {
     generateChatReply,
     generateChatReplyStream,
@@ -9,10 +11,11 @@ const {
     normalizeAiModel,
     aiConfig
 } = require('../services/ai/chatOrchestrator')
+const { getModelConfig } = require('../config/ai')
 
-function renderChat(req, res) {
+async function renderChat(req, res) {
     res.render('chat', {
-        aiModels: getModelOptions(),
+        aiModels: await getUserModelOptions(req.user._id),
         defaultAiModel: aiConfig.defaultModel,
         bodyClass: 'ai-chat-shell',
         mainClass: 'ai-chat-main',
@@ -51,7 +54,7 @@ async function sendMessage(req, res) {
             status: 'ok'
         })
 
-        const reply = await generateChatReply({ model, messages: chat.messages })
+        const reply = await generateChatReply({ userId, model, messages: chat.messages })
 
         chat.messages.push({
             role: 'assistant',
@@ -118,6 +121,7 @@ async function streamMessage(req, res) {
     const model = normalizeAiModel(req.body && req.body.model)
     let chat = null
     let aborted = false
+    const abortController = new AbortController()
 
     if (!message) {
         return res.status(400).json({ error: 'Message is required' })
@@ -131,9 +135,13 @@ async function streamMessage(req, res) {
 
     req.on('aborted', () => {
         aborted = true
+        abortController.abort()
     })
     res.on('close', () => {
-        if (!res.writableEnded) aborted = true
+        if (!res.writableEnded) {
+            aborted = true
+            abortController.abort()
+        }
     })
 
     try {
@@ -160,10 +168,15 @@ async function streamMessage(req, res) {
         })
 
         const reply = await generateChatReplyStream({
+            userId,
             model,
             messages: chat.messages,
+            signal: abortController.signal,
             onToken: (token) => {
                 if (!aborted) writeStreamEvent(res, 'chunk', { token })
+            },
+            onEvent: (event) => {
+                if (!aborted) writeStreamEvent(res, 'ai', event)
             }
         })
 
@@ -244,7 +257,7 @@ async function regenerateLast(req, res) {
         }
 
         chat.defaultModel = model
-        const reply = await generateChatReply({ model, messages: chat.messages })
+        const reply = await generateChatReply({ userId: req.user._id, model, messages: chat.messages })
         chat.messages.push({
             role: 'assistant',
             content: reply,
@@ -276,14 +289,19 @@ async function regenerateLast(req, res) {
 async function streamRegenerateLast(req, res) {
     const model = normalizeAiModel(req.body && req.body.model)
     let aborted = false
+    const abortController = new AbortController()
 
     prepareStream(res)
 
     req.on('aborted', () => {
         aborted = true
+        abortController.abort()
     })
     res.on('close', () => {
-        if (!res.writableEnded) aborted = true
+        if (!res.writableEnded) {
+            aborted = true
+            abortController.abort()
+        }
     })
 
     try {
@@ -317,10 +335,15 @@ async function streamRegenerateLast(req, res) {
         })
 
         const reply = await generateChatReplyStream({
+            userId: req.user._id,
             model,
             messages: chat.messages,
+            signal: abortController.signal,
             onToken: (token) => {
                 if (!aborted) writeStreamEvent(res, 'chunk', { token })
+            },
+            onEvent: (event) => {
+                if (!aborted) writeStreamEvent(res, 'ai', event)
             }
         })
 
@@ -378,6 +401,65 @@ async function listChats(req, res) {
         console.error('List Chats Error:', err.message)
         res.status(500).json({ error: 'Failed to fetch chats' })
     }
+}
+
+async function listModels(req, res) {
+    res.json(await getUserModelOptions(req.user._id))
+}
+
+async function getSettings(req, res) {
+    const status = await getUserKeyStatus(req.user._id)
+    res.json({ status, models: await getUserModelOptions(req.user._id) })
+}
+
+async function saveSettings(req, res) {
+    const payload = req.body || {}
+    const fields = ['openaiKey', 'xaiKey', 'claudeKey', 'geminiKey']
+    const update = {}
+
+    fields.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(payload, field)) {
+            const value = String(payload[field] || '').trim()
+            if (value) update[field] = encryptKey(value)
+        }
+    })
+
+    if (!Object.keys(update).length) {
+        return res.json({
+            success: true,
+            status: await getUserKeyStatus(req.user._id),
+            models: await getUserModelOptions(req.user._id)
+        })
+    }
+
+    await UserAISettings.findOneAndUpdate(
+        { user: req.user._id },
+        { $set: update, $setOnInsert: { user: req.user._id } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    )
+
+    res.json({ success: true, status: await getUserKeyStatus(req.user._id), models: await getUserModelOptions(req.user._id) })
+}
+
+async function clearSetting(req, res) {
+    const fieldMap = {
+        openai: 'openaiKey',
+        xai: 'xaiKey',
+        claude: 'claudeKey',
+        gemini: 'geminiKey'
+    }
+    const field = fieldMap[String(req.params.provider || '').toLowerCase()]
+    if (!field) {
+        return res.status(400).json({ error: 'Unknown provider' })
+    }
+
+    await UserAISettings.findOneAndUpdate(
+        { user: req.user._id },
+        { $set: { [field]: '' }, $setOnInsert: { user: req.user._id } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    )
+
+    res.json({ success: true, status: await getUserKeyStatus(req.user._id), models: await getUserModelOptions(req.user._id) })
 }
 
 async function getChat(req, res) {
@@ -475,6 +557,38 @@ function getLastMessageModel(chat) {
     return lastAssistant && lastAssistant.model
 }
 
+async function getUserKeyStatus(userId) {
+    const settings = await UserAISettings.findOne({ user: userId }).lean()
+    return {
+        openai: Boolean(decryptKey(settings && settings.openaiKey)),
+        xai: Boolean(decryptKey(settings && settings.xaiKey)),
+        claude: Boolean(decryptKey(settings && settings.claudeKey)),
+        gemini: Boolean(decryptKey(settings && settings.geminiKey))
+    }
+}
+
+async function getUserModelOptions(userId) {
+    const keyStatus = await getUserKeyStatus(userId)
+    return getModelOptions().map((model) => {
+        const config = getModelConfig(model.id)
+        const enabled = config.requiresKey
+            ? Boolean(keyStatus[config.providerKey])
+            : model.enabled
+
+        const disabledReason = enabled
+            ? ''
+            : config.requiresKey
+                ? 'Requires API key'
+                : 'Disabled'
+
+        return {
+            ...model,
+            enabled,
+            disabledReason
+        }
+    })
+}
+
 function prepareStream(res) {
     res.status(200)
     res.set({
@@ -503,6 +617,10 @@ module.exports = {
     regenerateLast,
     streamRegenerateLast,
     listChats,
+    listModels,
+    getSettings,
+    saveSettings,
+    clearSetting,
     getChat,
     deleteChat
 }

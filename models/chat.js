@@ -12,7 +12,6 @@ const messageSchema = new mongoose.Schema({
     },
     model: {
         type: String,
-        enum: ["llama3.2", "grok"],
         default: "llama3.2"
     },
     status: {
@@ -55,7 +54,6 @@ const chatSchema = new mongoose.Schema({
 
     defaultModel: {
         type: String,
-        enum: ["llama3.2", "grok"],
         default: "llama3.2"
     },
 

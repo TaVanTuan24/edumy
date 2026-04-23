@@ -1,7 +1,8 @@
 const path = require('path')
+const { DEFAULT_MODEL, getCatalogModels, getCatalogModel } = require('../services/ai/modelCatalog')
 
-const DEFAULT_MODEL = 'llama3.2'
-const SUPPORTED_MODELS = ['llama3.2', 'grok']
+const MODEL_OPTIONS = getCatalogModels()
+const SUPPORTED_MODELS = MODEL_OPTIONS.map((model) => model.id)
 
 function readBoolean(value, fallback) {
     if (value === undefined || value === null || value === '') return fallback
@@ -28,6 +29,20 @@ const aiConfig = {
         enabled: grokEnabled,
         scraperPath: path.resolve(process.env.GROK_SCRAPER_PATH || path.join(__dirname, '..', 'grok-scraper')),
         timeoutMs: readNumber(process.env.GROK_TIMEOUT_MS, 300000)
+    },
+    providers: {
+        openai: {
+            timeoutMs: readNumber(process.env.OPENAI_TIMEOUT_MS, 120000)
+        },
+        xai: {
+            timeoutMs: readNumber(process.env.XAI_TIMEOUT_MS, 180000)
+        },
+        claude: {
+            timeoutMs: readNumber(process.env.CLAUDE_TIMEOUT_MS, 180000)
+        },
+        gemini: {
+            timeoutMs: readNumber(process.env.GEMINI_TIMEOUT_MS, 180000)
+        }
     }
 }
 
@@ -37,22 +52,14 @@ function normalizeAiModel(model) {
 }
 
 function getModelOptions() {
-    return [
-        {
-            id: 'llama3.2',
-            label: 'llama3.2',
-            provider: 'Ollama',
-            enabled: true,
-            description: 'Local Ollama model'
-        },
-        {
-            id: 'grok',
-            label: 'Grok',
-            provider: 'x.com',
-            enabled: aiConfig.grok.enabled,
-            description: 'Local browser automation via grok-scraper'
-        }
-    ]
+    return MODEL_OPTIONS.map((model) => ({
+        ...model,
+        enabled: model.id === 'grok' ? aiConfig.grok.enabled : model.enabled === true
+    }))
+}
+
+function getModelConfig(model) {
+    return getCatalogModel(model)
 }
 
 function setGrokEnabled(enabled) {
@@ -66,7 +73,9 @@ function setGrokEnabled(enabled) {
 module.exports = {
     aiConfig,
     SUPPORTED_MODELS,
+    MODEL_OPTIONS,
     normalizeAiModel,
     getModelOptions,
+    getModelConfig,
     setGrokEnabled
 }

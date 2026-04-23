@@ -98,6 +98,7 @@
 
 .ai-new-chat,
 .ai-secondary-btn,
+.ai-settings-btn,
 .ai-link-btn,
 .ai-icon-btn,
 .ai-message-action,
@@ -316,6 +317,21 @@
     padding: 0 13px;
     background: var(--ai-ink);
     color: #fffaf0;
+    font-size: 0.9rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.ai-settings-btn {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border-radius: 10px;
+    padding: 0 12px;
+    background: var(--ai-accent-soft);
+    color: var(--ai-accent-strong);
     font-size: 0.9rem;
     font-weight: 800;
     white-space: nowrap;
@@ -889,6 +905,115 @@
     text-align: center;
 }
 
+.ai-settings-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(20, 31, 27, 0.42);
+}
+
+.ai-settings-modal[hidden] {
+    display: none;
+}
+
+.ai-settings-dialog {
+    width: min(100%, 680px);
+    max-height: min(760px, calc(100dvh - 40px));
+    overflow: auto;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 28px 90px rgba(20, 31, 27, 0.28);
+}
+
+.ai-settings-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px;
+    border-bottom: 1px solid var(--ai-line);
+}
+
+.ai-settings-head h2 {
+    margin: 0;
+    font-size: 1.35rem;
+}
+
+.ai-settings-head span {
+    color: var(--ai-muted);
+}
+
+.ai-settings-form {
+    display: grid;
+    gap: 14px;
+    padding: 20px;
+}
+
+.ai-settings-form label {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+}
+
+.ai-settings-form label > span {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--ai-ink);
+    font-weight: 800;
+}
+
+.ai-settings-form small {
+    color: var(--ai-muted);
+    font-weight: 700;
+}
+
+.ai-settings-form small.is-connected {
+    color: #166534;
+}
+
+.ai-settings-form input {
+    min-height: 42px;
+    min-width: 0;
+    border: 1px solid var(--ai-line-strong);
+    border-radius: 10px;
+    padding: 0 12px;
+}
+
+.ai-settings-form input:focus {
+    outline: 0;
+    border-color: rgba(15, 118, 110, 0.5);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.ai-settings-form [data-clear-key] {
+    min-height: 42px;
+    border: 1px solid var(--ai-line);
+    border-radius: 10px;
+    background: #fff8f6;
+    color: var(--ai-error);
+    font-weight: 800;
+}
+
+.ai-settings-message {
+    min-height: 20px;
+    color: var(--ai-muted);
+    font-size: 0.9rem;
+}
+
+.ai-settings-message.is-error {
+    color: #b42318;
+}
+
+.ai-settings-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
 @keyframes aiRise {
     from {
         opacity: 0;
@@ -1007,6 +1132,16 @@
     .ai-secondary-btn i {
         font-size: 0.95rem;
     }
+
+    .ai-settings-btn {
+        font-size: 0;
+        width: 38px;
+        padding: 0;
+    }
+
+    .ai-settings-btn i {
+        font-size: 0.95rem;
+    }
 }
 
 @media (max-width: 640px) {
@@ -1069,6 +1204,10 @@
 
     .ai-composer-wrap {
         padding: 9px 12px 12px;
+    }
+
+    .ai-settings-form label {
+        grid-template-columns: 1fr;
     }
 
     .ai-status-row {

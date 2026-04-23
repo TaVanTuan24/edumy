@@ -8,6 +8,7 @@
     currentChat: null,
     isLoading: false,
     chats: [],
+    models: [],
     shouldAutoScroll: true
   };
 
@@ -24,6 +25,11 @@
     modelSelect: document.getElementById('modelSelect'),
     modelLabel: document.getElementById('conversationModelLabel'),
     headerModelLabel: document.getElementById('headerModelLabel'),
+    settingsBtn: document.getElementById('aiSettingsBtn'),
+    settingsModal: document.getElementById('aiSettingsModal'),
+    settingsCloseBtn: document.getElementById('aiSettingsCloseBtn'),
+    settingsForm: document.getElementById('aiSettingsForm'),
+    settingsMessage: document.getElementById('aiSettingsMessage'),
     errorBanner: document.getElementById('errorBanner'),
     emptyState: document.getElementById('emptyState'),
     messages: document.getElementById('messages'),
@@ -36,9 +42,11 @@
   document.addEventListener('DOMContentLoaded', init);
 
   function init() {
+    hydrateModelsFromSelect();
     syncModelLabel();
     showEmptyState();
     loadChats();
+    loadModels();
     els.input.focus();
 
     els.form.addEventListener('submit', function(event) {
@@ -61,6 +69,21 @@
     els.newChatBtn.addEventListener('click', newChat);
     els.headerNewChatBtn.addEventListener('click', newChat);
     els.regenerateBtn.addEventListener('click', regenerateLastReply);
+    if (els.settingsBtn) els.settingsBtn.addEventListener('click', openSettings);
+    if (els.settingsCloseBtn) els.settingsCloseBtn.addEventListener('click', closeSettings);
+    if (els.settingsModal) {
+      els.settingsModal.addEventListener('click', function(event) {
+        if (event.target === els.settingsModal) closeSettings();
+      });
+    }
+    if (els.settingsForm) {
+      els.settingsForm.addEventListener('submit', saveSettings);
+      els.settingsForm.querySelectorAll('[data-clear-key]').forEach(function(button) {
+        button.addEventListener('click', function() {
+          clearProviderKey(button.dataset.clearKey);
+        });
+      });
+    }
     els.openSidebarBtn.addEventListener('click', openSidebar);
     els.closeSidebarBtn.addEventListener('click', closeSidebar);
     els.sidebarBackdrop.addEventListener('click', closeSidebar);
@@ -405,7 +428,7 @@
     if (role === 'user') {
       head.lastElementChild.textContent = formatTime(message.createdAt);
     } else {
-      head.querySelector('.ai-model-chip').textContent = modelLabel(message.model);
+      head.querySelector('.ai-model-chip').textContent = modelBadgeLabel(message.model);
       const statusChip = head.querySelector('.ai-status-chip');
       statusChip.textContent = status === 'error' ? 'Error' : 'Generated';
       statusChip.classList.toggle('is-error', status === 'error');
@@ -522,7 +545,7 @@
     });
 
     const modelChip = assistant.head.querySelector('.ai-model-chip');
-    if (modelChip) modelChip.textContent = modelLabel(settings.model || assistant.model || selectedModel());
+    if (modelChip) modelChip.textContent = modelBadgeLabel(settings.model || assistant.model || selectedModel());
     const statusChip = assistant.head.querySelector('.ai-status-chip');
     if (statusChip) {
       statusChip.textContent = settings.status === 'error' ? 'Error' : 'Generated';
@@ -624,7 +647,177 @@
   }
 
   function modelLabel(model) {
-    return model === 'grok' ? 'Grok' : 'llama3.2';
+    const item = state.models.find(function(entry) {
+      return entry.id === model;
+    });
+    return item ? item.label : (model || 'llama3.2');
+  }
+
+  function providerLabel(model) {
+    const item = state.models.find(function(entry) {
+      return entry.id === model;
+    });
+    return item && item.provider ? item.provider : '';
+  }
+
+  function modelBadgeLabel(model) {
+    const provider = providerLabel(model);
+    const label = modelLabel(model);
+    return provider ? provider + ' / ' + label : label;
+  }
+
+  function hydrateModelsFromSelect() {
+    state.models = Array.from(els.modelSelect.options).map(function(option) {
+      return {
+        id: option.value,
+        label: option.textContent.replace(/\s+\((disabled|Requires API key)\)$/i, '').trim(),
+        provider: '',
+        enabled: !option.disabled,
+        disabledReason: option.disabled ? 'Requires API key' : ''
+      };
+    });
+  }
+
+  async function loadModels(preferredModel) {
+    try {
+      const res = await fetch('/ai/models');
+      const models = await safeJson(res);
+      if (!res.ok || !Array.isArray(models)) throw new Error('Could not load models');
+      renderModelOptions(models, preferredModel || selectedModel());
+    } catch (_error) {
+      hydrateModelsFromSelect();
+      syncModelLabel();
+    }
+  }
+
+  function renderModelOptions(models, preferredModel) {
+    state.models = models.map(function(model) {
+      return {
+        id: String(model.id || ''),
+        label: String(model.label || model.id || ''),
+        provider: String(model.provider || ''),
+        enabled: model.enabled !== false,
+        disabledReason: String(model.disabledReason || '')
+      };
+    }).filter(function(model) {
+      return model.id;
+    });
+
+    const enabledModels = state.models.filter(function(model) {
+      return model.enabled;
+    });
+    const nextModel = enabledModels.find(function(model) {
+      return model.id === preferredModel;
+    }) || enabledModels[0] || state.models[0];
+
+    els.modelSelect.innerHTML = '';
+    state.models.forEach(function(model) {
+      const option = document.createElement('option');
+      option.value = model.id;
+      option.disabled = !model.enabled;
+      option.textContent = model.label + (model.provider ? ' - ' + model.provider : '') +
+        (model.enabled ? '' : ' (' + (model.disabledReason || 'Unavailable') + ')');
+      els.modelSelect.appendChild(option);
+    });
+
+    if (nextModel) {
+      els.modelSelect.value = nextModel.id;
+    }
+    syncModelLabel();
+    renderChatList();
+  }
+
+  async function openSettings() {
+    if (!els.settingsModal) return;
+    els.settingsModal.hidden = false;
+    setSettingsMessage('Checking provider status...');
+    await loadSettings();
+    const firstInput = els.settingsForm && els.settingsForm.querySelector('input');
+    if (firstInput) firstInput.focus();
+  }
+
+  function closeSettings() {
+    if (!els.settingsModal) return;
+    els.settingsModal.hidden = true;
+    setSettingsMessage('');
+  }
+
+  async function loadSettings() {
+    try {
+      const res = await fetch('/ai/settings');
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || 'Could not load AI settings');
+      updateSettingsStatus(data.status || {});
+      if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
+      setSettingsMessage('Keys are stored encrypted. Saved values are not shown again.');
+    } catch (error) {
+      setSettingsMessage(error.message || 'Could not load AI settings.', true);
+    }
+  }
+
+  async function saveSettings(event) {
+    event.preventDefault();
+    if (!els.settingsForm) return;
+
+    const formData = new FormData(els.settingsForm);
+    const payload = {};
+    ['openaiKey', 'xaiKey', 'claudeKey', 'geminiKey'].forEach(function(field) {
+      const value = String(formData.get(field) || '').trim();
+      if (value) payload[field] = value;
+    });
+
+    if (!Object.keys(payload).length) {
+      setSettingsMessage('Enter at least one new key to save.');
+      return;
+    }
+
+    setSettingsMessage('Saving keys...');
+    try {
+      const res = await fetch('/ai/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || 'Could not save AI settings');
+      els.settingsForm.reset();
+      updateSettingsStatus(data.status || {});
+      if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
+      setSettingsMessage('Saved. Available models have been updated.');
+    } catch (error) {
+      setSettingsMessage(error.message || 'Could not save AI settings.', true);
+    }
+  }
+
+  async function clearProviderKey(provider) {
+    if (!provider) return;
+    setSettingsMessage('Removing key...');
+    try {
+      const res = await fetch('/ai/settings/' + encodeURIComponent(provider), { method: 'DELETE' });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || 'Could not remove key');
+      updateSettingsStatus(data.status || {});
+      if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
+      setSettingsMessage('Key removed. Available models have been updated.');
+    } catch (error) {
+      setSettingsMessage(error.message || 'Could not remove key.', true);
+    }
+  }
+
+  function updateSettingsStatus(status) {
+    if (!els.settingsForm) return;
+    els.settingsForm.querySelectorAll('[data-key-status]').forEach(function(node) {
+      const provider = node.dataset.keyStatus;
+      const connected = Boolean(status && status[provider]);
+      node.textContent = connected ? 'Connected' : 'Not connected';
+      node.classList.toggle('is-connected', connected);
+    });
+  }
+
+  function setSettingsMessage(message, isError) {
+    if (!els.settingsMessage) return;
+    els.settingsMessage.textContent = message || '';
+    els.settingsMessage.classList.toggle('is-error', Boolean(isError));
   }
 
   function autoResize(textarea) {

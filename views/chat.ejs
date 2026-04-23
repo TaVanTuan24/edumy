@@ -63,6 +63,10 @@
                         <% }) %>
                     </select>
                 </label>
+                <button class="ai-settings-btn" id="aiSettingsBtn" type="button">
+                    <i class="fa-solid fa-gear"></i>
+                    AI Settings
+                </button>
                 <button class="ai-secondary-btn" id="headerNewChatBtn" type="button">
                     <i class="fa-regular fa-pen-to-square"></i>
                     New conversation
@@ -125,6 +129,52 @@
         </footer>
     </main>
 </section>
+
+<div class="ai-settings-modal" id="aiSettingsModal" hidden>
+    <div class="ai-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle">
+        <div class="ai-settings-head">
+            <div>
+                <p class="ai-eyebrow">BYOK</p>
+                <h2 id="aiSettingsTitle">AI Settings</h2>
+                <span>Add your own API keys. Keys are encrypted and never shown again after saving.</span>
+            </div>
+            <button class="ai-icon-btn" id="aiSettingsCloseBtn" type="button" aria-label="Close AI settings">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form class="ai-settings-form" id="aiSettingsForm">
+            <label>
+                <span>OpenAI API Key <small data-key-status="openai">Checking...</small></span>
+                <input type="password" name="openaiKey" autocomplete="off" placeholder="sk-..." />
+                <button type="button" data-clear-key="openai">Clear</button>
+            </label>
+            <label>
+                <span>xAI API Key <small data-key-status="xai">Checking...</small></span>
+                <input type="password" name="xaiKey" autocomplete="off" placeholder="xai-..." />
+                <button type="button" data-clear-key="xai">Clear</button>
+            </label>
+            <label>
+                <span>Claude API Key <small data-key-status="claude">Checking...</small></span>
+                <input type="password" name="claudeKey" autocomplete="off" placeholder="sk-ant-..." />
+                <button type="button" data-clear-key="claude">Clear</button>
+            </label>
+            <label>
+                <span>Gemini API Key <small data-key-status="gemini">Checking...</small></span>
+                <input type="password" name="geminiKey" autocomplete="off" placeholder="AIza..." />
+                <button type="button" data-clear-key="gemini">Clear</button>
+            </label>
+
+            <div class="ai-settings-message" id="aiSettingsMessage"></div>
+            <div class="ai-settings-actions">
+                <button class="ai-secondary-btn" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Save keys
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
