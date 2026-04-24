@@ -178,6 +178,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
     // Inject backend data into window object for frontend parsing
-    window.__ANALYTICS_DATA__ = <%- JSON.stringify({ charts: analytics.charts }) %>;
+    window.__ANALYTICS_DATA__ = <%- serializeJson({ charts: analytics.charts }) %>;
 </script>
 <script src="/javascripts/analytics.js"></script>

@@ -3,6 +3,7 @@ const User = require('../models/user');
 const { generateCourseDescription } = require('../utils/courseDescriptionGenerator');
 const { syncCourseContent } = require('../utils/courseContentAdapter');
 const { buildStoredCourseStats } = require('../utils/courseStats');
+const { summarizeCourseReviews } = require('../utils/courseReviews');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -14,14 +15,11 @@ module.exports.showExplore = async (req, res) => {
     );
 
     unjoinedCourses.forEach(course => {
-        if (course.reviews.length > 0) {
-            const total = course.reviews.reduce((sum, r) => sum + r.rating, 0);
-            course.avgRating = (total / course.reviews.length).toFixed(1);
-            course.totalReviews = course.reviews.length;
-        } else {
-            course.avgRating = null;
-            course.totalReviews = 0;
-        }
+        const reviewSummary = summarizeCourseReviews(course);
+        course.avgRating = reviewSummary.averageRating !== null
+            ? reviewSummary.averageRating.toFixed(1)
+            : null;
+        course.totalReviews = reviewSummary.reviewCount;
     });
 
     const groupedCourses = {};
@@ -42,16 +40,27 @@ module.exports.previewCourse = async (req, res) => {
     if (!course) return res.redirect('/explore');
     syncCourseContent(course);
     const previewStats = buildStoredCourseStats(course);
+    const reviewSummary = summarizeCourseReviews(course);
 
     const user = await User.findById(req.user._id).select('enrolledCourses enrolledCourseIds');
     const generatedDescription = await generateCourseDescription(course);
     const isEnrolled = !!(user && typeof user.findEnrollment === 'function' && user.findEnrollment(course._id));
-    res.render('courses/preview-modern', { course, generatedDescription, isEnrolled, previewStats });
+    res.render('courses/preview-modern', { course, generatedDescription, isEnrolled, previewStats, reviewSummary });
 };
 
 module.exports.enrollCourse = async (req, res) => {
     const course = await Course.findById(req.params.id);
     const user = await User.findById(req.user._id);
+
+    if (!course) {
+        req.flash('error', 'Course not found.');
+        return res.redirect('/explore');
+    }
+
+    if (!user) {
+        req.flash('error', 'User not found.');
+        return res.redirect('/login');
+    }
 
     const existingEnrollment = user.findEnrollment(course._id);
     if (!existingEnrollment) {

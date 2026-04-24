@@ -7,10 +7,23 @@ const {
     syncCourseContent
 } = require('../../utils/courseContentAdapter');
 const { prepareLessonForWrite, syncCourseAggregateFields } = require('../../utils/courseStats');
+const { adminApiLimiter } = require('../../utils/rateLimiters');
+const { logAuditEvent } = require('../../utils/auditLogger');
 
 const VALID_LESSON_TYPES = new Set(['video', 'slide', 'quiz']);
 
 router.use(isLoggedIn, isAdmin);
+router.use(adminApiLimiter);
+
+async function recordAdminAudit(req, action, targetType, targetId, metadata) {
+    await logAuditEvent({
+        req,
+        action,
+        targetType,
+        targetId,
+        metadata
+    });
+}
 
 async function loadCourseForEditing(courseId) {
     const course = await Course.findById(courseId);
@@ -88,6 +101,9 @@ router.post('/section/reorder', async (req, res) => {
         course.sections = reorderedSections;
         reindexSections(course);
         await saveCourseContent(course);
+        await recordAdminAudit(req, 'section_reordered', 'course', String(course._id), {
+            sectionCount: Array.isArray(course.sections) ? course.sections.length : 0
+        });
 
         res.json({ success: true, sections: course.sections });
     } catch (err) {
@@ -117,6 +133,10 @@ router.post('/section', async (req, res) => {
         await saveCourseContent(course);
 
         const addedSection = course.sections[course.sections.length - 1];
+        await recordAdminAudit(req, 'section_added', 'section', String(addedSection && addedSection._id || ''), {
+            courseId: String(course._id),
+            title: addedSection && addedSection.title
+        });
         res.json({ success: true, section: addedSection });
     } catch (err) {
         console.error('Add section error:', err);
@@ -142,6 +162,10 @@ router.put('/section/:courseId/:sectionId', async (req, res) => {
 
         section.title = title;
         await saveCourseContent(course);
+        await recordAdminAudit(req, 'section_updated', 'section', String(section._id), {
+            courseId: String(course._id),
+            title: section.title
+        });
 
         res.json({ success: true, section });
     } catch (err) {
@@ -160,9 +184,14 @@ router.delete('/section/:courseId/:sectionId', async (req, res) => {
             return res.status(404).json({ error: 'Course not found' });
         }
 
+        const removedSection = course.sections.id(sectionId);
         course.sections.pull({ _id: sectionId });
         reindexSections(course);
         await saveCourseContent(course);
+        await recordAdminAudit(req, 'section_deleted', 'section', String(sectionId), {
+            courseId: String(course._id),
+            title: removedSection && removedSection.title
+        });
 
         res.json({ success: true });
     } catch (err) {
@@ -219,6 +248,12 @@ router.post('/lesson', async (req, res) => {
         console.log('Saved item:', newLesson);
 
         const addedLesson = section.lessons[section.lessons.length - 1];
+        await recordAdminAudit(req, 'lesson_added', 'lesson', String(addedLesson && addedLesson._id || ''), {
+            courseId: String(course._id),
+            sectionId: String(section._id),
+            type: normalizedType,
+            title: addedLesson && addedLesson.title
+        });
         res.json({ success: true, lesson: addedLesson, sectionId });
     } catch (err) {
         console.error('Add lesson error:', err);
@@ -267,6 +302,12 @@ router.put('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
         await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: true });
 
         await saveCourseContent(course);
+        await recordAdminAudit(req, 'lesson_updated', 'lesson', String(lesson._id), {
+            courseId: String(course._id),
+            sectionId: String(section._id),
+            type: lesson.type,
+            title: lesson.title
+        });
 
         res.json({ success: true, lesson });
     } catch (err) {
@@ -290,9 +331,15 @@ router.delete('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
             return res.status(404).json({ error: 'Section not found' });
         }
 
+        const removedLesson = section.lessons.id(lessonId);
         section.lessons.pull({ _id: lessonId });
         reindexSections(course);
         await saveCourseContent(course);
+        await recordAdminAudit(req, 'lesson_deleted', 'lesson', String(lessonId), {
+            courseId: String(course._id),
+            sectionId: String(section._id),
+            title: removedLesson && removedLesson.title
+        });
 
         res.json({ success: true });
     } catch (err) {
@@ -382,6 +429,10 @@ router.post('/lesson/reorder', async (req, res) => {
 
         reindexSections(course);
         await saveCourseContent(course);
+        await recordAdminAudit(req, 'lesson_reordered', 'course', String(course._id), {
+            sourceSectionId: sourceSection && String(sourceSection._id),
+            destSectionId: destSection && String(destSection._id)
+        });
 
         console.log('[CourseEditor][API] canonical sections after reorder:', JSON.stringify(
             (course.sections || []).map((section) => ({

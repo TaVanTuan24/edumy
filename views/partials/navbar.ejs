@@ -12,9 +12,11 @@
         <a class="nav-link" href="/explore">Explore</a>
         <!-- <a class="nav-link" href="/video-models">AI Video Models</a> -->
         <a class="nav-link" href="/ai">AI Chat</a>
-        <a class="nav-link" href="/admin">Admin</a>
+        <% if (currentUser && isCurrentUserAdmin) { %>
+          <a class="nav-link" href="/admin">Admin</a>
+        <% } %>
 
-        <% if(currentUser && currentUser._id=='68ac0a0f3723bbe1d888f44f' ) {%>
+        <% if (currentUser && isCurrentUserAdmin) { %>
           <a class="nav-link" href="/courses/new">New Courses</a>
         <% } %>
       </div>
@@ -46,7 +48,10 @@
           </div>
           <a class="nav-link" href="/profile">Profile</a>
           <a class="nav-link" href="/leaderboard">Leaderboard</a>
-          <a class="nav-link" href="/logout">Logout</a>
+          <form action="/logout" method="POST" class="d-inline m-0">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="nav-link btn btn-link border-0 bg-transparent p-0">Logout</button>
+          </form>
         <% } %>
       </div>
     </div>

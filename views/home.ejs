@@ -1,48 +1,270 @@
-<!DOCTYPE html>
-<html lang="en">
+<% layout('/layouts/boilerplate') %>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/stylesheets/home.css">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Edumy</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/5.0.0-alpha1/css/bootstrap.min.css"
-    integrity="sha384-r4NyP46KrjDleawBgD5tp8Y7UzmLA05oM1iAEQ17CSuDqnUK2+k9luXQOfXJCJ4I" crossorigin="anonymous">
-    <link rel="stylesheet" href="/stylesheets/home.css">
-    <link rel="stylesheet" href="/stylesheets/responsive.css">
-</head>
+<%
+  const metrics = stats || {};
+  const heroPrimaryHref = currentUser ? '/courses' : '/register';
+  const heroPrimaryLabel = currentUser ? 'Start Learning' : 'Create Free Account';
+  const heroSecondaryHref = '/explore';
+  const heroTertiaryHref = '/ai';
+  const safeFeaturedCourses = Array.isArray(featuredCourses) ? featuredCourses : [];
+%>
 
-<body class="home-page d-flex text-center text-white bg-dark">
-    <div class="cover-container d-flex w-100 min-vh-100 p-3 mx-auto flex-column">
-        <header class="mb-auto">
-            <div class="home-header-shell">
-                <a href="/" class="home-brand text-white text-decoration-none">Edumy</a>
-                <nav class="nav nav-masthead justify-content-center">
-                    <a href="#" class="nav-link active" aria-current="page">Home</a>
-                    <a href="/courses" class="nav-link">Courses</a>
-                    <!-- <a href="/video-models" class="nav-link">AI Video Models</a> -->
-                    <% if(!currentUser) { %>
-                        <a class="nav-link" href="/login">Login</a>
-                        <a class="nav-link" href="/register">Register</a>
-                        <% } else { %>
-                        <a class="nav-link" href="/logout">Logout</a>
-                        <% } %>
-                </nav>
+<div class="home-landing">
+  <section class="home-hero">
+    <div class="home-ambient home-ambient-one"></div>
+    <div class="home-ambient home-ambient-two"></div>
+    <div class="container home-section-shell">
+      <div class="home-hero-grid">
+        <div class="home-hero-copy" data-reveal>
+          <span class="home-kicker">AI-Powered Learning Platform</span>
+          <h1 class="home-hero-title">Learn faster with AI tutors, immersive VR lessons, and structured course journeys.</h1>
+          <p class="home-hero-subtitle">
+            Edumy brings together expert-built content, local and multi-provider AI assistance, interactive quizzes,
+            and progress intelligence in one focused learning workspace.
+          </p>
+          <div class="home-hero-actions">
+            <a href="<%= heroPrimaryHref %>" class="btn home-btn home-btn-primary"><%= heroPrimaryLabel %></a>
+            <a href="<%= heroSecondaryHref %>" class="btn home-btn home-btn-secondary">Explore Courses</a>
+            <a href="<%= heroTertiaryHref %>" class="home-text-link">Open AI Chat</a>
+          </div>
+          <div class="home-trust-strip">
+            <span>Built for AI-assisted lessons</span>
+            <span>VR-ready course delivery</span>
+            <span>Interactive assessment flow</span>
+          </div>
+        </div>
+
+        <div class="home-hero-visual" data-reveal data-reveal-delay="120">
+          <div class="hero-panel">
+            <div class="hero-panel-header">
+              <span class="hero-panel-pill">Learning Workspace</span>
+              <span class="hero-panel-badge">Live Progress</span>
             </div>
-        </header>
-        <main class="px-3 home-hero-copy">
-            <h1>Edumy Education</h1>
-            <p class="lead"> Step into a world of endless learning and self-growth. <br> Explore a wide variety of courses, share your own knowledge, and engage with a vibrant community of learners. <br>
-                Start your journey today because learning never stops.</p>
-            <a href="/courses" class="btn btn-lg btn-secondary font-weight-bold border-white bg-white home-cta">View
-                Courses</a>
-        </main>
-
-        <footer class="mt-auto text-white-50">
-            <p>&copy; 2025 </p>
-        </footer>
+            <div class="hero-panel-grid">
+              <article class="hero-metric-card">
+                <span>Active Path</span>
+                <strong>AI Fundamentals</strong>
+                <small>12 lessons • 3 labs • 2 quizzes</small>
+              </article>
+              <article class="hero-metric-card">
+                <span>Assistant</span>
+                <strong>llama3.2 + BYOK</strong>
+                <small>Switch local and cloud models per task</small>
+              </article>
+            </div>
+            <div class="hero-progress-card">
+              <div class="hero-progress-head">
+                <span>Weekly Momentum</span>
+                <strong>78%</strong>
+              </div>
+              <div class="hero-progress-bar">
+                <span style="width: 78%"></span>
+              </div>
+              <div class="hero-progress-meta">
+                <span>4 lessons completed</span>
+                <span>2 AI study sessions</span>
+              </div>
+            </div>
+            <div class="hero-mini-cards">
+              <article>
+                <i class="fa-solid fa-vr-cardboard"></i>
+                <span>VR lesson support</span>
+              </article>
+              <article>
+                <i class="fa-solid fa-brain"></i>
+                <span>Context-aware AI tutor</span>
+              </article>
+              <article>
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Progress analytics</span>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r" crossorigin="anonymous"></script>
-</body>
+  </section>
 
-</html>
+  <section class="home-feature-section">
+    <div class="container home-section-shell">
+      <div class="home-section-intro" data-reveal>
+        <span class="home-kicker">Core Experience</span>
+        <h2>Everything needed to teach, learn, and iterate in one platform.</h2>
+      </div>
+      <div class="home-feature-grid">
+        <article class="home-feature-card" data-reveal>
+          <i class="fa-solid fa-robot"></i>
+          <h3>AI Learning Assistant</h3>
+          <p>Use local Ollama or BYOK providers for guided explanations, study plans, and lesson-aware support.</p>
+        </article>
+        <article class="home-feature-card" data-reveal data-reveal-delay="80">
+          <i class="fa-solid fa-vr-cardboard"></i>
+          <h3>VR Learning</h3>
+          <p>Pair headset sessions with your account and continue lessons in immersive VR without leaving the course flow.</p>
+        </article>
+        <article class="home-feature-card" data-reveal data-reveal-delay="160">
+          <i class="fa-solid fa-list-check"></i>
+          <h3>Interactive Quizzes</h3>
+          <p>Blend static assessments and video-timed checkpoints to reinforce concepts while learners are engaged.</p>
+        </article>
+        <article class="home-feature-card" data-reveal data-reveal-delay="240">
+          <i class="fa-solid fa-chart-column"></i>
+          <h3>Smart Progress Tracking</h3>
+          <p>Track watch time, lesson completion, quiz performance, streaks, and learner momentum across the platform.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="home-ai-section">
+    <div class="container home-section-shell">
+      <div class="home-ai-grid">
+        <div class="home-ai-copy" data-reveal>
+          <span class="home-kicker">AI Highlight</span>
+          <h2>A modern study copilot that stays close to the lesson context.</h2>
+          <p>
+            Let learners ask follow-up questions, summarize a lesson, generate quizzes, and move between local or
+            external providers without exposing API secrets to the browser.
+          </p>
+          <ul class="home-bullet-list">
+            <li>Local `llama3.2` support through Ollama</li>
+            <li>Optional BYOK for OpenAI, xAI, Claude, and Gemini</li>
+            <li>Safe model gating based on encrypted backend-only keys</li>
+          </ul>
+        </div>
+
+        <div class="home-ai-preview" data-reveal data-reveal-delay="120">
+          <div class="home-chat-demo">
+            <div class="home-chat-demo-head">
+              <span>Learning Copilot</span>
+              <span class="home-chat-demo-model">GPT-5.4 / llama3.2</span>
+            </div>
+            <div class="home-chat-demo-body">
+              <div class="home-chat-bubble user">Create a 7-day plan to learn JavaScript fundamentals.</div>
+              <div class="home-chat-bubble assistant">
+                <span class="home-chat-typing-label">Assistant</span>
+                <span data-demo-typing class="home-demo-typing"></span>
+              </div>
+              <div class="home-chat-bubble assistant soft">
+                I can also turn this lesson into a quiz or summarize the current course section.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="home-courses-section">
+    <div class="container home-section-shell">
+      <div class="home-section-intro" data-reveal>
+        <span class="home-kicker">Featured Courses</span>
+        <h2>Browse structured learning paths built inside Edumy.</h2>
+      </div>
+
+      <% if (safeFeaturedCourses.length) { %>
+        <div class="home-course-grid">
+          <% safeFeaturedCourses.forEach((course, index) => { %>
+            <a
+              href="<%= currentUser ? ('/explore/' + course._id + '/preview') : '/login' %>"
+              class="home-course-card"
+              data-reveal
+              data-reveal-delay="<%= index * 70 %>"
+            >
+              <div class="home-course-media">
+                <% if (course.imageUrl) { %>
+                  <img src="<%= course.imageUrl %>" alt="<%= course.title %>" loading="lazy">
+                <% } else { %>
+                  <div class="home-course-fallback">
+                    <i class="fa-solid fa-book-open-reader"></i>
+                  </div>
+                <% } %>
+              </div>
+              <div class="home-course-content">
+                <span class="home-course-topic"><%= course.topic || 'General' %></span>
+                <h3><%= course.title %></h3>
+                <p><%= course.shortDescription || 'Structured course content with lessons, quizzes, and AI support.' %></p>
+                <div class="home-course-meta">
+                  <span><i class="fa-solid fa-layer-group"></i> <%= Number(course.totalLessonCount || 0) %> lessons</span>
+                  <span>Open Preview</span>
+                </div>
+              </div>
+            </a>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="home-empty-state" data-reveal>
+          <i class="fa-solid fa-sparkles"></i>
+          <h3>Courses will appear here as your library grows.</h3>
+          <p>Start with the course dashboard or explore the AI workspace while content is being prepared.</p>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="home-stats-section" data-counter-section>
+    <div class="container home-section-shell">
+      <div class="home-stats-grid">
+        <article class="home-stat-card" data-reveal>
+          <span>Registered learners</span>
+          <strong data-count="<%= Number(metrics.users || 0) %>">0</strong>
+        </article>
+        <article class="home-stat-card" data-reveal data-reveal-delay="90">
+          <span>Courses published</span>
+          <strong data-count="<%= Number(metrics.courses || 0) %>">0</strong>
+        </article>
+        <article class="home-stat-card" data-reveal data-reveal-delay="180">
+          <span>Lessons tracked</span>
+          <strong data-count="<%= Number(metrics.lessons || 0) %>">0</strong>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="home-cta-section">
+    <div class="container home-section-shell">
+      <div class="home-cta-card" data-reveal>
+        <div>
+          <span class="home-kicker">Ready To Learn</span>
+          <h2>Start a focused learning journey with AI support built in.</h2>
+          <p>Move from course discovery to active study, adaptive quizzes, and guided follow-up without leaving the platform.</p>
+        </div>
+        <div class="home-cta-actions">
+          <a href="<%= heroPrimaryHref %>" class="btn home-btn home-btn-primary"><%= heroPrimaryLabel %></a>
+          <a href="/ai" class="btn home-btn home-btn-secondary">Try AI Chat</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="home-footer">
+    <div class="container home-section-shell home-footer-shell">
+      <div>
+        <strong>Edumy</strong>
+        <p>Express-powered learning workflows with AI, VR, and structured course delivery.</p>
+      </div>
+      <div class="home-footer-links">
+        <a href="/explore">Explore</a>
+        <a href="/courses">My Courses</a>
+        <a href="/ai">AI Chat</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+  window.__HOME_DEMO_LINES__ = <%- serializeJson([
+    'Day 1: variables, types, and conditionals.',
+    'Day 2: loops, arrays, and object basics.',
+    'Day 3: functions and scope with practice prompts.',
+    'Day 4: DOM interactions and event handling.',
+    'Day 5: async flows and working with APIs.',
+    'Day 6: build a mini project with quizzes.',
+    'Day 7: review weak spots and ship a final exercise.'
+  ]) %>;
+</script>
+<script src="/javascripts/home.js" defer></script>

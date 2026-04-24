@@ -5,6 +5,8 @@ module.exports = [
   {
     ignores: [
       'node_modules/**',
+      'archive/**',
+      'grok-scraper/**',
       'public/images/**',
       'public/javascripts/courseEditor.js'
     ]
@@ -46,6 +48,7 @@ module.exports = [
         Sortable: 'readonly',
         bootstrap: 'readonly',
         DOMPurify: 'readonly',
+        Chart: 'readonly',
         marked: 'readonly',
         maptilerApiKey: 'readonly',
         maptilersdk: 'readonly',

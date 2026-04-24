@@ -11,6 +11,7 @@
   </header>
 
   <form class="card card-body" method="POST" action="/courses/<%= course._id %>/discussions">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="mb-3">
       <label class="form-label" for="title">Title</label>
       <input id="title" name="title" class="form-control" maxlength="180" required placeholder="Be specific and imagine you're asking another student">

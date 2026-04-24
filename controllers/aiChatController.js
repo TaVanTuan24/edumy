@@ -1,8 +1,11 @@
 const Chat = require('../models/chat')
 const User = require('../models/user')
 const UserAISettings = require('../models/userAISettings')
+const mongoose = require('mongoose')
 const { awardGamification } = require('../utils/gamification')
 const { encryptKey, decryptKey } = require('../utils/apiKeyCrypto')
+const { validateApiKey, buildKeyStatus } = require('../utils/apiKeySecurity')
+const { logAuditEvent } = require('../utils/auditLogger')
 const {
     generateChatReply,
     generateChatReplyStream,
@@ -14,9 +17,13 @@ const {
 const { getModelConfig } = require('../config/ai')
 
 async function renderChat(req, res) {
+    const aiModels = await getUserModelOptions(req.user._id)
+    const preferredDefault = aiModels.find((model) => model.enabled)
+        || aiModels[0]
+
     res.render('chat', {
-        aiModels: await getUserModelOptions(req.user._id),
-        defaultAiModel: aiConfig.defaultModel,
+        aiModels,
+        defaultAiModel: preferredDefault ? preferredDefault.id : aiConfig.defaultModel,
         bodyClass: 'ai-chat-shell',
         mainClass: 'ai-chat-main',
         hideFooter: true
@@ -236,6 +243,10 @@ async function streamMessage(req, res) {
 async function regenerateLast(req, res) {
     const model = normalizeAiModel(req.body && req.body.model)
 
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid chat ID' })
+    }
+
     try {
         const chat = await Chat.findOne({
             _id: req.params.id,
@@ -290,6 +301,12 @@ async function streamRegenerateLast(req, res) {
     const model = normalizeAiModel(req.body && req.body.model)
     let aborted = false
     const abortController = new AbortController()
+
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        prepareStream(res)
+        writeStreamEvent(res, 'error', { error: 'Invalid chat ID', code: 'INVALID_CHAT_ID' })
+        return res.end()
+    }
 
     prepareStream(res)
 
@@ -415,14 +432,33 @@ async function getSettings(req, res) {
 async function saveSettings(req, res) {
     const payload = req.body || {}
     const fields = ['openaiKey', 'xaiKey', 'claudeKey', 'geminiKey']
+    const providerByField = {
+        openaiKey: 'openai',
+        xaiKey: 'xai',
+        claudeKey: 'claude',
+        geminiKey: 'gemini'
+    }
     const update = {}
+    const changedProviders = []
 
-    fields.forEach((field) => {
+    for (const field of fields) {
         if (Object.prototype.hasOwnProperty.call(payload, field)) {
             const value = String(payload[field] || '').trim()
-            if (value) update[field] = encryptKey(value)
+            if (!value) continue
+
+            const provider = providerByField[field]
+            const validation = validateApiKey(provider, value)
+            if (!validation.ok) {
+                return res.status(400).json({ error: validation.error })
+            }
+
+            update[field] = encryptKey(validation.value)
+            changedProviders.push({
+                provider,
+                masked: validation.masked
+            })
         }
-    })
+    }
 
     if (!Object.keys(update).length) {
         return res.json({
@@ -437,6 +473,16 @@ async function saveSettings(req, res) {
         { $set: update, $setOnInsert: { user: req.user._id } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
     )
+
+    await logAuditEvent({
+        req,
+        action: 'ai_key_saved',
+        targetType: 'ai-settings',
+        targetId: String(req.user._id),
+        metadata: {
+            providers: changedProviders
+        }
+    })
 
     res.json({ success: true, status: await getUserKeyStatus(req.user._id), models: await getUserModelOptions(req.user._id) })
 }
@@ -458,6 +504,16 @@ async function clearSetting(req, res) {
         { $set: { [field]: '' }, $setOnInsert: { user: req.user._id } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
     )
+
+    await logAuditEvent({
+        req,
+        action: 'ai_key_removed',
+        targetType: 'ai-settings',
+        targetId: String(req.user._id),
+        metadata: {
+            provider: String(req.params.provider || '').toLowerCase()
+        }
+    })
 
     res.json({ success: true, status: await getUserKeyStatus(req.user._id), models: await getUserModelOptions(req.user._id) })
 }
@@ -527,6 +583,12 @@ async function deleteChat(req, res) {
 
 async function findOrCreateChat({ userId, chatId, titleSeed, model }) {
     if (chatId) {
+        if (!mongoose.isValidObjectId(chatId)) {
+            const error = new Error('Invalid chat ID')
+            error.statusCode = 400
+            throw error
+        }
+
         const chat = await Chat.findOne({ _id: chatId, userId })
         if (!chat) {
             const error = new Error('Chat not found')
@@ -560,10 +622,10 @@ function getLastMessageModel(chat) {
 async function getUserKeyStatus(userId) {
     const settings = await UserAISettings.findOne({ user: userId }).lean()
     return {
-        openai: Boolean(decryptKey(settings && settings.openaiKey)),
-        xai: Boolean(decryptKey(settings && settings.xaiKey)),
-        claude: Boolean(decryptKey(settings && settings.claudeKey)),
-        gemini: Boolean(decryptKey(settings && settings.geminiKey))
+        openai: buildKeyStatus(decryptKey(settings && settings.openaiKey)),
+        xai: buildKeyStatus(decryptKey(settings && settings.xaiKey)),
+        claude: buildKeyStatus(decryptKey(settings && settings.claudeKey)),
+        gemini: buildKeyStatus(decryptKey(settings && settings.geminiKey))
     }
 }
 
@@ -572,7 +634,7 @@ async function getUserModelOptions(userId) {
     return getModelOptions().map((model) => {
         const config = getModelConfig(model.id)
         const enabled = config.requiresKey
-            ? Boolean(keyStatus[config.providerKey])
+            ? Boolean(keyStatus[config.providerKey] && keyStatus[config.providerKey].connected)
             : model.enabled
 
         const disabledReason = enabled

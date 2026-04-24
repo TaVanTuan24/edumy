@@ -1,24 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const { isLoggedIn, requireCourseAccess, requireCourseManagement } = require('../middleware');
+const { isLoggedIn, isAdmin, requireCourseAccess, requireCourseManagement } = require('../middleware');
 const catchAsync = require('../utils/catchAsync');
 const course = require('../controllers/courses');
 const multer = require('multer');
-const { storage } = require('../config/cloudinary');
-const upload = multer({ storage });
+const { storage, imageFileFilter, MAX_IMAGE_UPLOAD_BYTES } = require('../config/cloudinary');
+const { uploadLimiter } = require('../utils/rateLimiters');
+const upload = multer({
+  storage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: MAX_IMAGE_UPLOAD_BYTES,
+    files: 6
+  }
+});
 
 router
   .route('/')
   .get(isLoggedIn, catchAsync(course.index))
-  .post(isLoggedIn, upload.array('image'), catchAsync(course.createCourse));
+  .post(isLoggedIn, isAdmin, uploadLimiter, upload.array('image'), catchAsync(course.createCourse));
 
 
-router.get('/new', isLoggedIn, course.renderNewForm);
+router.get('/new', isLoggedIn, isAdmin, course.renderNewForm);
 
 router
   .route('/:id')
   .get(isLoggedIn, requireCourseAccess, catchAsync(course.showCourses))
-  .put(isLoggedIn, requireCourseManagement, upload.array('image'), catchAsync(course.updateCourse))
+  .put(isLoggedIn, requireCourseManagement, uploadLimiter, upload.array('image'), catchAsync(course.updateCourse))
   .delete(isLoggedIn, requireCourseManagement, catchAsync(course.deleteCourse));
 
 router.get('/:id/edit', isLoggedIn, requireCourseManagement, catchAsync(course.renderEditForm));

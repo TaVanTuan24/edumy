@@ -11,7 +11,7 @@
 </head>
 
 <body class="slide-editor-page" data-course-id="<%= course._id %>" data-section-index="<%= sectionIndex %>" data-lesson-index="<%= lessonIndex %>">
-    <script id="slide-editor-data" type="application/json"><%- JSON.stringify(slideData || []) %></script>
+    <script id="slide-editor-data" type="application/json"><%- serializeJson(slideData || []) %></script>
 
     <header class="se-topbar">
         <div class="se-topbar-left">

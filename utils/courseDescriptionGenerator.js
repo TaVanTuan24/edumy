@@ -1,4 +1,5 @@
-const axios = require('axios');
+const ollama = require('../config/ollama');
+const { aiConfig } = require('../config/ai');
 const { getCanonicalSections } = require('./courseContentAdapter');
 
 const descriptionCache = new Map();
@@ -101,14 +102,14 @@ function parseAiDescription(text) {
 }
 
 async function callOllama(prompt) {
-  const response = await axios.post(
-    'http://localhost:11434/api/generate',
+  const response = await ollama.post(
+    '/api/generate',
     {
-      model: 'llama3.2',
+      model: aiConfig.ollama.model,
       prompt,
       stream: false
     },
-    { timeout: 12000 }
+    { timeout: Math.min(aiConfig.ollama.timeoutMs, 12000) }
   );
 
   return response && response.data && response.data.response

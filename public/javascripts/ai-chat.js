@@ -808,8 +808,10 @@
     if (!els.settingsForm) return;
     els.settingsForm.querySelectorAll('[data-key-status]').forEach(function(node) {
       const provider = node.dataset.keyStatus;
-      const connected = Boolean(status && status[provider]);
-      node.textContent = connected ? 'Connected' : 'Not connected';
+      const entry = status && status[provider] ? status[provider] : {};
+      const connected = Boolean(entry && entry.connected);
+      const masked = connected && entry.masked ? ' (' + entry.masked + ')' : '';
+      node.textContent = connected ? 'Connected' + masked : 'Not connected';
       node.classList.toggle('is-connected', connected);
     });
   }

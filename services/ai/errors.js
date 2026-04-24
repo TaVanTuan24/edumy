@@ -28,7 +28,7 @@ class AIAuthError extends AIProviderError {
             code: 'AI_AUTH_FAILED',
             statusCode: 401,
             provider,
-            publicMessage: 'The API key for this provider was rejected. Check it in AI Settings.',
+            publicMessage: 'Invalid API key.',
             cause
         })
     }
@@ -40,7 +40,19 @@ class AIRateLimitError extends AIProviderError {
             code: 'AI_RATE_LIMITED',
             statusCode: 429,
             provider,
-            publicMessage: 'This AI provider is rate limiting requests. Please try again shortly.',
+            publicMessage: 'Rate limited.',
+            cause
+        })
+    }
+}
+
+class AIQuotaExceededError extends AIProviderError {
+    constructor(provider, cause) {
+        super('AI provider quota exceeded', {
+            code: 'AI_QUOTA_EXCEEDED',
+            statusCode: 402,
+            provider,
+            publicMessage: 'Quota exceeded.',
             cause
         })
     }
@@ -81,9 +93,15 @@ function normalizeProviderError(error, provider) {
 
     const status = error && error.response && error.response.status
     const responseMessage = extractProviderMessage(error)
-    if (status === 401 || status === 403) return new AIAuthError(provider, error)
+    const normalizedMessage = responseMessage.toLowerCase()
+    if (status === 401 || status === 403 || /invalid api key|incorrect api key|authentication|unauthorized|forbidden|invalid x-api-key|invalid argument.*api key|api key not valid/i.test(responseMessage)) {
+        return new AIAuthError(provider, error)
+    }
+    if (status === 429 || /rate limit|too many requests/i.test(responseMessage)) return new AIRateLimitError(provider, error)
+    if (/quota|insufficient_quota|billing|credit balance|resource has been exhausted|exceeded your current quota/i.test(normalizedMessage)) {
+        return new AIQuotaExceededError(provider, error)
+    }
     if (status === 408 || status === 504) return new AITimeoutError(provider, error)
-    if (status === 429) return new AIRateLimitError(provider, error)
 
     return new AIProviderError('AI service error', {
         code: status === 404 ? 'AI_MODEL_NOT_AVAILABLE' : 'AI_PROVIDER_ERROR',
@@ -91,7 +109,7 @@ function normalizeProviderError(error, provider) {
         provider,
         publicMessage: status === 404
             ? 'This model is not available for the selected provider.'
-            : responseMessage || 'AI service error',
+            : 'AI service error. Please try again.',
         cause: error
     })
 }
@@ -113,6 +131,7 @@ module.exports = {
     AIKeyMissingError,
     AIAuthError,
     AIRateLimitError,
+    AIQuotaExceededError,
     AITimeoutError,
     AIAbortError,
     normalizeProviderError

@@ -1,6 +1,8 @@
-const DEFAULT_ADMIN_USER_IDS = new Set([
-  '68a69b0a055071b7e4410b8f'
-]);
+const mongoose = require('mongoose');
+
+const DEFAULT_ADMIN_USER_IDS = process.env.NODE_ENV === 'production'
+  ? []
+  : ['68a69b0a055071b7e4410b8f'];
 
 function sanitizeReturnTo(input, req) {
   const raw = String(input || '').trim();
@@ -56,7 +58,7 @@ function getConfiguredAdminIds() {
   return new Set([
     ...DEFAULT_ADMIN_USER_IDS,
     ...configuredAdminIds
-  ]);
+  ].filter((id) => mongoose.isValidObjectId(id)));
 }
 
 function isAdminUser(user) {
@@ -121,6 +123,10 @@ async function loadCourseForRequest(req) {
   const courseId = getCourseIdFromRequest(req);
   if (!courseId) {
     return { error: 'Course id is required.', statusCode: 400 };
+  }
+
+  if (!mongoose.isValidObjectId(courseId)) {
+    return { error: 'Invalid course id.', statusCode: 400 };
   }
 
   const course = await Course.findById(courseId).select('author');

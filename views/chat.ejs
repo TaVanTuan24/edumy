@@ -114,6 +114,7 @@
                 </button>
             </div>
             <form class="ai-composer" id="chatForm">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <textarea
                     id="messageInput"
                     rows="1"
@@ -144,6 +145,7 @@
         </div>
 
         <form class="ai-settings-form" id="aiSettingsForm">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <label>
                 <span>OpenAI-Compatible API Key <small data-key-status="openai">Checking...</small></span>
                 <input type="password" name="openaiKey" autocomplete="off" placeholder="Third-party gateway key" />

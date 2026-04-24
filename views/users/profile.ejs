@@ -17,6 +17,7 @@
       <% } %>
 
       <form class="profile-avatar-form" action="/profile/avatar" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <label class="avatar-upload-btn" for="profileAvatarInput">Đổi ảnh đại diện</label>
         <input id="profileAvatarInput" class="avatar-upload-input" type="file" name="avatar" accept="image/png,image/jpeg,image/jpg">
         <button id="profileAvatarSubmit" class="btn btn-primary btn-sm" type="submit" disabled>Cập nhật ảnh</button>
@@ -177,6 +178,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form id="vrPairingForm">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="modal-body">
           <label class="form-label fw-semibold" for="vrPairingCodeInput">5-digit pairing PIN</label>
           <input

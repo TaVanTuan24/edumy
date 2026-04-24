@@ -245,6 +245,23 @@
         initLibraryDrag();
     }
 
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttribute(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     function renderItemsList(items, type) {
         if (items.length === 0) {
             return `
@@ -271,13 +288,13 @@
         };
 
         return items.map(item => `
-            <div class="library-item" draggable="true" data-id="${item._id}" data-type="${type}">
+            <div class="library-item" draggable="true" data-id="${escapeAttribute(item._id)}" data-type="${escapeAttribute(type)}">
                 <div class="library-item-icon" style="color: ${colors[type]}">
                     <i class="fas ${icons[type]}"></i>
                 </div>
                 <div class="library-item-content">
-                    <div class="library-item-title">${item.title}</div>
-                    <div class="library-item-meta">${item.preview || 'No content'}</div>
+                    <div class="library-item-title">${escapeHtml(item.title)}</div>
+                    <div class="library-item-meta">${escapeHtml(item.preview || 'No content')}</div>
                 </div>
                 <div class="library-item-actions">
                     <button class="btn btn-sm btn-outline-primary" onclick="useLibraryItem('${item._id}', '${type}')" title="Add to section">

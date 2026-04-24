@@ -120,7 +120,20 @@ module.exports.login = (req, res) => {
     res.redirect(redirectUrl);
 };
 
+module.exports.redirectLogout = (req, res) => {
+    if (req.isAuthenticated && req.isAuthenticated()) {
+        req.flash('error', 'Please use the logout button to sign out safely.');
+    }
+
+    res.redirect('/');
+};
+
 module.exports.logout = (req, res, next) => {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+        req.flash('error', 'You are already signed out.');
+        return res.redirect('/');
+    }
+
     req.logout(function(err) {
         if (err) {
             return next(err);

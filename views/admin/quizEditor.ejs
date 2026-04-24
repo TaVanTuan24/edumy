@@ -9,7 +9,7 @@
     data-section-index="<%= sectionIndex %>"
     data-quiz-index="<%= quizIndex %>"
 >
-    <script id="quiz-editor-data" type="application/json"><%- JSON.stringify(quiz || {}) %></script>
+    <script id="quiz-editor-data" type="application/json"><%- serializeJson(quiz || {}) %></script>
     <div class="d-flex align-items-center justify-content-between mb-3">
         <div>
             <h3 class="mb-1">Quiz Editor</h3>
@@ -49,6 +49,7 @@
 
                 <div id="editorCard" class="editor-card d-none">
                     <form id="editorForm" class="d-none" novalidate>
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <div class="mb-3">
                             <label for="questionText" class="form-label fw-semibold">Question text</label>
                             <textarea id="questionText" class="form-control" rows="3" placeholder="Enter question text"></textarea>

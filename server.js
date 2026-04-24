@@ -14,10 +14,15 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const cors = require('cors');
+const csrf = require('csurf');
 const rateLimit = require('express-rate-limit');
 const mongoStore = require('connect-mongo');
 const { connectDB, closeDB } = require('./config/database');
 const passport = require('./config/passport');
+const { isAdminUser, sanitizeReturnTo } = require('./middleware');
+const serializeJsonForHtml = require('./utils/serializeJsonForHtml');
+const catchAsync = require('./utils/catchAsync');
+const homeController = require('./controllers/home');
 
 const userRoutes = require('./routes/users');
 const courseRoutes = require('./routes/courses');
@@ -42,6 +47,32 @@ if (isProduction && sessionSecret === 'dev-session-secret-change-me') {
 }
 
 const app = express();
+const csrfProtection = csrf();
+
+function requestWantsJson(req) {
+  const acceptHeader = String(req.get('Accept') || '').toLowerCase();
+  const contentType = String(req.get('Content-Type') || '').toLowerCase();
+  return Boolean(
+    req.xhr
+    || acceptHeader.includes('application/json')
+    || contentType.includes('application/json')
+    || req.path.startsWith('/api/')
+  );
+}
+
+function shouldSkipCsrf(req) {
+  const path = String(req.path || '');
+
+  if (path === '/api/vr-auth/request-code') {
+    return true;
+  }
+
+  if (path.startsWith('/api/vr/')) {
+    return true;
+  }
+
+  return false;
+}
 
 app.engine('ejs', ejsMate)
 app.set('view engine', 'ejs');
@@ -107,6 +138,13 @@ const sessionConfig = {
 }
 app.use(session(sessionConfig))
 app.use(flash())
+app.use((req, res, next) => {
+  if (shouldSkipCsrf(req)) {
+    return next();
+  }
+
+  return csrfProtection(req, res, next);
+});
 
 // Helmet CSP same as before
 const scriptSrcUrls = [
@@ -130,7 +168,7 @@ const connectSrcUrls = [
   "https://www.youtube.com",
   "https://www.youtube-nocookie.com"
 ];
-const fontSrcUrls = ["https://cdnjs.cloudflare.com/"];
+const fontSrcUrls = ["https://cdnjs.cloudflare.com/", "https://fonts.gstatic.com/"];
 app.use(helmet.contentSecurityPolicy({
   directives: {
     upgradeInsecureRequests: null,
@@ -165,7 +203,19 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use(async (req, res, next) => {
+  let csrfToken = '';
+  if (typeof req.csrfToken === 'function') {
+    try {
+      csrfToken = req.csrfToken();
+    } catch (_error) {
+      csrfToken = '';
+    }
+  }
+
   res.locals.currentUser = req.user;
+  res.locals.isCurrentUserAdmin = isAdminUser(req.user);
+  res.locals.serializeJson = serializeJsonForHtml;
+  res.locals.csrfToken = csrfToken;
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.courseNotifications = [];
@@ -260,19 +310,67 @@ app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'images', 'picture.png'));
 });
 
-app.get('/', (req, res) => {
-  res.render('home');
-});
+app.get('/', catchAsync(homeController.renderHome));
 
 // Catch-all 404 handler
 app.all('*', (req, res, next) => {
   next(new ExpressError('Page Not Found', 404));
 });
 
+app.use((err, req, res, next) => {
+  if (err && err.code === 'EBADCSRFTOKEN') {
+    const message = 'Your form expired or the request could not be verified. Please try again.';
+
+    if (requestWantsJson(req)) {
+      return res.status(403).json({
+        success: false,
+        error: message,
+        code: 'EBADCSRFTOKEN'
+      });
+    }
+
+    req.flash('error', message);
+    const returnTo = sanitizeReturnTo(req.get('Referrer'), req) || '/';
+    return res.redirect(returnTo);
+  }
+
+  return next(err);
+});
+
 // Production error handler
 app.use((err, req, res, _next) => {
-  const { statusCode = 500 } = err;
+  if (res.headersSent) {
+    return;
+  }
+
+  let statusCode = Number(err && err.statusCode) || 500;
+
+  if (err && err.name === 'CastError') {
+    statusCode = 400;
+    err.message = 'Invalid request identifier.';
+  } else if (err && err.name === 'ValidationError') {
+    statusCode = 400;
+    err.message = Object.values(err.errors || {})[0]?.message || 'Invalid request data.';
+  } else if (err && err.name === 'MulterError') {
+    statusCode = 400;
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      err.message = 'Uploaded image is too large.';
+    } else if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
+      err.message = 'Too many files were uploaded.';
+    } else {
+      err.message = 'Invalid file upload.';
+    }
+  }
+
   if (!err.message) err.message = 'Oh No, Something Went Wrong!';
+
+  if (requestWantsJson(req)) {
+    return res.status(statusCode).json({
+      success: false,
+      error: err.message
+    });
+  }
+
   res.status(statusCode).render('error', { err });
 });
 

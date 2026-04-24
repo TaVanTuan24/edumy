@@ -1,14 +1,16 @@
 const express = require("express")
 const router = express.Router()
-const axios = require("axios")
 const Course = require("../models/course")
 const User = require("../models/user")
 const Video = require("../models/video")
 const Transcript = require("../models/Transcript")
+const ollama = require("../config/ollama")
 const aiChatController = require("../controllers/aiChatController")
 const { generatePromptReply, normalizeAiModel } = require("../services/ai/chatOrchestrator")
+const { aiConfig } = require("../config/ai")
 const { awardGamification } = require('../utils/gamification')
 const { userCanAccessCourse } = require('../middleware')
+const { aiChatLimiter, aiSettingsLimiter, aiStreamLimiter } = require('../utils/rateLimiters')
 const {
     buildSlidePrompt,
     parseAiSlideResponse,
@@ -35,15 +37,15 @@ router.get("/models", aiChatController.listModels)
 
 router.get("/settings", aiChatController.getSettings)
 
-router.post("/settings", aiChatController.saveSettings)
+router.post("/settings", aiSettingsLimiter, aiChatController.saveSettings)
 
-router.delete("/settings/:provider", aiChatController.clearSetting)
+router.delete("/settings/:provider", aiSettingsLimiter, aiChatController.clearSetting)
 
 // Stream message - creates new chat or appends to existing conversation
-router.post("/chat/stream", aiChatController.streamMessage)
+router.post("/chat/stream", aiStreamLimiter, aiChatController.streamMessage)
 
 // Send message - creates new chat or appends to existing
-router.post("/chat", async (req, res, next) => {
+router.post("/chat", aiChatLimiter, async (req, res, next) => {
     const { courseId, question, lessonId, context } = req.body || {}
 
     if (!courseId || !question) {
@@ -105,10 +107,10 @@ router.post("/generate-quiz", async (req, res) => {
 
         const prompt = `You are a quiz generator.\n\nGenerate EXACTLY ${count} multiple choice questions.\nEach question MUST have EXACTLY 4 answers.\nDifficulty: ${safeDifficulty}.\n\nRULES:\n- Only ONE correct answer\n- Other 3 answers must be plausible but incorrect\n- DO NOT return less than 4 answers\n- DO NOT return explanations\n\nTopic: ${trimmedPrompt}\n\nReturn JSON format ONLY:\n[\n  {\n    "question": "string",\n    "answers": [\n      {"text": "A", "correct": false},\n      {"text": "B", "correct": false},\n      {"text": "C", "correct": true},\n      {"text": "D", "correct": false}\n    ]\n  }\n]\n`;
 
-        const ai = await axios.post(
-            "http://localhost:11434/api/generate",
+        const ai = await ollama.post(
+            "/api/generate",
             {
-                model: "llama3.2",
+                model: aiConfig.ollama.model,
                 prompt: prompt,
                 stream: false,
                 options: {
@@ -117,7 +119,7 @@ router.post("/generate-quiz", async (req, res) => {
                     max_tokens: 1600
                 }
             },
-            { timeout: 120000 }
+            { timeout: aiConfig.ollama.timeoutMs }
         );
 
         const raw = ai.data && ai.data.response ? String(ai.data.response) : '';
@@ -437,14 +439,14 @@ async function generateWithRetry(prompt, retries, options) {
 }
 
 async function callOllama(prompt) {
-    const ai = await axios.post(
-        "http://localhost:11434/api/generate",
+    const ai = await ollama.post(
+        "/api/generate",
         {
-            model: "llama3.2",
+            model: aiConfig.ollama.model,
             prompt: prompt,
             stream: false
         },
-        { timeout: 20000 }
+        { timeout: Math.min(aiConfig.ollama.timeoutMs, 20000) }
     )
 
     return ai.data && ai.data.response ? String(ai.data.response) : ''

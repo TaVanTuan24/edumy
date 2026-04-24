@@ -54,7 +54,7 @@
               <p class="card-text"><%= course.description %></p>
             </div>
 
-            <% if ((currentUser && course.author.equals(currentUser._id)) || currentUser._id == '675da20f3dfdaa4f789ffa00') { %>
+            <% if (currentUser && (course.author.equals(currentUser._id) || isCurrentUserAdmin)) { %>
               <div class="card-body">
                 <!-- <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
                   <button class="btn btn-danger">Delete</button>
@@ -87,6 +87,7 @@
               </div>
 
               <form id="reviewForm" class="mb-3">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <div class="row g-2 align-items-end">
                   <div class="col-12 col-md-3">
                     <label class="form-label" for="rating">Rating</label>
@@ -258,14 +259,14 @@
 
 <!-- Khai báo biến và load JS -->
 <script>
-  window.__COURSE__ = <%- JSON.stringify(course) %>;
-  window.completedVideos = <%- JSON.stringify(completedVideos) %>;
-  window.sectionNotes = <%- JSON.stringify(sectionNotes) %>;
+  window.__COURSE__ = <%- serializeJson(course) %>;
+  window.completedVideos = <%- serializeJson(completedVideos) %>;
+  window.sectionNotes = <%- serializeJson(sectionNotes) %>;
   const course = window.__COURSE__;
   const completedVideos = window.completedVideos;
   const sectionNotes = window.sectionNotes;
-  const hasCourseUpdate = <%- JSON.stringify(!!hasCourseUpdate) %>;
-  window.__GAMIFICATION__ = <%- JSON.stringify(gamification || null) %>;
+  const hasCourseUpdate = <%- serializeJson(!!hasCourseUpdate) %>;
+  window.__GAMIFICATION__ = <%- serializeJson(gamification || null) %>;
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script src="/javascripts/show/store.js" defer></script>

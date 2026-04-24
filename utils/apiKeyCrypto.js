@@ -1,9 +1,15 @@
 const crypto = require('crypto')
 
 const ALGORITHM = 'aes-256-gcm'
+const isProduction = process.env.NODE_ENV === 'production'
+const encryptionSecret = String(process.env.AI_KEY_ENCRYPTION_SECRET || '').trim()
+
+if (isProduction && !encryptionSecret) {
+    throw new Error('AI_KEY_ENCRYPTION_SECRET must be set in production')
+}
 
 function getEncryptionKey() {
-    const secret = process.env.AI_KEY_ENCRYPTION_SECRET
+    const secret = encryptionSecret
         || process.env.SESSION_SECRET
         || 'dev-ai-key-encryption-secret-change-me'
     return crypto.createHash('sha256').update(String(secret)).digest()

@@ -4,9 +4,10 @@ const router = express.Router();
 const { isLoggedIn, isAdmin } = require('../middleware');
 const catchAsync = require('../utils/catchAsync');
 const transcriptController = require('../controllers/transcript');
+const { adminActionLimiter } = require('../utils/rateLimiters');
 
-router.post('/:videoId/transcript', isLoggedIn, isAdmin, catchAsync(transcriptController.fetchAndSaveTranscript));
-router.post('/:videoId/ai-quiz', isLoggedIn, isAdmin, catchAsync(transcriptController.aiGenerateQuiz));
+router.post('/:videoId/transcript', isLoggedIn, isAdmin, adminActionLimiter, catchAsync(transcriptController.fetchAndSaveTranscript));
+router.post('/:videoId/ai-quiz', isLoggedIn, isAdmin, adminActionLimiter, catchAsync(transcriptController.aiGenerateQuiz));
 
 router.use((err, req, res, next) => {
 	const statusCode = Number(err && err.statusCode) || 500;

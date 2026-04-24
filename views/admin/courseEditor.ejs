@@ -17,7 +17,7 @@
     <% const lessonCount = Array.isArray(course.sections) ? course.sections.reduce((total, section) => total + ((section.lessons || []).length), 0) : 0; %>
     <!-- Course Data (hidden, parsed by JavaScript) -->
     <script id="course-data" type="application/json">
-        <%- JSON.stringify(course.sections || []) %>
+        <%- serializeJson(course.sections || []) %>
     </script>
 
     <!-- Top Bar -->
@@ -206,6 +206,7 @@
                 </div>
                 <div class="modal-body pt-0">
                     <form id="addItemForm" novalidate>
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <div id="addItemError" class="alert alert-danger d-none mb-3" role="alert"></div>
 
                         <div class="mb-3">
@@ -254,6 +255,7 @@
                 <div class="modal-footer border-0 pt-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                     <form action="/courses/<%= course._id %>?_method=DELETE" method="POST" class="m-0">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <button type="submit" class="btn btn-danger">
                             <i class="fas fa-trash-can me-2"></i>Delete Course
                         </button>
@@ -276,6 +278,7 @@
                 </div>
                 <div class="modal-body pt-0">
                     <form id="addSectionForm" novalidate>
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <div class="mb-3">
                             <label for="addSectionTitle" class="form-label fw-bold">Section Title</label>
                             <input type="text" class="form-control" id="addSectionTitle" placeholder="e.g. Chapter 1: Introduction" maxlength="150" required>

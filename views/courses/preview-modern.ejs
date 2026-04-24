@@ -9,10 +9,9 @@
   const totalSections = Number(stats.totalSectionCount || sections.length || 0);
   const totalVideos = Number(stats.totalVideoCount || 0);
   const totalDurationLabel = stats.formattedDuration || 'Duration unavailable';
-  const totalReviews = Array.isArray(course.reviews) ? course.reviews.length : 0;
-  const averageRating = totalReviews
-    ? (course.reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / totalReviews).toFixed(1)
-    : null;
+  const summary = reviewSummary || {};
+  const totalReviews = Number(summary.reviewCount || 0);
+  const averageRating = Number.isFinite(summary.averageRating) ? Number(summary.averageRating).toFixed(1) : null;
 
   function itemTypeLabel(item) {
     const type = String((item && item.type) || 'video').toLowerCase();
@@ -64,6 +63,7 @@
               <a class="btn btn-success" href="/courses/<%= course._id %>">Vào khóa học</a>
             <% } else { %>
               <form action="/explore/<%= course._id %>/enroll" method="POST">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <button class="btn btn-success">Tham gia khóa học</button>
               </form>
             <% } %>
@@ -200,6 +200,7 @@
                 <a class="btn btn-success w-100" href="/courses/<%= course._id %>">Vào khóa học</a>
               <% } else { %>
                 <form action="/explore/<%= course._id %>/enroll" method="POST" class="d-grid">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <button class="btn btn-success">Tham gia khóa học</button>
                 </form>
               <% } %>

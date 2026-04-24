@@ -7,6 +7,7 @@ const UserCourseProgress = require('../models/userCourseProgress');
 const mongoose = require('mongoose');
 const { awardGamification, buildGamificationViewModel, recordLearningActivity } = require('../utils/gamification');
 const Discussion = require('../models/discussion');
+const { logAuditEvent } = require('../utils/auditLogger');
 const {
   getCanonicalSections,
   syncCourseContent
@@ -216,6 +217,17 @@ module.exports.createCourse = async (req, res) => {
   }
 
   await course.save();
+  await logAuditEvent({
+    req,
+    action: 'course_created',
+    targetType: 'course',
+    targetId: String(course._id),
+    metadata: {
+      title: course.title,
+      topic: course.topic,
+      sectionCount: Array.isArray(course.sections) ? course.sections.length : 0
+    }
+  });
   req.flash('success', 'Successfully made a new course!');
   res.redirect(`/courses/${course._id}`);
 };
@@ -291,7 +303,7 @@ module.exports.renderEditForm = async (req, res) => {
 };
 
 module.exports.updateCourse = async (req, res) => {
-  const course = await Course.findByIdAndUpdate(req.params.id, sanitizeCourseInput(req.body.course), { new: true, runValidators: true });
+  const course = await Course.findById(req.params.id);
   if (!course) {
     req.flash('error', 'Cannot find that course!');
     return res.redirect('/courses');
@@ -307,9 +319,9 @@ module.exports.updateCourse = async (req, res) => {
     return res.redirect(`/courses/${req.params.id}/edit`);
   }
 
-  const imgs = imageResult.source === 'upload'
-    ? imageResult.images
-    : getUploadedImageEntries(req.files);
+  course.set(sanitizeCourseInput(req.body.course));
+
+  const imgs = imageResult.source === 'upload' ? imageResult.images : [];
 
   if (imgs.length) {
     course.images.push(...imgs);
@@ -317,12 +329,34 @@ module.exports.updateCourse = async (req, res) => {
     course.images.push(...imageResult.images);
   }
   await course.save();
+  await logAuditEvent({
+    req,
+    action: 'course_updated',
+    targetType: 'course',
+    targetId: String(course._id),
+    metadata: {
+      title: course.title,
+      topic: course.topic,
+      imageSource: imageResult.source
+    }
+  });
   req.flash('success', 'Successfully updated course!');
   res.redirect(`/courses/${course._id}`);
 };
 
 module.exports.deleteCourse = async (req, res) => {
-  await Course.findByIdAndDelete(req.params.id);
+  const course = await Course.findByIdAndDelete(req.params.id);
+  if (course) {
+    await logAuditEvent({
+      req,
+      action: 'course_deleted',
+      targetType: 'course',
+      targetId: String(course._id),
+      metadata: {
+        title: course.title
+      }
+    });
+  }
   req.flash('success', 'Successfully deleted course!');
   res.redirect('/courses');
 };

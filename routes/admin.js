@@ -8,6 +8,8 @@ const UserCourseProgress = require('../models/userCourseProgress');
 const Video = require('../models/video');
 const adminAnalyticsRoutes = require('./adminAnalytics');
 const grokSetupService = require('../services/ai/grokSetupService')
+const { adminActionLimiter } = require('../utils/rateLimiters')
+const { logAuditEvent } = require('../utils/auditLogger')
 const {
     getCanonicalSections,
     syncCourseContent
@@ -16,6 +18,22 @@ const { prepareLessonForWrite, syncCourseAggregateFields } = require('../utils/c
 
 router.use(isLoggedIn, isAdmin);
 router.use('/courses/:courseId/analytics', adminAnalyticsRoutes);
+router.use((req, res, next) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method || '').toUpperCase())) {
+        return adminActionLimiter(req, res, next)
+    }
+    return next()
+})
+
+async function recordAdminAudit(req, action, targetType, targetId, metadata) {
+    await logAuditEvent({
+        req,
+        action,
+        targetType,
+        targetId,
+        metadata
+    })
+}
 
 router.get('/ai/grok/status', async (_req, res) => {
     res.json(await grokSetupService.getStatus())
@@ -24,6 +42,7 @@ router.get('/ai/grok/status', async (_req, res) => {
 router.post('/ai/grok/setup', async (_req, res) => {
     try {
         const setup = await grokSetupService.startSetup()
+        await recordAdminAudit(_req, 'admin_grok_setup_started', 'ai-provider', 'grok', {})
         res.status(202).json({ success: true, setup })
     } catch (error) {
         res.status(400).json({ success: false, error: error.publicMessage || error.message })
@@ -33,6 +52,7 @@ router.post('/ai/grok/setup', async (_req, res) => {
 router.post('/ai/grok/setup/complete', async (_req, res) => {
     try {
         const setup = await grokSetupService.completeLogin()
+        await recordAdminAudit(_req, 'admin_grok_setup_completed', 'ai-provider', 'grok', {})
         res.json({ success: true, setup })
     } catch (error) {
         res.status(400).json({ success: false, error: error.publicMessage || error.message })
@@ -41,7 +61,9 @@ router.post('/ai/grok/setup/complete', async (_req, res) => {
 
 router.post('/ai/grok/enable', async (_req, res) => {
     try {
-        res.json({ success: true, status: await grokSetupService.setEnabled(true) })
+        const status = await grokSetupService.setEnabled(true)
+        await recordAdminAudit(_req, 'admin_grok_enabled', 'ai-provider', 'grok', {})
+        res.json({ success: true, status })
     } catch (error) {
         res.status(400).json({ success: false, error: error.publicMessage || error.message })
     }
@@ -49,7 +71,9 @@ router.post('/ai/grok/enable', async (_req, res) => {
 
 router.post('/ai/grok/disable', async (_req, res) => {
     try {
-        res.json({ success: true, status: await grokSetupService.setEnabled(false) })
+        const status = await grokSetupService.setEnabled(false)
+        await recordAdminAudit(_req, 'admin_grok_disabled', 'ai-provider', 'grok', {})
+        res.json({ success: true, status })
     } catch (error) {
         res.status(400).json({ success: false, error: error.publicMessage || error.message })
     }
@@ -799,6 +823,11 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
             title: lesson.title,
             slideCount: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides.length : 0
         }))
+        await recordAdminAudit(req, 'slide_deck_saved', 'lesson', String(lesson && lesson._id || ''), {
+            courseId: String(course._id),
+            title: lesson.title,
+            slideCount: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides.length : 0
+        })
 
         return res.json({ success: true })
     } catch (err) {
@@ -851,6 +880,11 @@ lesson.content = {
 await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: true })
 
 await saveEditableCourse(course)
+await recordAdminAudit(req, 'lesson_updated', 'lesson', String(lesson && lesson._id || ''), {
+    courseId: String(course._id),
+    title: lesson.title,
+    type: lesson.type
+})
 
 res.send("updated")
 
@@ -871,9 +905,14 @@ router.delete('/course/:id/lesson/delete', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid lesson reference' })
     }
 
+    const removedLesson = lessons[parsedLessonIndex]
     lessons.splice(parsedLessonIndex, 1)
     reindexCanonicalSections(course)
     await saveEditableCourse(course)
+    await recordAdminAudit(req, 'lesson_deleted', 'lesson', String(removedLesson && removedLesson._id || ''), {
+        courseId: String(course._id),
+        title: removedLesson && removedLesson.title
+    })
 
     res.json({ success: true })
 
@@ -912,6 +951,12 @@ router.put('/course/:id/lesson/add', async (req, res) => {
         await saveEditableCourse(course)
 
         console.log('Saved item:', newItem)
+        const savedItem = videos[videos.length - 1]
+        await recordAdminAudit(req, 'lesson_added', 'lesson', String(savedItem && savedItem._id || ''), {
+            courseId: String(course._id),
+            title: savedItem && savedItem.title,
+            type: savedItem && savedItem.type
+        })
 
         res.json({ success: true, item: newItem })
     } catch (err) {
@@ -1043,6 +1088,10 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
 
         reindexCanonicalSections(course)
         await saveEditableCourse(course)
+        await recordAdminAudit(req, 'lesson_reordered', 'course', String(course._id), {
+            sourceSectionIndex: fromSection,
+            destSectionIndex: toSection
+        })
 
         res.json({
             success: true,
@@ -1071,6 +1120,10 @@ router.put('/course/:id/section/edit', async (req, res) => {
 
     section.title = name
     await saveEditableCourse(course)
+    await recordAdminAudit(req, 'section_updated', 'section', String(section && section._id || ''), {
+        courseId: String(course._id),
+        title: section.title
+    })
 
     res.json({ success: true })
 
@@ -1091,6 +1144,11 @@ router.post("/course/:id/section/add", async (req, res) => {
     })
     reindexCanonicalSections(course)
     await saveEditableCourse(course)
+    const addedSection = course.sections[course.sections.length - 1]
+    await recordAdminAudit(req, 'section_added', 'section', String(addedSection && addedSection._id || ''), {
+        courseId: String(course._id),
+        title: addedSection && addedSection.title
+    })
 
     res.json({ success: true })
 
@@ -1245,6 +1303,10 @@ router.put('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes', 
         lesson.interactiveQuizzes = interactiveQuizzes
         lesson.content = { ...(lesson.content || {}), interactiveQuizzes }
         await saveEditableCourse(course)
+        await recordAdminAudit(req, 'interactive_quizzes_replaced', 'lesson', String(lesson && lesson._id || ''), {
+            courseId: String(course._id),
+            quizCount: interactiveQuizzes.length
+        })
 
         return res.json({ success: true, interactiveQuizzes })
     } catch (err) {
@@ -1279,6 +1341,10 @@ router.post('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes',
         lesson.content.interactiveQuizzes = appended
 
         await saveEditableCourse(course)
+        await recordAdminAudit(req, 'interactive_quiz_added', 'lesson', String(lesson && lesson._id || ''), {
+            courseId: String(course._id),
+            quizCount: appended.length
+        })
         return res.json({ success: true, interactiveQuizzes: appended })
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message })
@@ -1326,6 +1392,10 @@ router.patch('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes/
         lesson.content.interactiveQuizzes = normalized
 
         await saveEditableCourse(course)
+        await recordAdminAudit(req, 'interactive_quizzes_reordered', 'lesson', String(lesson && lesson._id || ''), {
+            courseId: String(course._id),
+            quizCount: normalized.length
+        })
         return res.json({ success: true, interactiveQuizzes: normalized })
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message })
@@ -1362,6 +1432,10 @@ router.delete('/course/:id/lesson/:sectionIndex/:lessonIndex/interactive-quizzes
         lesson.content.interactiveQuizzes = normalized
 
         await saveEditableCourse(course)
+        await recordAdminAudit(req, 'interactive_quiz_deleted', 'lesson', String(lesson && lesson._id || ''), {
+            courseId: String(course._id),
+            quizId
+        })
         return res.json({ success: true, interactiveQuizzes: normalized })
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message })
@@ -1501,6 +1575,10 @@ router.post(
                 questionIndex,
                 question: buildEditorQuizQuestionResponse(questions[questionIndex])
             }))
+            await recordAdminAudit(req, 'quiz_question_added', 'lesson', String(quizLesson && quizLesson._id || ''), {
+                courseId: String(course._id),
+                questionIndex
+            })
 
             res.json({
                 success: true,
@@ -1606,6 +1684,10 @@ router.put(
                 questionIndex: parsedQuestionIndex,
                 question: buildEditorQuizQuestionResponse(questions[parsedQuestionIndex])
             }))
+            await recordAdminAudit(req, 'quiz_question_updated', 'lesson', String(quizLesson && quizLesson._id || ''), {
+                courseId: String(course._id),
+                questionIndex: parsedQuestionIndex
+            })
 
             res.json({ success: true })
         } catch (err) {
@@ -1649,6 +1731,10 @@ router.delete(
             quizLesson.content = { ...(quizLesson.content || {}), questions }
             course.markModified('sections')
             await saveEditableCourse(course)
+            await recordAdminAudit(req, 'quiz_question_deleted', 'lesson', String(quizLesson && quizLesson._id || ''), {
+                courseId: String(course._id),
+                questionIndex: parsedQuestionIndex
+            })
 
             res.json({ success: true })
         } catch (err) {
@@ -1703,6 +1789,10 @@ router.put(
             course.markModified('sections')
 
             await saveEditableCourse(course)
+            await recordAdminAudit(req, 'quiz_questions_reordered', 'lesson', String(course.sections[parsedSectionIndex].lessons[parsedQuizIndex] && course.sections[parsedSectionIndex].lessons[parsedQuizIndex]._id || ''), {
+                courseId: String(course._id),
+                questionCount: questions.length
+            })
 
             res.json({ success: true })
         } catch (err) {
@@ -1754,6 +1844,10 @@ router.put('/course/:id/lesson/slides/add', async (req, res) => {
     lesson.aiGenerated = true
     course.markModified('sections')
     await saveEditableCourse(course)
+    await recordAdminAudit(req, 'lesson_slides_added', 'lesson', String(lesson && lesson._id || ''), {
+        courseId: String(course._id),
+        slideCount: normalizedSlides.length
+    })
 
     res.json({ success: true })
 })
@@ -1778,6 +1872,10 @@ router.put('/course/:id/lesson/slides/update', async (req, res) => {
     lesson.content = { ...(lesson.content || {}), slides }
     course.markModified('sections')
     await saveEditableCourse(course)
+    await recordAdminAudit(req, 'lesson_slide_updated', 'lesson', String(lesson && lesson._id || ''), {
+        courseId: String(course._id),
+        slideIndex: Number(slideIndex)
+    })
 
     res.json({ success: true })
 })
@@ -1800,6 +1898,9 @@ router.put('/course/:id/lesson/slides/delete', async (req, res) => {
     lesson.aiGenerated = false
     course.markModified('sections')
     await saveEditableCourse(course)
+    await recordAdminAudit(req, 'lesson_slides_deleted', 'lesson', String(lesson && lesson._id || ''), {
+        courseId: String(course._id)
+    })
 
     res.json({ success: true })
 })
