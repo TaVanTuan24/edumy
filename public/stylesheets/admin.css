@@ -1,20 +1,26 @@
 :root {
-  --admin-bg: #f8fafc;
-  --admin-card-bg: #fff;
-  --admin-border: #e2e8f0;
-  --admin-text-main: #1e293b;
-  --admin-text-muted: #64748b;
+  --admin-bg: var(--app-bg);
+  --admin-card-bg: var(--app-surface);
+  --admin-border: var(--app-border);
+  --admin-text-main: var(--app-text);
+  --admin-text-muted: var(--app-text-muted);
   --admin-primary: #4f46e5;
   --admin-primary-hover: #4338ca;
   --admin-danger: #ef4444;
-  --admin-shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
-  --admin-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-  --admin-shadow-hover: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  --admin-shadow-sm: var(--app-shadow-sm);
+  --admin-shadow-md: var(--app-shadow-md);
+  --admin-shadow-hover: var(--app-shadow-lg);
   --admin-radius: 12px;
 }
 
 body {
   background-color: var(--admin-bg);
+}
+
+html[data-theme="dark"] {
+  --admin-primary: #60a5fa;
+  --admin-primary-hover: #3b82f6;
+  --admin-danger: #f87171;
 }
 
 .admin-header-row {
@@ -98,7 +104,7 @@ body {
   flex: 0 0 auto;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
-  background: #f1f5f9;
+  background: var(--app-surface-soft);
   color: var(--admin-text-muted);
   font-size: 0.8rem;
   font-weight: 800;
@@ -132,7 +138,7 @@ body {
   padding: 0.85rem;
   border: 1px solid var(--admin-border);
   border-radius: 0.75rem;
-  background: #f8fafc;
+  background: var(--app-surface-soft);
 }
 
 .grok-check i {
@@ -230,7 +236,7 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
   border-radius: 9999px;
-  background-color: #e0e7ff;
+  background-color: color-mix(in srgb, var(--admin-primary) 18%, transparent);
   color: var(--admin-primary);
   margin-bottom: 0.75rem;
 }

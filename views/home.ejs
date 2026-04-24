@@ -38,7 +38,7 @@
           </div>
         </div>
 
-        <div class="home-hero-visual" data-reveal data-reveal-delay="120">
+        <div class="home-hero-visual" data-reveal data-reveal-delay="120" data-depth-layer>
           <div class="hero-panel">
             <div class="hero-panel-header">
               <span class="hero-panel-pill">Learning Workspace</span>
@@ -137,20 +137,20 @@
           </ul>
         </div>
 
-        <div class="home-ai-preview" data-reveal data-reveal-delay="120">
+        <div class="home-ai-preview" data-reveal data-reveal-delay="120" data-depth-layer>
           <div class="home-chat-demo">
             <div class="home-chat-demo-head">
               <span>Learning Copilot</span>
-              <span class="home-chat-demo-model">GPT-5.4 / llama3.2</span>
+              <span class="home-chat-demo-model" data-demo-model>AI Tutor</span>
             </div>
             <div class="home-chat-demo-body">
-              <div class="home-chat-bubble user">Create a 7-day plan to learn JavaScript fundamentals.</div>
+              <div class="home-chat-bubble user" data-demo-user></div>
               <div class="home-chat-bubble assistant">
                 <span class="home-chat-typing-label">Assistant</span>
-                <span data-demo-typing class="home-demo-typing"></span>
+                <span data-demo-stream class="home-demo-typing"></span>
               </div>
-              <div class="home-chat-bubble assistant soft">
-                I can also turn this lesson into a quiz or summarize the current course section.
+              <div class="home-chat-bubble assistant soft" data-demo-followup>
+                Grok/GPT/Gemini-ready with local `llama3.2` fallback.
               </div>
             </div>
           </div>
@@ -258,13 +258,21 @@
 
 <script>
   window.__HOME_DEMO_LINES__ = <%- serializeJson([
-    'Day 1: variables, types, and conditionals.',
-    'Day 2: loops, arrays, and object basics.',
-    'Day 3: functions and scope with practice prompts.',
-    'Day 4: DOM interactions and event handling.',
-    'Day 5: async flows and working with APIs.',
-    'Day 6: build a mini project with quizzes.',
-    'Day 7: review weak spots and ship a final exercise.'
+    {
+      model: 'AI Tutor',
+      prompt: 'Explain event bubbling like I am brand new to JavaScript.',
+      response: '**Event bubbling** means an event starts on the clicked element, then travels upward.\n\n- Click a button\n- The button handler runs first\n- Then the parent container can react too\n\n`button -> card -> page`'
+    },
+    {
+      model: 'Quiz Builder',
+      prompt: 'Generate 3 quiz questions from this lesson.',
+      response: 'I can turn the lesson into a quick check:\n\n- 3 multiple-choice questions\n- difficulty: `medium`\n- focus: key concepts and common mistakes\n\n```txt\nQ1. Which handler receives the event first?\n```'
+    },
+    {
+      model: 'Progress Coach',
+      prompt: 'Summarize my learning progress this week.',
+      response: 'You completed **4 lessons** and improved your quiz score to **82%**.\n\n- strongest area: DOM basics\n- next step: async practice\n- recommendation: review one weak lesson before the weekend'
+    }
   ]) %>;
 </script>
 <script src="/javascripts/home.js" defer></script>

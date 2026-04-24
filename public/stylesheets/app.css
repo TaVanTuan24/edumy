@@ -1,3 +1,76 @@
+:root {
+    --app-shell-max: 1280px;
+    --app-space-1: 0.5rem;
+    --app-space-2: 0.75rem;
+    --app-space-3: 1rem;
+    --app-space-4: 1.25rem;
+    --app-space-5: 1.5rem;
+    --app-radius-sm: 0.8rem;
+    --app-radius-md: 1rem;
+    --app-radius-lg: 1.2rem;
+    --app-radius-xl: 1.5rem;
+    --app-shadow-sm: 0 10px 24px rgba(15, 23, 42, 0.05);
+    --app-shadow-md: 0 18px 36px rgba(15, 23, 42, 0.08);
+    --app-shadow-lg: 0 26px 60px rgba(15, 23, 42, 0.12);
+    --app-navbar-bg: rgba(11, 18, 30, 0.9);
+    --app-navbar-border: rgba(255, 255, 255, 0.08);
+    --app-accent: #0f766e;
+    --app-accent-strong: #0b5c56;
+    --app-accent-soft: rgba(15, 118, 110, 0.12);
+    --app-bg: #f4f7fb;
+    --app-bg-elevated: #eef3f9;
+    --app-surface: #ffffff;
+    --app-surface-soft: #f8fafc;
+    --app-input-bg: #ffffff;
+    --app-input-text: #10233f;
+    --app-input-border: rgba(148, 163, 184, 0.28);
+    --app-input-disabled-bg: #eef3f9;
+    --app-placeholder: #7f8ea3;
+    --app-text: #10233f;
+    --app-text-muted: #5f6d7d;
+    --app-border: rgba(148, 163, 184, 0.24);
+    --app-shadow-color: rgba(15, 23, 42, 0.12);
+    --app-skeleton-base: #e7edf5;
+    --app-skeleton-glow: #f8fbff;
+    --app-focus: rgba(15, 118, 110, 0.22);
+    --app-selection-bg: rgba(15, 118, 110, 0.22);
+    --app-selection-text: #10233f;
+    --app-success-soft: rgba(22, 163, 74, 0.12);
+    --app-success-text: #166534;
+    --app-danger-soft: rgba(239, 68, 68, 0.12);
+    --app-danger-text: #b42318;
+}
+
+html[data-theme="dark"] {
+    --app-navbar-bg: rgba(8, 12, 22, 0.88);
+    --app-navbar-border: rgba(148, 163, 184, 0.14);
+    --app-accent: #34d399;
+    --app-accent-strong: #6ee7b7;
+    --app-accent-soft: rgba(52, 211, 153, 0.16);
+    --app-bg: #09111d;
+    --app-bg-elevated: #0d1726;
+    --app-surface: #101b2d;
+    --app-surface-soft: #142033;
+    --app-input-bg: #142033;
+    --app-input-text: #e8eef6;
+    --app-input-border: rgba(148, 163, 184, 0.24);
+    --app-input-disabled-bg: #0f192a;
+    --app-placeholder: #8ea1b9;
+    --app-text: #e8eef6;
+    --app-text-muted: #97a7bb;
+    --app-border: rgba(148, 163, 184, 0.18);
+    --app-shadow-color: rgba(2, 6, 23, 0.42);
+    --app-skeleton-base: #1c2b40;
+    --app-skeleton-glow: #293b57;
+    --app-focus: rgba(52, 211, 153, 0.22);
+    --app-selection-bg: rgba(52, 211, 153, 0.26);
+    --app-selection-text: #f8fafc;
+    --app-success-soft: rgba(22, 163, 74, 0.16);
+    --app-success-text: #86efac;
+    --app-danger-soft: rgba(239, 68, 68, 0.18);
+    --app-danger-text: #fda4af;
+}
+
 #cluster-map {
     width: 100%;
     height: 500px;
@@ -7,6 +80,14 @@ body {
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+    background: var(--app-bg);
+    color: var(--app-text);
+    transition: background-color 180ms ease, color 180ms ease;
+}
+
+::selection {
+    background: var(--app-selection-bg);
+    color: var(--app-selection-text);
 }
 
 #map {
@@ -193,6 +274,531 @@ body {
     gap: 6px;
 }
 
+.app-shell,
+.app-main {
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+.text-muted,
+.dropdown-item-text.text-muted {
+    color: var(--app-text-muted) !important;
+}
+
+.card,
+.modal-content,
+.dropdown-menu,
+.list-group-item,
+.accordion-item,
+.table,
+.table-responsive,
+.form-control,
+.form-select,
+.input-group-text {
+    background-color: var(--app-surface);
+    color: var(--app-text);
+}
+
+.card,
+.modal-content,
+.dropdown-menu,
+.list-group-item,
+.accordion-item {
+    border-color: var(--app-border);
+    box-shadow: var(--app-shadow-sm);
+}
+
+.dropdown-menu {
+    backdrop-filter: blur(18px);
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    background-color: var(--app-input-bg);
+    color: var(--app-input-text);
+    border-color: var(--app-input-border);
+    caret-color: var(--app-input-text);
+}
+
+input,
+select,
+textarea {
+    color: var(--app-input-text);
+    caret-color: var(--app-input-text);
+}
+
+.form-control::placeholder,
+.form-select::placeholder,
+textarea::placeholder,
+input::placeholder {
+    color: var(--app-placeholder);
+    opacity: 1;
+}
+
+.form-label {
+    color: var(--app-text);
+    font-weight: 600;
+}
+
+.form-text {
+    color: var(--app-text-muted);
+}
+
+.input-group-text {
+    background-color: var(--app-surface-soft);
+    color: var(--app-text-muted);
+    border-color: var(--app-input-border);
+}
+
+.form-control:focus,
+.form-select:focus,
+textarea:focus,
+input:focus,
+select:focus,
+.btn:focus,
+.btn-close:focus,
+.dropdown-item:focus,
+.nav-link:focus,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    box-shadow: 0 0 0 0.25rem var(--app-focus) !important;
+    outline: none;
+}
+
+.form-control:focus,
+.form-select:focus,
+textarea:focus,
+input:focus,
+select:focus {
+    background-color: var(--app-input-bg);
+    color: var(--app-input-text);
+    border-color: color-mix(in srgb, var(--app-accent) 48%, var(--app-input-border));
+}
+
+.form-control:disabled,
+.form-control[readonly],
+.form-select:disabled,
+textarea:disabled,
+textarea[readonly],
+input:disabled,
+input[readonly],
+select:disabled {
+    background-color: var(--app-input-disabled-bg) !important;
+    color: var(--app-text-muted) !important;
+    border-color: var(--app-input-border) !important;
+    opacity: 1;
+}
+
+.form-control:-webkit-autofill,
+.form-control:-webkit-autofill:hover,
+.form-control:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--app-input-text);
+    -webkit-box-shadow: 0 0 0 1000px var(--app-input-bg) inset;
+    transition: background-color 9999s ease-in-out 0s;
+}
+
+.form-check-input {
+    background-color: var(--app-input-bg);
+    border-color: var(--app-input-border);
+}
+
+.form-check-input:focus {
+    border-color: color-mix(in srgb, var(--app-accent) 48%, var(--app-input-border));
+    box-shadow: 0 0 0 0.25rem var(--app-focus);
+}
+
+.form-check-input:checked {
+    background-color: var(--app-accent);
+    border-color: var(--app-accent);
+}
+
+.valid-feedback,
+.valid-tooltip {
+    color: var(--app-success-text);
+}
+
+.invalid-feedback,
+.invalid-tooltip {
+    color: var(--app-danger-text);
+}
+
+.form-control.is-valid,
+.was-validated .form-control:valid,
+.form-select.is-valid,
+.was-validated .form-select:valid {
+    border-color: color-mix(in srgb, var(--app-success-text) 55%, var(--app-input-border));
+}
+
+.form-control.is-invalid,
+.was-validated .form-control:invalid,
+.form-select.is-invalid,
+.was-validated .form-select:invalid {
+    border-color: color-mix(in srgb, var(--app-danger-text) 55%, var(--app-input-border));
+}
+
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--app-text);
+    --bs-table-border-color: var(--app-border);
+    --bs-table-striped-bg: rgba(148, 163, 184, 0.08);
+    --bs-table-hover-bg: rgba(148, 163, 184, 0.12);
+}
+
+.alert {
+    border-radius: var(--app-radius-md);
+}
+
+.btn-close {
+    filter: none;
+}
+
+html[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%);
+}
+
+.app-flash .alert {
+    box-shadow: var(--app-shadow-sm);
+}
+
+.app-navbar {
+    background: var(--app-navbar-bg);
+    border-bottom: 1px solid var(--app-navbar-border);
+    backdrop-filter: blur(16px);
+}
+
+.app-navbar .nav-link,
+.app-navbar .navbar-brand {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.app-navbar .nav-link:hover,
+.app-navbar .nav-link:focus,
+.app-navbar .nav-link.active {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+}
+
+.nav-theme-toggle i {
+    width: 1rem;
+    text-align: center;
+}
+
+.app-footer {
+    background: var(--app-navbar-bg);
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.app-footer .footer-inner {
+    border-top: 1px solid transparent;
+}
+
+.skeleton-shimmer,
+.course-skeleton-card,
+.chart-skeleton {
+    position: relative;
+    overflow: hidden;
+}
+
+.skeleton-shimmer::after,
+.course-skeleton-card::after,
+.chart-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.55),
+        transparent
+    );
+    animation: skeletonShimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-block {
+    border-radius: 999px;
+    background: var(--app-skeleton-base);
+}
+
+.course-skeleton-grid {
+    display: grid;
+    gap: 18px;
+}
+
+.course-skeleton-card {
+    min-height: 300px;
+    border-radius: 24px;
+    background: var(--app-surface);
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow-sm);
+}
+
+.course-skeleton-media {
+    height: 180px;
+    border-bottom: 1px solid var(--app-border);
+    background: var(--app-skeleton-base);
+}
+
+.course-skeleton-body {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+}
+
+.course-skeleton-line {
+    height: 12px;
+}
+
+.course-skeleton-line.is-short {
+    width: 52%;
+}
+
+.course-skeleton-line.is-medium {
+    width: 76%;
+}
+
+.course-skeleton-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.course-skeleton-pill,
+.course-skeleton-button {
+    height: 34px;
+    background: var(--app-skeleton-base);
+    border-radius: 999px;
+}
+
+.course-skeleton-pill {
+    width: 88px;
+}
+
+.course-skeleton-button {
+    width: 126px;
+}
+
+.chart-skeleton {
+    height: 100%;
+    min-height: 300px;
+    border-radius: var(--app-radius-lg);
+    background:
+        linear-gradient(180deg, var(--app-surface-soft), var(--app-surface));
+    border: 1px solid var(--app-border);
+}
+
+.chart-skeleton-bars {
+    position: absolute;
+    inset: auto 20px 20px;
+    display: flex;
+    align-items: end;
+    gap: 10px;
+    height: 52%;
+}
+
+.chart-skeleton-bars span {
+    flex: 1 1 0;
+    border-radius: 999px 999px 0 0;
+    background: var(--app-skeleton-base);
+}
+
+.chart-skeleton-bars span:nth-child(1) { height: 42%; }
+.chart-skeleton-bars span:nth-child(2) { height: 68%; }
+.chart-skeleton-bars span:nth-child(3) { height: 54%; }
+.chart-skeleton-bars span:nth-child(4) { height: 82%; }
+.chart-skeleton-bars span:nth-child(5) { height: 61%; }
+
+@keyframes skeletonShimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton-shimmer::after,
+    .course-skeleton-card::after,
+    .chart-skeleton::after {
+        animation: none;
+    }
+}
+
+html[data-theme="dark"] .bg-white,
+html[data-theme="dark"] .bg-light,
+html[data-theme="dark"] .text-bg-light,
+html[data-theme="dark"] .list-group-item,
+html[data-theme="dark"] .accordion-item,
+html[data-theme="dark"] .accordion-button,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .dropdown-menu,
+html[data-theme="dark"] .dropdown-item,
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .table,
+html[data-theme="dark"] .table-responsive {
+    background-color: var(--app-surface) !important;
+    color: var(--app-text) !important;
+    border-color: var(--app-border) !important;
+}
+
+html[data-theme="dark"] .accordion-button:not(.collapsed),
+html[data-theme="dark"] .dropdown-item:hover,
+html[data-theme="dark"] .dropdown-item:focus,
+html[data-theme="dark"] .list-group-item:hover {
+    background-color: var(--app-surface-soft) !important;
+}
+
+html[data-theme="dark"] .text-dark,
+html[data-theme="dark"] .text-body,
+html[data-theme="dark"] .text-black {
+    color: var(--app-text) !important;
+}
+
+html[data-theme="dark"] .border,
+html[data-theme="dark"] .border-top,
+html[data-theme="dark"] .border-bottom,
+html[data-theme="dark"] .border-start,
+html[data-theme="dark"] .border-end {
+    border-color: var(--app-border) !important;
+}
+
+html[data-theme="dark"] .btn-light {
+    background: var(--app-surface-soft);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+html[data-theme="dark"] select option,
+html[data-theme="dark"] select optgroup {
+    background: var(--app-surface);
+    color: var(--app-text);
+}
+
+html[data-theme="dark"] .alert-light,
+html[data-theme="dark"] .alert-light.border,
+html[data-theme="dark"] .alert-secondary,
+html[data-theme="dark"] .alert-secondary.border {
+    background: var(--app-surface-soft);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+html[data-theme="dark"] .btn-outline-secondary,
+html[data-theme="dark"] .btn-outline-primary,
+html[data-theme="dark"] .btn-outline-danger,
+html[data-theme="dark"] .btn-outline-success,
+html[data-theme="dark"] .btn-outline-dark {
+    background: transparent;
+}
+
+html[data-theme="dark"] .btn-outline-secondary {
+    color: #cbd5e1;
+    border-color: rgba(148, 163, 184, 0.26);
+}
+
+html[data-theme="dark"] .btn-outline-secondary:hover,
+html[data-theme="dark"] .btn-outline-primary:hover,
+html[data-theme="dark"] .btn-outline-success:hover,
+html[data-theme="dark"] .btn-outline-danger:hover,
+html[data-theme="dark"] .btn-outline-dark:hover {
+    color: #fff;
+}
+
+html[data-theme="dark"] .nav-tabs {
+    border-bottom-color: var(--app-border);
+}
+
+html[data-theme="dark"] .nav-tabs .nav-link {
+    color: var(--app-text-muted);
+    border-color: transparent;
+}
+
+html[data-theme="dark"] .nav-tabs .nav-link.active,
+html[data-theme="dark"] .nav-tabs .nav-link:hover {
+    color: var(--app-text);
+    background: var(--app-surface);
+    border-color: var(--app-border);
+    border-bottom-color: var(--app-surface);
+}
+
+html[data-theme="dark"] .table > :not(caption) > * > * {
+    background-color: transparent !important;
+    color: inherit !important;
+    border-bottom-color: var(--app-border) !important;
+}
+
+html[data-theme="dark"] .section,
+html[data-theme="dark"] .review-item,
+html[data-theme="dark"] .option-btn,
+html[data-theme="dark"] .quiz-result,
+html[data-theme="dark"] .ai-chat-box,
+html[data-theme="dark"] .ai-chat-popup,
+html[data-theme="dark"] .ai-msg.ai,
+html[data-theme="dark"] .student-table,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .chart-card,
+html[data-theme="dark"] .insights-card {
+    background: var(--app-surface);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+html[data-theme="dark"] .learning-content,
+html[data-theme="dark"] .slide-wrapper,
+html[data-theme="dark"] .section-header,
+html[data-theme="dark"] .lesson-item:hover,
+html[data-theme="dark"] .ai-chat-messages,
+html[data-theme="dark"] .search-box input,
+html[data-theme="dark"] .interactive-quiz-dialog,
+html[data-theme="dark"] .interactive-quiz-head,
+html[data-theme="dark"] .interactive-quiz-option,
+html[data-theme="dark"] .interactive-quiz-modal.inline-quiz-mode .interactive-quiz-dialog {
+    background: var(--app-surface-soft);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+html[data-theme="dark"] .quiz-progress,
+html[data-theme="dark"] .lesson-item.active {
+    background: rgba(96, 165, 250, 0.14);
+    color: #bfdbfe;
+}
+
+html[data-theme="dark"] .lesson-completed-badge {
+    background: rgba(22, 163, 74, 0.14);
+    color: #86efac;
+}
+
+html[data-theme="dark"] .lesson-new-badge {
+    background: rgba(245, 158, 11, 0.14);
+    color: #fcd34d;
+}
+
+html[data-theme="dark"] .interactive-quiz-option.correct {
+    background: rgba(22, 163, 74, 0.18);
+    color: #86efac;
+}
+
+html[data-theme="dark"] .interactive-quiz-option.wrong {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fda4af;
+}
+
 .notification-bell {
     font-size: 16px;
     line-height: 1;
@@ -269,9 +875,9 @@ body {
 
 .course-thumbnail-field {
     padding: 20px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--app-border);
     border-radius: 20px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--app-surface) 98%, transparent) 0%, color-mix(in srgb, var(--app-surface-soft) 94%, transparent) 100%);
 }
 
 .course-thumbnail-mode-switch {
@@ -294,9 +900,9 @@ body {
     gap: 18px;
     align-items: center;
     padding: 16px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--app-border);
     border-radius: 18px;
-    background: #ffffff;
+    background: var(--app-surface);
 }
 
 .course-thumbnail-preview-frame {
@@ -304,7 +910,7 @@ body {
     width: 100%;
     border-radius: 14px;
     overflow: hidden;
-    background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+    background: linear-gradient(135deg, var(--app-bg-elevated), var(--app-surface-soft));
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
 }
 

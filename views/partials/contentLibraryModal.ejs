@@ -123,16 +123,16 @@
         align-items: center;
         padding: 12px;
         margin-bottom: 8px;
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
+        background: var(--app-surface-soft);
+        border: 1px solid var(--app-border);
         border-radius: 8px;
         cursor: grab;
         transition: all 0.2s ease;
     }
 
     .library-item:hover {
-        background: #e9ecef;
-        border-color: #adb5bd;
+        background: color-mix(in srgb, var(--app-surface-soft) 90%, transparent);
+        border-color: var(--app-border);
     }
 
     .library-item:active {
@@ -141,7 +141,7 @@
 
     .library-item.dragging {
         opacity: 0.5;
-        background: #e9ecef;
+        background: color-mix(in srgb, var(--app-surface-soft) 88%, transparent);
     }
 
     .library-item-icon {
@@ -150,7 +150,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #fff;
+        background: var(--app-surface);
         border-radius: 8px;
         margin-right: 12px;
         font-size: 18px;
@@ -163,12 +163,12 @@
     .library-item-title {
         font-weight: 600;
         margin-bottom: 2px;
-        color: #212529;
+        color: var(--app-text);
     }
 
     .library-item-meta {
         font-size: 12px;
-        color: #6c757d;
+        color: var(--app-text-muted);
     }
 
     .library-item-actions {
@@ -197,7 +197,7 @@
     .empty-library {
         text-align: center;
         padding: 40px;
-        color: #6c757d;
+        color: var(--app-text-muted);
     }
 
     .empty-library i {

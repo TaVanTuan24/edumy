@@ -1,13 +1,22 @@
 .profile-page {
+  --profile-surface: var(--app-surface);
+  --profile-surface-soft: var(--app-surface-soft);
+  --profile-border: var(--app-border);
+  --profile-text: var(--app-text);
+  --profile-muted: var(--app-text-muted);
+}
+
+.profile-page {
   max-width: 1100px;
+  color: var(--profile-text);
 }
 
 .profile-header-card,
 .profile-card {
-  background: #ffffff;
-  border: 1px solid #dfe5ec;
+  background: var(--profile-surface);
+  border: 1px solid var(--profile-border);
   border-radius: 16px;
-  box-shadow: 0 12px 30px rgba(16, 24, 40, 0.08);
+  box-shadow: var(--app-shadow-md);
 }
 
 .profile-header-card {
@@ -95,11 +104,11 @@
 }
 
 .profile-email {
-  color: #5b6470;
+  color: var(--profile-muted);
 }
 
 .profile-meta {
-  color: #8290a1;
+  color: var(--profile-muted);
   font-size: 13px;
 }
 
@@ -131,10 +140,10 @@
 }
 
 .profile-modal-shell {
-  background: #ffffff;
-  border: 1px solid #dfe5ec;
+  background: var(--profile-surface);
+  border: 1px solid var(--profile-border);
   border-radius: 18px;
-  box-shadow: 0 18px 40px rgba(16, 24, 40, 0.14);
+  box-shadow: var(--app-shadow-lg);
   overflow: hidden;
 }
 
@@ -145,7 +154,7 @@
 
 .profile-vr-modal .modal-header {
   padding: 1.1rem 1.5rem 0.9rem;
-  border-bottom: 1px solid #e6ebf2;
+  border-bottom: 1px solid var(--profile-border);
 }
 
 .profile-vr-modal .modal-title {
@@ -213,17 +222,17 @@
 
 .level-pill {
   color: #0f3ba8;
-  background: #e5efff;
+  background: color-mix(in srgb, #3b82f6 18%, transparent);
 }
 
 .xp-pill {
   color: #9a3412;
-  background: #fff2d6;
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
 }
 
 .xp-track {
   height: 12px;
-  background: #e4ebf4;
+  background: rgba(148, 163, 184, 0.18);
   border-radius: 999px;
   overflow: hidden;
   margin-bottom: 10px;
@@ -236,7 +245,7 @@
 }
 
 .progress-note {
-  color: #475569;
+  color: var(--profile-muted);
   font-size: 14px;
 }
 
@@ -249,7 +258,7 @@
 .streak-box {
   border-radius: 12px;
   border: 1px solid #ffd3ad;
-  background: #fff7ed;
+  background: color-mix(in srgb, #f97316 12%, var(--profile-surface));
   display: flex;
   gap: 12px;
   align-items: center;
@@ -262,8 +271,8 @@
 }
 
 .streak-box.muted {
-  border-color: #dbe2ea;
-  background: #f8fafc;
+  border-color: var(--profile-border);
+  background: var(--profile-surface-soft);
 }
 
 .streak-box.muted i {
@@ -277,7 +286,7 @@
 }
 
 .streak-label {
-  color: #6b7280;
+  color: var(--profile-muted);
   font-size: 12px;
 }
 
@@ -292,7 +301,7 @@
 .stat-list li {
   display: flex;
   justify-content: space-between;
-  border-bottom: 1px dashed #d9e1ea;
+  border-bottom: 1px dashed var(--profile-border);
   padding-bottom: 6px;
 }
 
@@ -304,13 +313,13 @@
 }
 
 .badge-subtitle {
-  color: #64748b;
+  color: var(--profile-muted);
   font-size: 14px;
 }
 
 .badge-count {
   border-radius: 999px;
-  background: #eff6ff;
+  background: color-mix(in srgb, #3b82f6 18%, transparent);
   color: #1e40af;
   padding: 5px 10px;
   font-size: 12px;
@@ -325,7 +334,7 @@
 
 .badge-item {
   border-radius: 12px;
-  border: 1px solid #d8e0ea;
+  border: 1px solid var(--profile-border);
   padding: 12px;
   display: flex;
   gap: 12px;
@@ -339,12 +348,12 @@
 
 .badge-item p {
   margin: 2px 0 6px;
-  color: #5e6a77;
+  color: var(--profile-muted);
   font-size: 13px;
 }
 
 .badge-item small {
-  color: #7c8a99;
+  color: var(--profile-muted);
 }
 
 .badge-icon {
@@ -357,7 +366,7 @@
 }
 
 .badge-item.earned {
-  background: #f8fbff;
+  background: color-mix(in srgb, #3b82f6 10%, var(--profile-surface));
   border-color: #bfdbfe;
 }
 
@@ -429,4 +438,37 @@
     gap: 8px;
     flex-wrap: wrap;
   }
+}
+
+html[data-theme="dark"] .profile-header-card,
+html[data-theme="dark"] .profile-card,
+html[data-theme="dark"] .profile-modal-shell,
+html[data-theme="dark"] .badge-item,
+html[data-theme="dark"] .streak-box.muted {
+  background: var(--profile-surface);
+  border-color: var(--profile-border);
+  color: var(--profile-text);
+}
+
+html[data-theme="dark"] .avatar-upload-btn,
+html[data-theme="dark"] .badge-count {
+  background: color-mix(in srgb, #3b82f6 18%, transparent);
+}
+
+html[data-theme="dark"] .profile-vr-code-input {
+  background: var(--profile-surface-soft);
+  color: var(--profile-text);
+  border-color: var(--profile-border);
+}
+
+html[data-theme="dark"] .xp-track {
+  background: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .streak-box {
+  background: color-mix(in srgb, #f97316 16%, var(--profile-surface));
+}
+
+html[data-theme="dark"] .badge-item.earned {
+  background: color-mix(in srgb, #3b82f6 10%, var(--profile-surface));
 }

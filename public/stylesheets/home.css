@@ -20,6 +20,26 @@ body.home-page-shell {
   font-family: 'Manrope', sans-serif;
 }
 
+html[data-theme="dark"] body.home-page-shell {
+  background:
+    radial-gradient(circle at top left, rgba(52, 211, 153, 0.08), transparent 30%),
+    linear-gradient(180deg, #09111d 0%, #0d1726 100%);
+}
+
+html[data-theme="dark"] .home-landing {
+  --home-ink: #e8eef6;
+  --home-muted: #98a7bb;
+  --home-line: rgba(148, 163, 184, 0.16);
+  --home-surface: #0d1726;
+  --home-card: rgba(16, 27, 45, 0.82);
+  --home-card-strong: #101b2d;
+  --home-accent: #34d399;
+  --home-accent-dark: #a7f3d0;
+  --home-accent-soft: rgba(52, 211, 153, 0.14);
+  --home-highlight: #f8c15a;
+  --home-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+}
+
 .home-main {
   overflow-x: clip;
 }
@@ -113,7 +133,7 @@ body.home-page-shell {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   letter-spacing: -0.03em;
-  line-height: 1.02;
+  line-height: 1;
 }
 
 .home-hero-title {
@@ -205,6 +225,27 @@ body.home-page-shell {
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: var(--home-shadow);
   backdrop-filter: blur(18px);
+}
+
+[data-depth-layer] {
+  transform:
+    perspective(1200px)
+    translate3d(var(--depth-x, 0px), var(--depth-y, 0px), 0)
+    rotateX(var(--depth-tilt-x, 0deg))
+    rotateY(var(--depth-tilt-y, 0deg));
+  transition: transform 220ms ease;
+  will-change: transform;
+}
+
+html[data-theme="dark"] .hero-metric-card,
+html[data-theme="dark"] .hero-progress-card,
+html[data-theme="dark"] .hero-mini-cards article,
+html[data-theme="dark"] .home-stat-card,
+html[data-theme="dark"] .home-chat-bubble.assistant,
+html[data-theme="dark"] .home-chat-bubble.soft,
+html[data-theme="dark"] .home-course-fallback {
+  background: rgba(19, 32, 52, 0.94);
+  border-color: var(--home-line);
 }
 
 .hero-panel {
@@ -368,6 +409,7 @@ body.home-page-shell {
 .home-feature-card {
   border-radius: 1.5rem;
   padding: 1.5rem;
+  transform: perspective(900px) rotateX(var(--card-tilt-x, 0deg)) rotateY(var(--card-tilt-y, 0deg));
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
@@ -446,6 +488,44 @@ body.home-page-shell {
 .home-demo-typing {
   min-height: 5.8rem;
   display: block;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+
+.home-demo-typing strong {
+  color: var(--home-accent-dark);
+}
+
+.home-demo-typing code {
+  display: inline-block;
+  padding: 0.08rem 0.38rem;
+  border-radius: 0.45rem;
+  background: rgba(148, 163, 184, 0.14);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.home-demo-code {
+  display: block;
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.94);
+  color: #eef2ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+  overflow: hidden;
+}
+
+.home-demo-cursor {
+  display: inline-block;
+  width: 0.65ch;
+  margin-left: 0.08rem;
+  animation: homeCursorBlink 0.85s ease-in-out infinite;
+}
+
+.home-chat-bubble.assistant {
+  position: relative;
 }
 
 .home-course-grid {
@@ -461,6 +541,7 @@ body.home-page-shell {
   border-radius: 1.7rem;
   text-decoration: none;
   color: inherit;
+  transform: perspective(1000px) rotateX(var(--card-tilt-x, 0deg)) rotateY(var(--card-tilt-y, 0deg));
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
@@ -570,6 +651,26 @@ body.home-page-shell {
   font-weight: 700;
 }
 
+.home-btn-primary {
+  position: relative;
+}
+
+.home-btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: auto 18% -14px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.28);
+  filter: blur(16px);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.home-btn-primary:hover::after {
+  opacity: 1;
+}
+
 [data-reveal] {
   opacity: 0;
   transform: translateY(26px);
@@ -591,6 +692,11 @@ body.home-page-shell {
   50% {
     transform: translate3d(0, -18px, 0);
   }
+}
+
+@keyframes homeCursorBlink {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
 }
 
 @media (max-width: 991.98px) {

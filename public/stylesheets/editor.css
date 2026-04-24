@@ -1,26 +1,31 @@
 :root {
     --udemy-purple: #a435f0;
     --udemy-purple-hover: #8710d8;
-    --surface-bg: #f7f9fa;
-    --surface-card: #ffffff;
-    --border: #d1d7dc;
-    --text-main: #1c1d1f;
-    --text-muted: #6a6f73;
+    --surface-bg: var(--app-bg);
+    --surface-card: var(--app-surface);
+    --border: var(--app-border);
+    --text-main: var(--app-text);
+    --text-muted: var(--app-text-muted);
     --shadow-soft: 0 10px 30px rgba(28, 29, 31, 0.08);
     --shadow-hover: 0 12px 28px rgba(28, 29, 31, 0.14);
 }
 
+html[data-theme="dark"] {
+    --udemy-purple: #c084fc;
+    --udemy-purple-hover: #a855f7;
+}
+
 body {
     font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    background: linear-gradient(180deg, #fbfcfd 0%, var(--surface-bg) 35%, #f3f6f9 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 88%, #ffffff 12%) 0%, var(--surface-bg) 35%, color-mix(in srgb, var(--app-bg-elevated) 94%, transparent) 100%);
     margin: 0;
     color: var(--text-main);
 }
 
 .top-bar {
-    background: rgba(255, 255, 255, 0.95);
+    background: color-mix(in srgb, var(--surface-card) 95%, transparent);
     backdrop-filter: blur(8px);
-    border: 1px solid #ebedf0;
+    border: 1px solid var(--border);
     border-radius: 14px;
     margin: 12px 16px 0;
     padding: 14px 18px;
@@ -85,9 +90,9 @@ body {
     gap: 6px;
     padding: 6px 10px;
     border-radius: 999px;
-    background: #f6f8fb;
-    border: 1px solid #e6ebf1;
-    color: #5e6670;
+    background: var(--app-surface-soft);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     font-size: 12px;
     font-weight: 600;
 }
@@ -163,7 +168,7 @@ body {
 
 .sidebar-header {
     padding: 16px 16px 12px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-card) 96%, transparent) 0%, color-mix(in srgb, var(--app-surface-soft) 92%, transparent) 100%);
     border-bottom: 1px solid var(--border);
 }
 
@@ -253,11 +258,14 @@ body {
 
 .section-title-input {
     width: 100%;
-    border: 1px solid #a9b6c2;
+    border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 14px;
     font-weight: 700;
     padding: 4px 8px;
+    background: var(--app-input-bg);
+    color: var(--app-input-text);
+    caret-color: var(--app-input-text);
     outline: none;
 }
 
@@ -626,6 +634,9 @@ body {
 .editor-content .form-control {
     min-height: 46px;
     border-radius: 11px;
+    background: var(--app-input-bg);
+    color: var(--app-input-text);
+    border-color: var(--app-input-border);
 }
 
 .editor-content textarea.form-control {
@@ -735,6 +746,12 @@ body {
 .library-tabs button.active {
     color: var(--udemy-purple);
     border-bottom-color: var(--udemy-purple);
+}
+
+html[data-theme="dark"] .section-title-input,
+html[data-theme="dark"] .editor-content .form-control,
+html[data-theme="dark"] .library-tabs button {
+    color: var(--app-input-text);
 }
 
 .library-content {
@@ -921,4 +938,47 @@ body.hit-test-mode .hit-test-active {
         left: 12px;
         width: auto;
     }
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .editor-panel,
+html[data-theme="dark"] .section-card,
+html[data-theme="dark"] .lesson-item,
+html[data-theme="dark"] .interactive-quiz-form,
+html[data-theme="dark"] .interactive-quiz-item,
+html[data-theme="dark"] .editor-content .card,
+html[data-theme="dark"] .library-popup,
+html[data-theme="dark"] .add-item-modal .modal-content,
+html[data-theme="dark"] .delete-course-modal .modal-content {
+    background: var(--surface-card);
+    color: var(--text-main);
+    border-color: var(--border);
+}
+
+html[data-theme="dark"] .sidebar-header,
+html[data-theme="dark"] .section-header,
+html[data-theme="dark"] .add-buttons,
+html[data-theme="dark"] .editor-placeholder,
+html[data-theme="dark"] .editor-content .card-header,
+html[data-theme="dark"] .library-popup-header {
+    background: var(--app-surface-soft);
+    color: var(--text-main);
+    border-color: var(--border);
+}
+
+html[data-theme="dark"] .top-bar-meta-pill,
+html[data-theme="dark"] .editor-inline-action,
+html[data-theme="dark"] .add-buttons button,
+html[data-theme="dark"] .library-item {
+    background: var(--app-surface-soft);
+    color: var(--text-main);
+    border-color: var(--border);
+}
+
+html[data-theme="dark"] .lesson-item:hover,
+html[data-theme="dark"] .section-title:hover,
+html[data-theme="dark"] .editor-icon-btn,
+html[data-theme="dark"] .library-popup-header .close-btn {
+    background: color-mix(in srgb, var(--app-surface-soft) 90%, transparent);
 }

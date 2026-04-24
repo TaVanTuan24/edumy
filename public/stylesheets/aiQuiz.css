@@ -1,4 +1,9 @@
 .ai-quiz-page {
+    --aiquiz-surface: var(--app-surface);
+    --aiquiz-surface-soft: var(--app-surface-soft);
+    --aiquiz-border: var(--app-border);
+    --aiquiz-text: var(--app-text);
+    --aiquiz-muted: var(--app-text-muted);
     max-width: 1100px;
     margin: 0 auto;
     padding: 24px 12px 60px;
@@ -14,7 +19,7 @@
 }
 
 .ai-quiz-controls {
-    background: #ffffff;
+    background: var(--aiquiz-surface);
     border-radius: 14px;
     padding: 18px;
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
@@ -47,12 +52,12 @@
 
 .ai-status {
     font-size: 13px;
-    color: #475569;
+    color: var(--aiquiz-muted);
 }
 
 .ai-quiz-editor {
     margin-top: 24px;
-    background: #ffffff;
+    background: var(--aiquiz-surface);
     border-radius: 14px;
     padding: 18px;
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
@@ -72,12 +77,12 @@
 }
 
 .quiz-item {
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--aiquiz-border);
     border-radius: 12px;
     padding: 14px;
     display: grid;
     gap: 10px;
-    background: #f8fafc;
+    background: var(--aiquiz-surface-soft);
 }
 
 .quiz-item h6 {

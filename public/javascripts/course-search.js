@@ -118,8 +118,50 @@
       results: [],
       activeIndex: -1
     };
+    const grids = cards.reduce(function(acc, card) {
+      const grid = card.closest('.course-card-grid');
+      if (grid && !acc.includes(grid)) acc.push(grid);
+      return acc;
+    }, []);
 
     root.dataset[BOUND_FLAG] = "true";
+
+    function createSkeletonCard() {
+      return (
+        '<div class="course-skeleton-card">' +
+          '<div class="course-skeleton-media"></div>' +
+          '<div class="course-skeleton-body">' +
+            '<div class="skeleton-block course-skeleton-line is-medium"></div>' +
+            '<div class="skeleton-block course-skeleton-line"></div>' +
+            '<div class="skeleton-block course-skeleton-line"></div>' +
+            '<div class="course-skeleton-footer">' +
+              '<div class="course-skeleton-pill"></div>' +
+              '<div class="course-skeleton-button"></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function ensureSkeletonGrid(grid) {
+      if (!grid) return;
+      let skeleton = grid.querySelector('.course-grid-skeleton');
+      if (skeleton) return skeleton;
+
+      skeleton = document.createElement('div');
+      skeleton.className = 'course-grid-skeleton';
+      const count = grid.classList.contains('course-card-grid-library') ? 4 : 3;
+      skeleton.innerHTML = new Array(count).fill('').map(createSkeletonCard).join('');
+      grid.appendChild(skeleton);
+      return skeleton;
+    }
+
+    function setLoadingState(isLoading) {
+      grids.forEach(function(grid) {
+        ensureSkeletonGrid(grid);
+        grid.classList.toggle('is-loading', Boolean(isLoading));
+      });
+    }
 
     function openUrl(url) {
       if (!url || url === "#") {
@@ -191,6 +233,7 @@
       state.activeIndex = state.results.length ? 0 : -1;
       filterCards();
       renderDropdown();
+      setLoadingState(false);
     }
 
     function refreshResults() {
@@ -198,9 +241,12 @@
       applyResults();
     }
 
-    const refreshResultsDebounced = debounce(refreshResults, 120);
+    const refreshResultsDebounced = debounce(refreshResults, 140);
 
-    input.addEventListener("input", refreshResultsDebounced);
+    input.addEventListener("input", function() {
+      setLoadingState(true);
+      refreshResultsDebounced();
+    });
 
     input.addEventListener("focus", function () {
       if (state.query) {
@@ -278,6 +324,7 @@
     });
 
     filterCards();
+    setLoadingState(false);
   }
 
   function boot() {
