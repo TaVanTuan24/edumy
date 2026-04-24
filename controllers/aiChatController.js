@@ -389,8 +389,8 @@ async function listChats(req, res) {
         const formattedChats = chats.map((chat) => ({
             _id: chat._id,
             title: chat.title,
-            defaultModel: chat.defaultModel || 'llama3.2',
-            lastModel: getLastMessageModel(chat) || chat.defaultModel || 'llama3.2',
+            defaultModel: normalizeAiModel(chat.defaultModel),
+            lastModel: getLastMessageModel(chat) || normalizeAiModel(chat.defaultModel),
             createdAt: chat.createdAt,
             updatedAt: chat.updatedAt,
             messageCount: chat.messages.length
@@ -476,14 +476,14 @@ async function getChat(req, res) {
         const formattedChat = {
             _id: chat._id,
             title: chat.title,
-            defaultModel: chat.defaultModel || getLastMessageModel(chat) || 'llama3.2',
+            defaultModel: normalizeAiModel(chat.defaultModel || getLastMessageModel(chat)),
             createdAt: chat.createdAt,
             updatedAt: chat.updatedAt,
             messages: chat.messages.map((msg) => ({
                 _id: msg._id,
                 role: msg.role,
                 content: msg.content,
-                model: msg.model || 'llama3.2',
+                model: normalizeAiModel(msg.model),
                 status: msg.status || 'ok',
                 error: msg.error || null,
                 createdAt: msg.createdAt
@@ -554,7 +554,7 @@ async function awardAiTutor(userId) {
 function getLastMessageModel(chat) {
     const messages = Array.isArray(chat && chat.messages) ? chat.messages : []
     const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && msg.model)
-    return lastAssistant && lastAssistant.model
+    return lastAssistant ? normalizeAiModel(lastAssistant.model) : ''
 }
 
 async function getUserKeyStatus(userId) {

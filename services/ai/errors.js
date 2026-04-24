@@ -80,6 +80,7 @@ function normalizeProviderError(error, provider) {
     }
 
     const status = error && error.response && error.response.status
+    const responseMessage = extractProviderMessage(error)
     if (status === 401 || status === 403) return new AIAuthError(provider, error)
     if (status === 408 || status === 504) return new AITimeoutError(provider, error)
     if (status === 429) return new AIRateLimitError(provider, error)
@@ -90,9 +91,21 @@ function normalizeProviderError(error, provider) {
         provider,
         publicMessage: status === 404
             ? 'This model is not available for the selected provider.'
-            : 'AI service error',
+            : responseMessage || 'AI service error',
         cause: error
     })
+}
+
+function extractProviderMessage(error) {
+    const data = error && error.response && error.response.data
+    if (!data) return ''
+    if (typeof data === 'string') return data
+    if (data.error && typeof data.error.message === 'string') return data.error.message
+    if (typeof data.message === 'string') return data.message
+    if (data.response && data.response.error && typeof data.response.error.message === 'string') {
+        return data.response.error.message
+    }
+    return ''
 }
 
 module.exports = {

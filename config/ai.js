@@ -3,6 +3,8 @@ const { DEFAULT_MODEL, getCatalogModels, getCatalogModel } = require('../service
 
 const MODEL_OPTIONS = getCatalogModels()
 const SUPPORTED_MODELS = MODEL_OPTIONS.map((model) => model.id)
+const LEGACY_OPENAI_MODELS = new Set(['gpt-4o', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4'])
+const OPENAI_UPGRADE_MODEL = 'gpt-5.4'
 
 function readBoolean(value, fallback) {
     if (value === undefined || value === null || value === '') return fallback
@@ -15,9 +17,12 @@ function readNumber(value, fallback) {
 }
 
 const grokEnabled = readBoolean(process.env.GROK_ENABLED, false)
-const requestedDefaultModel = SUPPORTED_MODELS.includes(process.env.AI_DEFAULT_MODEL)
-    ? process.env.AI_DEFAULT_MODEL
-    : DEFAULT_MODEL
+const envDefaultModel = String(process.env.AI_DEFAULT_MODEL || '').trim()
+const requestedDefaultModel = SUPPORTED_MODELS.includes(envDefaultModel)
+    ? envDefaultModel
+    : LEGACY_OPENAI_MODELS.has(envDefaultModel)
+        ? OPENAI_UPGRADE_MODEL
+        : DEFAULT_MODEL
 
 const aiConfig = {
     defaultModel: requestedDefaultModel === 'grok' && !grokEnabled ? DEFAULT_MODEL : requestedDefaultModel,
@@ -48,6 +53,7 @@ const aiConfig = {
 
 function normalizeAiModel(model) {
     const value = String(model || aiConfig.defaultModel || DEFAULT_MODEL).trim()
+    if (LEGACY_OPENAI_MODELS.has(value)) return OPENAI_UPGRADE_MODEL
     return SUPPORTED_MODELS.includes(value) ? value : aiConfig.defaultModel
 }
 

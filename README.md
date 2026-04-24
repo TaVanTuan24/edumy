@@ -94,11 +94,18 @@ OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
 OLLAMA_TIMEOUT_MS=120000
 
+OPENAI_BASE_URL=https://api.krouter.net/v1
+OPENAI_MODEL=gpt-5.4
+OPENAI_REASONING_EFFORT=high
+OPENAI_TIMEOUT_MS=120000
+
 AI_DEFAULT_MODEL=llama3.2
 GROK_ENABLED=false
 GROK_SCRAPER_PATH=./grok-scraper
 GROK_TIMEOUT_MS=300000
 ```
+
+For `gpt-5.4`, the web app uses the OpenAI-compatible `Responses API` endpoint at `${OPENAI_BASE_URL}/responses`, so a third-party gateway key can be saved in the `OpenAI-Compatible API Key` field on `/ai`.
 
 Set `GROK_ENABLED=true` only on a local desktop or remote desktop with a real browser environment. Keep it `false` on headless servers or CI.
 

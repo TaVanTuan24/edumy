@@ -88,7 +88,7 @@
     if (role === 'ai' && model) {
       const meta = document.createElement('span');
       meta.className = 'ai-msg-model';
-      meta.textContent = model === 'grok' ? 'Grok' : 'llama3.2';
+      meta.textContent = formatModelLabel(model);
       div.appendChild(meta);
       div.appendChild(document.createTextNode(text));
     } else {
@@ -120,6 +120,12 @@
       parts.push('Slide: ' + (Number(context.slideIndex) + 1));
     }
     status.textContent = parts.length ? parts.join(' | ') : 'Sẵn sàng';
+  }
+
+  function formatModelLabel(model) {
+    if (model === 'grok') return 'Grok';
+    if (model === 'gpt-5.4') return 'GPT-5.4';
+    return 'llama3.2';
   }
 
   function getCurrentContext() {

@@ -28,44 +28,14 @@ const MODEL_CATALOG = [
         description: 'xAI Grok API'
     },
     {
-        id: 'gpt-4o',
-        label: 'GPT-4o',
+        id: 'gpt-5.4',
+        label: 'GPT-5.4',
         provider: 'OpenAI',
         providerKey: 'openai',
         requiresKey: 'openaiKey',
-        apiModel: process.env.OPENAI_GPT4O_MODEL || 'gpt-4o',
+        apiModel: process.env.OPENAI_GPT54_MODEL || process.env.OPENAI_MODEL || 'gpt-5.4',
         timeoutEnv: 'OPENAI_TIMEOUT_MS',
-        description: 'OpenAI GPT-4o'
-    },
-    {
-        id: 'gpt-4.1',
-        label: 'GPT-4.1',
-        provider: 'OpenAI',
-        providerKey: 'openai',
-        requiresKey: 'openaiKey',
-        apiModel: process.env.OPENAI_GPT41_MODEL || 'gpt-4.1',
-        timeoutEnv: 'OPENAI_TIMEOUT_MS',
-        description: 'OpenAI GPT-4.1'
-    },
-    {
-        id: 'gpt-4.1-mini',
-        label: 'GPT-4.1 Mini',
-        provider: 'OpenAI',
-        providerKey: 'openai',
-        requiresKey: 'openaiKey',
-        apiModel: process.env.OPENAI_GPT41_MINI_MODEL || 'gpt-4.1-mini',
-        timeoutEnv: 'OPENAI_TIMEOUT_MS',
-        description: 'OpenAI GPT-4.1 mini'
-    },
-    {
-        id: 'gpt-4',
-        label: 'GPT-4',
-        provider: 'OpenAI',
-        providerKey: 'openai',
-        requiresKey: 'openaiKey',
-        apiModel: process.env.OPENAI_GPT4_MODEL || 'gpt-4',
-        timeoutEnv: 'OPENAI_TIMEOUT_MS',
-        description: 'OpenAI GPT-4'
+        description: 'OpenAI GPT-5.4'
     },
     {
         id: 'claude-3-5-sonnet',
@@ -93,7 +63,7 @@ const MODEL_CATALOG = [
         provider: 'Google',
         providerKey: 'gemini',
         requiresKey: 'geminiKey',
-        apiModel: process.env.GEMINI_PRO_MODEL || 'gemini-1.5-pro',
+        apiModel: process.env.GEMINI_PRO_MODEL || 'gemini-3-flash-preview',
         timeoutEnv: 'GEMINI_TIMEOUT_MS',
         description: 'Google Gemini'
     }
