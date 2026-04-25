@@ -4,6 +4,12 @@
 <div class="learning-root">
   <div class="learning-layout">
   <main class="learning-content" id="content">
+    <% if (courseStatusNotice) { %>
+      <div id="courseStatusNotice" class="alert alert-warning alert-dismissible fade show m-3 mb-0" role="alert">
+        <%= courseStatusNotice %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
     <div id="imageContainer">
       <div id="carouselExample" class="carousel slide">
         <div class="carousel-inner">
@@ -151,8 +157,8 @@
     <div id="aiChatPopup" class="ai-chat-popup hidden" data-course-id="<%= course._id %>">
       <div class="ai-chat-header">
         <div>
-          <h6 class="mb-0">AI Assistant</h6>
-          <small class="text-muted">Tư vấn theo bài học hiện tại</small>
+          <h6 class="mb-0">AI Tutor</h6>
+          <small class="text-muted">Ask about the current lesson</small>
         </div>
         <div class="ai-chat-header-actions">
           <select id="courseAiModel" class="ai-chat-model-select" aria-label="Choose AI model">
@@ -165,11 +171,13 @@
       </div>
 
       <div class="ai-quick-actions">
-        <button class="btn btn-sm btn-outline-secondary" data-ai-quick="Giải thích slide này">Giải thích slide này</button>
-        <button class="btn btn-sm btn-outline-secondary" data-ai-quick="Tóm tắt bài học">Tóm tắt bài học</button>
-        <button class="btn btn-sm btn-outline-secondary" data-ai-quick="Câu hỏi ôn tập">Câu hỏi ôn tập</button>
+        <button class="btn btn-sm btn-outline-secondary" data-ai-action="summarize">Summarize this lesson</button>
+        <button class="btn btn-sm btn-outline-secondary" data-ai-action="explain">Explain like I'm a beginner</button>
+        <button class="btn btn-sm btn-outline-secondary" data-ai-action="practice">Generate practice questions</button>
+        <button class="btn btn-sm btn-outline-secondary" data-ai-action="flashcards">Create flashcards</button>
       </div>
 
+      <div class="ai-context px-3 pt-2" id="aiLessonContext">Lesson context will appear here.</div>
       <div id="chatMessages" class="ai-chat-messages"></div>
 
       <div class="ai-chat-input">
@@ -268,9 +276,31 @@
   const hasCourseUpdate = <%- serializeJson(!!hasCourseUpdate) %>;
   window.__GAMIFICATION__ = <%- serializeJson(gamification || null) %>;
 </script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script src="/javascripts/show/store.js" defer></script>
 <script src="/javascripts/show/render.js" defer></script>
 <script src="/javascripts/show/app.js" defer></script>
 <script src="/javascripts/show/aiChat.js" defer></script>
+<script>
+  (function() {
+    const notice = document.getElementById('courseStatusNotice');
+    if (!notice) return;
+
+    window.setTimeout(function() {
+      if (window.bootstrap && window.bootstrap.Alert) {
+        window.bootstrap.Alert.getOrCreateInstance(notice).close();
+        return;
+      }
+
+      notice.classList.remove('show');
+      window.setTimeout(function() {
+        if (notice.parentNode) {
+          notice.remove();
+        }
+      }, 180);
+    }, 3000);
+  })();
+</script>
 

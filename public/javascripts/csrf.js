@@ -78,6 +78,14 @@
     };
   }
 
+  function csrfFetch(input, init) {
+    if (typeof window.fetch !== 'function') {
+      return Promise.reject(new Error('Fetch is not available in this browser.'));
+    }
+
+    return window.fetch(input, init);
+  }
+
   function ensureFormToken(form) {
     if (!(form instanceof HTMLFormElement)) return;
 
@@ -128,6 +136,7 @@
   function init() {
     window.__CSRF_TOKEN__ = getCsrfToken();
     patchFetch();
+    window.csrfFetch = csrfFetch;
     ensureAllFormTokens(document);
     observeForms();
   }

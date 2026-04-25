@@ -62,6 +62,7 @@
     return {
       _id: String(item && item._id ? item._id : ('lesson-' + sectionIndex + '-' + index)),
       sectionIndex: sectionIndex,
+      lessonIndex: index,
       type: type,
       title: item && item.title ? item.title : 'Untitled Lesson',
       preview: item && item.preview ? item.preview : '',

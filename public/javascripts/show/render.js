@@ -829,7 +829,15 @@
     fetch('/courses/' + String(course._id || '') + '/quiz-results', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quizId: quizId, score: scoreValue, total: totalValue })
+      body: JSON.stringify({
+        quizId: quizId,
+        score: scoreValue,
+        total: totalValue,
+        lessonName: lesson && lesson.title || '',
+        lessonType: lesson && lesson.type || 'quiz',
+        sectionIndex: lesson && lesson.sectionIndex,
+        lessonIndex: lesson && lesson.lessonIndex
+      })
     }).catch(function(err) {
       console.error('[Quiz Result Sync Error]', err);
     });

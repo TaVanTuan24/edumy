@@ -3,6 +3,7 @@ const User = require('../models/user');
 const Course = require('../models/course');
 const { awardGamification, recordLearningActivity } = require('../utils/gamification');
 const { getCanonicalSections } = require('../utils/courseContentAdapter');
+const { findLessonContext } = require('../utils/lessonLocator');
 
 async function markUserLearningActivity(userId, activityDate) {
   const user = await User.findById(userId);
@@ -51,6 +52,38 @@ async function getOrCreateProgress(userId, courseId) {
   );
 }
 
+function appendRecentActivity(progressDoc, activity) {
+  progressDoc.recentActivity = Array.isArray(progressDoc.recentActivity) ? progressDoc.recentActivity : [];
+  progressDoc.recentActivity.push({
+    type: String(activity && activity.type || 'activity'),
+    label: String(activity && activity.label || 'Learning activity'),
+    lessonId: String(activity && activity.lessonId || ''),
+    lessonName: String(activity && activity.lessonName || ''),
+    lessonType: String(activity && activity.lessonType || ''),
+    sectionIndex: Number.isInteger(Number(activity && activity.sectionIndex)) ? Number(activity.sectionIndex) : null,
+    lessonIndex: Number.isInteger(Number(activity && activity.lessonIndex)) ? Number(activity.lessonIndex) : null,
+    createdAt: activity && activity.createdAt ? new Date(activity.createdAt) : new Date()
+  });
+  progressDoc.recentActivity = progressDoc.recentActivity
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .slice(-20);
+}
+
+function setResumeMetadata(progressDoc, course, payload = {}) {
+  const lessonId = String(payload.lessonId || '').trim();
+  const sectionIndex = Number.isInteger(Number(payload.sectionIndex)) ? Number(payload.sectionIndex) : null;
+  const lessonIndex = Number.isInteger(Number(payload.lessonIndex)) ? Number(payload.lessonIndex) : null;
+  const lessonName = String(payload.lessonName || '').trim();
+  const lessonType = String(payload.lessonType || '').trim();
+
+  const lessonContext = course ? findLessonContext(course, { lessonId, sectionIndex, lessonIndex }) : null;
+  progressDoc.lastLessonId = lessonId || String(lessonContext && lessonContext.lesson && lessonContext.lesson._id || progressDoc.lastLessonId || '');
+  progressDoc.lastLessonName = lessonName || String(lessonContext && lessonContext.lesson && lessonContext.lesson.title || progressDoc.lastLessonName || '');
+  progressDoc.lastLessonType = lessonType || String(lessonContext && lessonContext.lesson && lessonContext.lesson.type || progressDoc.lastLessonType || '');
+  progressDoc.lastSectionIndex = sectionIndex !== null ? sectionIndex : (lessonContext ? lessonContext.sectionIndex : progressDoc.lastSectionIndex);
+  progressDoc.lastLessonIndex = lessonIndex !== null ? lessonIndex : (lessonContext ? lessonContext.lessonIndex : progressDoc.lastLessonIndex);
+}
+
 function getQuizQuestionCount(course, lessonId) {
   const targetLessonId = String(lessonId || '').trim();
   if (!course || !targetLessonId) return 0;
@@ -71,13 +104,14 @@ function getQuizQuestionCount(course, lessonId) {
 
 module.exports.trackEvent = async (req, res) => {
   try {
-    const { courseId, lessonId, lessonType, eventType, position } = req.body;
+    const { courseId, lessonId, lessonType, eventType, position, lessonName, sectionIndex, lessonIndex } = req.body;
     if (!courseId || !lessonId || !eventType) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType);
+    const course = await Course.findById(courseId).select('sections');
 
     if (['play', 'pause', 'seek'].includes(eventType)) {
       entry.interactions[eventType] = Number(entry.interactions[eventType] || 0) + 1;
@@ -92,6 +126,21 @@ module.exports.trackEvent = async (req, res) => {
     }
 
     progressDoc.lastAccessed = new Date();
+    setResumeMetadata(progressDoc, course, { lessonId, lessonType, lessonName, sectionIndex, lessonIndex });
+    appendRecentActivity(progressDoc, {
+      type: eventType === 'open' ? 'lesson-open' : `lesson-${eventType}`,
+      label: eventType === 'completed'
+        ? `Completed ${progressDoc.lastLessonName || 'lesson'}`
+        : eventType === 'open'
+          ? `Opened ${progressDoc.lastLessonName || 'lesson'}`
+          : `${eventType.charAt(0).toUpperCase() + eventType.slice(1)} ${progressDoc.lastLessonName || 'lesson'}`,
+      lessonId,
+      lessonName: progressDoc.lastLessonName,
+      lessonType: progressDoc.lastLessonType,
+      sectionIndex: progressDoc.lastSectionIndex,
+      lessonIndex: progressDoc.lastLessonIndex,
+      createdAt: progressDoc.lastAccessed
+    });
     await progressDoc.save();
     await markUserLearningActivity(req.user._id, progressDoc.lastAccessed);
 
@@ -104,19 +153,21 @@ module.exports.trackEvent = async (req, res) => {
 
 module.exports.trackWatchTime = async (req, res) => {
   try {
-    const { courseId, lessonId, lessonType, watchTime } = req.body;
+    const { courseId, lessonId, lessonType, watchTime, lessonName, sectionIndex, lessonIndex } = req.body;
     if (!courseId || !lessonId || !Number.isFinite(Number(watchTime))) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType);
+    const course = await Course.findById(courseId).select('sections');
 
     const delta = Math.max(0, Number(watchTime));
     entry.watchTime = Number(entry.watchTime || 0) + delta;
     progressDoc.totalWatchTime = Number(progressDoc.totalWatchTime || 0) + delta;
     progressDoc.watchTime = Number(progressDoc.watchTime || 0) + delta;
     progressDoc.lastAccessed = new Date();
+    setResumeMetadata(progressDoc, course, { lessonId, lessonType, lessonName, sectionIndex, lessonIndex });
 
     await progressDoc.save();
     await markUserLearningActivity(req.user._id, progressDoc.lastAccessed);
@@ -129,13 +180,14 @@ module.exports.trackWatchTime = async (req, res) => {
 
 module.exports.trackSlide = async (req, res) => {
   try {
-    const { courseId, lessonId, lessonType, slideIndex } = req.body;
+    const { courseId, lessonId, lessonType, slideIndex, lessonName, sectionIndex, lessonIndex } = req.body;
     if (!courseId || !lessonId) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType || 'slide');
+    const course = await Course.findById(courseId).select('sections');
 
     entry.slidesViewed = Number(entry.slidesViewed || 0) + 1;
     if (Number.isFinite(Number(slideIndex))) {
@@ -143,6 +195,17 @@ module.exports.trackSlide = async (req, res) => {
     }
 
     progressDoc.lastAccessed = new Date();
+    setResumeMetadata(progressDoc, course, { lessonId, lessonType: lessonType || 'slide', lessonName, sectionIndex, lessonIndex });
+    appendRecentActivity(progressDoc, {
+      type: 'slide-view',
+      label: `Viewed slide in ${progressDoc.lastLessonName || 'lesson'}`,
+      lessonId,
+      lessonName: progressDoc.lastLessonName,
+      lessonType: progressDoc.lastLessonType || 'slide',
+      sectionIndex: progressDoc.lastSectionIndex,
+      lessonIndex: progressDoc.lastLessonIndex,
+      createdAt: progressDoc.lastAccessed
+    });
     await progressDoc.save();
     await markUserLearningActivity(req.user._id, progressDoc.lastAccessed);
 
@@ -155,7 +218,7 @@ module.exports.trackSlide = async (req, res) => {
 
 module.exports.trackQuiz = async (req, res) => {
   try {
-    const { courseId, lessonId, lessonType, score, total, attempts } = req.body;
+    const { courseId, lessonId, lessonType, score, total, attempts, lessonName, sectionIndex, lessonIndex } = req.body;
     if (!courseId || !lessonId) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
@@ -164,6 +227,7 @@ module.exports.trackQuiz = async (req, res) => {
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType || 'quiz');
 
     const course = await Course.findById(courseId).select('sections').lean();
+    setResumeMetadata(progressDoc, course, { lessonId, lessonType: lessonType || 'quiz', lessonName, sectionIndex, lessonIndex });
     const expectedTotal = getQuizQuestionCount(course, lessonId);
     const rawTotal = Math.max(0, Number(total) || 0);
     const totalValue = expectedTotal > 0 ? expectedTotal : rawTotal;
@@ -188,6 +252,16 @@ module.exports.trackQuiz = async (req, res) => {
     }
 
     progressDoc.lastAccessed = new Date();
+    appendRecentActivity(progressDoc, {
+      type: 'quiz-attempt',
+      label: `Scored ${percent}% on ${progressDoc.lastLessonName || 'quiz'}`,
+      lessonId,
+      lessonName: progressDoc.lastLessonName,
+      lessonType: progressDoc.lastLessonType || 'quiz',
+      sectionIndex: progressDoc.lastSectionIndex,
+      lessonIndex: progressDoc.lastLessonIndex,
+      createdAt: progressDoc.lastAccessed
+    });
     await progressDoc.save();
 
     const user = await User.findById(req.user._id);

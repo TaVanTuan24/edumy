@@ -19,7 +19,8 @@
     "migrate:sections:dry": "node scripts/remove-driveStructure.js",
     "migrate:sections:apply": "node scripts/remove-driveStructure.js --apply",
     "cleanup:drive-structure:dry": "node scripts/remove-driveStructure.js",
-    "cleanup:drive-structure:apply": "node scripts/remove-driveStructure.js --apply"
+    "cleanup:drive-structure:apply": "node scripts/remove-driveStructure.js --apply",
+    "backfill:course-status": "node scripts/backfillCourseStatus.js"
   },
   "author": "",
   "license": "ISC",

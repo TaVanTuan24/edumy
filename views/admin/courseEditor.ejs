@@ -28,7 +28,14 @@
             <div class="top-bar-meta">
                 <span class="top-bar-meta-pill"><i class="fas fa-layer-group"></i><%= sectionCount %> section<%= sectionCount === 1 ? '' : 's' %></span>
                 <span class="top-bar-meta-pill"><i class="fas fa-list-check"></i><%= lessonCount %> item<%= lessonCount === 1 ? '' : 's' %></span>
+                <span class="top-bar-meta-pill"><i class="fas fa-flag"></i><%= statusBadge.label %></span>
                 <span class="top-bar-meta-pill"><i class="fas fa-shield-halved"></i>Admin editor</span>
+            </div>
+            <div class="small text-muted">
+                Last edited: <%= course.lastEditedAt ? new Date(course.lastEditedAt).toLocaleString() : 'Not available' %>
+                <% if (course.publishedAt) { %>
+                    • Published: <%= new Date(course.publishedAt).toLocaleString() %>
+                <% } %>
             </div>
         </div>
         <div class="top-bar-actions">
@@ -36,12 +43,38 @@
                 <a href="/courses/<%= course._id %>" class="btn btn-outline-secondary editor-action-btn" target="_blank" rel="noopener noreferrer">
                     <i class="fas fa-eye me-2"></i>Preview
                 </a>
+                <button class="btn btn-outline-primary editor-action-btn" type="button" data-bs-toggle="modal" data-bs-target="#youtubeImportModal">
+                    <i class="fa-brands fa-youtube me-2"></i>Import Playlist
+                </button>
                 <a href="/admin/ai/quiz" class="btn btn-warning editor-action-btn editor-action-btn-warning">
                     <i class="fas fa-robot me-2"></i>AI quiz
                 </a>
                 <a href="/admin/ai/slide?courseId=<%= course._id %>" class="btn btn-warning editor-action-btn editor-action-btn-warning">
                     <i class="fas fa-wand-magic-sparkles me-2"></i>AI slide
                 </a>
+                <% if (statusBadge.status !== 'published') { %>
+                    <form action="/admin/courses/<%= course._id %>/publish" method="POST" class="m-0">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="btn btn-success editor-action-btn">
+                            <i class="fas fa-upload me-2"></i><%= readiness.isPublishReady ? 'Publish' : 'Publish Anyway' %>
+                        </button>
+                    </form>
+                <% } else { %>
+                    <form action="/admin/courses/<%= course._id %>/unpublish" method="POST" class="m-0">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="btn btn-outline-warning editor-action-btn">
+                            <i class="fas fa-eye-slash me-2"></i>Move To Draft
+                        </button>
+                    </form>
+                <% } %>
+                <% if (statusBadge.status !== 'archived') { %>
+                    <form action="/admin/courses/<%= course._id %>/archive" method="POST" class="m-0">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="btn btn-outline-dark editor-action-btn">
+                            <i class="fas fa-box-archive me-2"></i>Archive
+                        </button>
+                    </form>
+                <% } %>
             </div>
             <div class="top-bar-action-group top-bar-action-group-primary">
                 <button class="btn btn-primary editor-action-btn editor-action-btn-primary" id="saveCourseBtn">
@@ -67,6 +100,19 @@
                 </div>
                 <p class="sidebar-subtitle mb-1">Organize your sections and lessons.</p>
                 <div id="reorderStatus" class="reorder-status" aria-live="polite"></div>
+                <div class="mt-3 small">
+                    <strong>Publish checklist</strong>
+                    <div class="d-grid gap-1 mt-2">
+                        <% readiness.items.forEach((item) => { %>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><%= item.label %></span>
+                                <span class="badge <%= item.ok ? 'bg-success' : (item.critical ? 'bg-danger' : 'bg-secondary') %>">
+                                    <%= item.ok ? 'OK' : (item.critical ? 'Required' : 'Optional') %>
+                                </span>
+                            </div>
+                        <% }) %>
+                    </div>
+                </div>
             </div>
 
             <div class="sidebar-content" id="sectionsContainer">
@@ -238,6 +284,32 @@
         </div>
     </div>
 
+    <div class="modal fade" id="youtubeImportModal" tabindex="-1" aria-labelledby="youtubeImportModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="youtubeImportModalLabel">Import YouTube Playlist</h5>
+                        <p class="modal-subtitle mb-0 text-muted">Fetch playlist videos, organize them into sections, review the structure, then append them to this course.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="youtube-import-card" data-youtube-import-root data-import-mode="apply" data-course-id="<%= course._id %>">
+                        <label class="form-label" for="editorYoutubePlaylistUrl">YouTube Playlist URL</label>
+                        <div class="input-group">
+                            <input class="form-control" id="editorYoutubePlaylistUrl" type="url" placeholder="https://www.youtube.com/playlist?list=..." data-youtube-playlist-url>
+                            <button class="btn btn-outline-primary" type="button" data-youtube-preview-btn>Import Playlist</button>
+                        </div>
+                        <div class="form-text">Preview first. Imported sections will be appended to the current course.</div>
+                        <div class="youtube-import-feedback mt-3 small text-muted" data-youtube-import-status>Paste a playlist URL to begin.</div>
+                        <div class="youtube-import-preview mt-3 d-none" data-youtube-preview></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade delete-course-modal" id="deleteCourseModal" tabindex="-1" aria-labelledby="deleteCourseModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -300,4 +372,5 @@
 
     <!-- Custom Editor JavaScript -->
     <script src="/javascripts/editor.js"></script>
+    <script src="/javascripts/youtube-course-import.js"></script>
 </body>

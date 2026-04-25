@@ -6,6 +6,7 @@ const course = require('../controllers/courses');
 const multer = require('multer');
 const { storage, imageFileFilter, MAX_IMAGE_UPLOAD_BYTES } = require('../config/cloudinary');
 const { uploadLimiter } = require('../utils/rateLimiters');
+const { aiChatLimiter } = require('../utils/rateLimiters');
 const upload = multer({
   storage,
   fileFilter: imageFileFilter,
@@ -34,6 +35,7 @@ router.get('/:id/edit', isLoggedIn, requireCourseManagement, catchAsync(course.r
 router.post('/:courseId/progress', isLoggedIn, requireCourseAccess, catchAsync(course.updateProgress));
 router.post('/:courseId/notes', isLoggedIn, requireCourseAccess, catchAsync(course.saveNote));
 router.post('/:courseId/quiz-results', isLoggedIn, requireCourseAccess, catchAsync(course.saveQuizResult));
+router.post('/:courseId/lessons/ai', isLoggedIn, requireCourseAccess, aiChatLimiter, catchAsync(course.askLessonAi));
 router.post('/:id/review', isLoggedIn, requireCourseAccess, catchAsync(course.createReview));
 router.get('/:id/reviews', isLoggedIn, requireCourseAccess, catchAsync(course.getReviews));
 

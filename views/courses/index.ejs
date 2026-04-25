@@ -1,136 +1,295 @@
-﻿<% layout('/layouts/boilerplate')%>
+<% layout('/layouts/boilerplate') %>
 <link rel="stylesheet" href="/stylesheets/course-pages.css">
 
 <%
-  const totalCourses = Array.isArray(courses) ? courses.length : 0;
-  const topicMap = new Map();
-  const searchCourses = (courses || []).map((course) => ({
-    id: String(course._id),
+  const learnerDashboard = dashboard || {};
+  const continueLearning = learnerDashboard.continueLearning || null;
+  const myCourses = Array.isArray(learnerDashboard.myCourses) ? learnerDashboard.myCourses : [];
+  const stats = learnerDashboard.stats || {};
+  const recentActivity = Array.isArray(learnerDashboard.recentActivity) ? learnerDashboard.recentActivity : [];
+  const username = (currentUser && currentUser.username) ? currentUser.username : 'Learner';
+  const searchCourses = myCourses.map((course) => ({
+    id: String(course.courseId),
     title: course.title,
-    url: `/courses/${course._id}`,
-    thumbnailUrl: course.images && course.images.length ? course.images[0].url : '/default.png',
-    topic: course.topic || 'Course'
+    url: course.continueUrl || (`/courses/${course.courseId}`),
+    thumbnailUrl: course.thumbnailUrl || '/default.png',
+    topic: course.statusLabel || 'Course'
   }));
-  (courses || []).forEach((course) => {
-    const topic = course.topic || 'Course';
-    topicMap.set(topic, (topicMap.get(topic) || 0) + 1);
-  });
-  const topTopics = Array.from(topicMap.entries()).slice(0, 5);
 %>
 
-<div class="course-discovery-page">
-  <div class="discovery-shell discovery-shell-compact">
-    <section class="discovery-hero discovery-hero-library">
-      <div>
-        <span class="discovery-eyebrow">My learning</span>
-        <h1 class="discovery-title">Tiếp tục học từ nơi bạn đã dừng lại</h1>
-        <p class="discovery-lead">Mỗi lần quay lại là một bước tiến mới, tiếp tục học đều hôm nay để kỹ năng của bạn mạnh hơn từng ngày.</p>
+<div class="learner-dashboard">
+  <div class="learner-dashboard-shell">
+    <section class="dashboard-hero-card">
+      <div class="dashboard-hero-copy">
+        <span class="dashboard-eyebrow">Learning Home</span>
+        <h1 class="dashboard-title">Welcome back, <%= username %></h1>
+        <p class="dashboard-subtitle">Keep the momentum going with one clear next step, a quick view of your progress, and focused practice suggestions.</p>
+      </div>
 
-        <div class="discovery-stats">
-          <div class="discovery-stat">
-            <span class="discovery-stat-value"><%= totalCourses %></span>
-            <span class="discovery-stat-label">Khóa học đã đăng ký</span>
-          </div>
-          <div class="discovery-stat">
-            <span class="discovery-stat-value"><%= topTopics.length %></span>
-            <span class="discovery-stat-label">Chủ đề đang theo học</span>
-          </div>
-          <div class="discovery-stat">
-            <span class="discovery-stat-value">Now</span>
-            <span class="discovery-stat-label">Tiếp tục học chỉ với một lần bấm</span>
-          </div>
-        </div>
-
-        <% if (topTopics.length) { %>
-          <div class="library-topic-row">
-            <% topTopics.forEach(([topic, count]) => { %>
-              <span class="library-topic-chip"><%= topic %> <strong><%= count %></strong></span>
-            <% }) %>
-          </div>
-        <% } %>
+      <div class="dashboard-stat-row" aria-label="Learning stats overview">
+        <article class="dashboard-stat-pill">
+          <span>In progress</span>
+          <strong><%= stats.coursesInProgress || 0 %></strong>
+        </article>
+        <article class="dashboard-stat-pill">
+          <span>Completed</span>
+          <strong><%= stats.completedCourses || 0 %></strong>
+        </article>
+        <article class="dashboard-stat-pill">
+          <span>Streak</span>
+          <strong><%= stats.currentStreak || 0 %></strong>
+        </article>
+        <article class="dashboard-stat-pill">
+          <span>Quiz average</span>
+          <strong><%= stats.averageQuizScore || 0 %>%</strong>
+        </article>
       </div>
     </section>
 
-    <section class="topic-section">
-      <div class="topic-head">
-        <div>
-          <h2 class="topic-title">Khóa học đã đăng ký</h2>
-          <div class="topic-meta"><%= totalCourses %> khóa học trong thư viện học tập của bạn</div>
+    <section class="continue-card">
+      <% if (continueLearning) { %>
+        <div class="continue-card-media">
+          <img src="<%= continueLearning.thumbnailUrl || '/default.png' %>" alt="<%= continueLearning.title %> thumbnail">
         </div>
 
-        <% if (totalCourses) { %>
-          <div
-            class="course-search-shell"
-            data-course-search-root
-            data-search-data-id="my-courses-search-data"
-            data-search-card-selector="[data-course-card]"
-            data-search-empty-selector="#myCoursesSearchEmpty"
-            data-search-no-results="No matching courses"
-          >
-            <label class="visually-hidden" for="myCoursesSearchInput">Search your courses</label>
-            <div class="course-search-input-wrap">
-              <span class="course-search-icon" aria-hidden="true">⌕</span>
-              <input
-                id="myCoursesSearchInput"
-                class="course-search-input"
-                type="search"
-                placeholder="Search your courses..."
-                autocomplete="off"
-                spellcheck="false"
-                aria-autocomplete="list"
-                aria-expanded="false"
-                data-course-search-input
-              >
+        <div class="continue-card-body">
+          <div class="continue-card-head">
+            <div>
+              <span class="continue-card-label">Continue Learning</span>
+              <h2><%= continueLearning.title %></h2>
             </div>
-            <div class="course-search-dropdown" data-course-search-dropdown hidden></div>
+            <span class="continue-lesson-badge"><%= continueLearning.lastLessonTypeLabel || 'Lesson' %></span>
           </div>
-        <% } %>
-      </div>
 
-      <% if (!totalCourses) { %>
-        <div class="alert alert-light border">Bạn chưa đăng ký khóa học nào.</div>
-      <% } else { %>
-        <div
-          class="alert alert-light border course-search-empty-state"
-          id="myCoursesSearchEmpty"
-          hidden
-        >
-          Không tìm thấy khóa học phù hợp.
+          <p class="continue-card-lesson"><%= continueLearning.lastLessonName || 'Open the course to continue your next lesson.' %></p>
+
+          <div class="continue-progress-meta">
+            <span><%= continueLearning.progressPercent %>% complete</span>
+            <span><%= continueLearning.completedLessons %> / <%= continueLearning.totalLessons %> lessons</span>
+            <span><%= continueLearning.lastAccessedLabel %></span>
+          </div>
+
+          <div class="continue-progress-track" role="progressbar" aria-label="Course progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= continueLearning.progressPercent %>">
+            <span style="width: <%= continueLearning.progressPercent %>%"></span>
+          </div>
+
+          <div class="continue-card-actions">
+            <a href="<%= continueLearning.continueUrl %>" class="btn btn-primary btn-lg">Continue Learning</a>
+          </div>
         </div>
-
-        <div class="course-card-grid course-card-grid-library">
-          <% courses.forEach((course) => { %>
-            <article
-              class="course-discovery-card course-library-card"
-              data-course-card
-              data-search-title="<%= course.title %>"
-              data-search-topic="<%= course.topic || 'Course' %>"
-            >
-              <div class="course-card-media">
-                <img src="<%= course.images && course.images.length ? course.images[0].url : '/default.png' %>" alt="<%= course.title %>">
-              </div>
-
-              <div class="course-card-body">
-                <h3 class="course-card-title"><%= course.title %></h3>
-                <p class="course-card-description">
-                  <%= (course.description || 'Tiếp tục học khóa học này để xem nội dung chi tiết và tiến độ hiện tại của bạn.').slice(0, 140) %><%= course.description && course.description.length > 140 ? '...' : '' %>
-                </p>
-
-                <div class="course-card-rating course-card-rating-compact">
-                  <span class="course-card-topic"><%= course.topic || 'Course' %></span>
-                </div>
-
-                <div class="course-card-footer">
-                  <a class="btn btn-primary" href="/courses/<%= course._id %>">Tiếp tục học</a>
-                </div>
-              </div>
-            </article>
-          <% }) %>
+      <% } else { %>
+        <div class="continue-empty-state">
+          <div>
+            <span class="continue-card-label">Ready to start?</span>
+            <h2>No active course yet</h2>
+            <p>Explore the course library and enroll in a learning path to unlock resume learning, recent activity, and personalized practice.</p>
+          </div>
+          <a href="/explore" class="btn btn-primary btn-lg">Explore Courses</a>
         </div>
       <% } %>
+    </section>
+
+    <section class="dashboard-main-grid">
+      <div class="dashboard-main-column">
+        <section class="dashboard-section-card">
+          <div class="dashboard-section-head">
+            <div>
+              <h2>My Courses</h2>
+              <p><%= myCourses.length %> course<%= myCourses.length === 1 ? '' : 's' %> in your learning library</p>
+            </div>
+
+            <% if (myCourses.length) { %>
+              <div
+                class="course-search-shell dashboard-search-shell"
+                data-course-search-root
+                data-search-data-id="my-courses-search-data"
+                data-search-card-selector="[data-course-card]"
+                data-search-empty-selector="#myCoursesSearchEmpty"
+                data-search-no-results="No matching courses"
+              >
+                <label class="visually-hidden" for="myCoursesSearchInput">Search your courses</label>
+                <div class="course-search-input-wrap">
+                  <span class="course-search-icon" aria-hidden="true">⌕</span>
+                  <input
+                    id="myCoursesSearchInput"
+                    class="course-search-input"
+                    type="search"
+                    placeholder="Search your courses..."
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-autocomplete="list"
+                    aria-expanded="false"
+                    data-course-search-input
+                  >
+                </div>
+                <div class="course-search-dropdown" data-course-search-dropdown hidden></div>
+              </div>
+            <% } %>
+          </div>
+
+          <% if (!myCourses.length) { %>
+            <div class="dashboard-empty-state">
+              <strong>You have not enrolled in any courses yet.</strong>
+              <p>Start with Explore and add a course to build your learning dashboard.</p>
+              <a href="/explore" class="btn btn-outline-primary">Browse Courses</a>
+            </div>
+          <% } else { %>
+            <div class="dashboard-filter-row" role="tablist" aria-label="Course filters">
+              <button type="button" class="dashboard-filter-chip is-active" data-dashboard-filter="all" aria-pressed="true">All</button>
+              <button type="button" class="dashboard-filter-chip" data-dashboard-filter="in-progress" aria-pressed="false">In Progress</button>
+              <button type="button" class="dashboard-filter-chip" data-dashboard-filter="completed" aria-pressed="false">Completed</button>
+            </div>
+
+            <div class="alert alert-light border course-search-empty-state" id="myCoursesSearchEmpty" hidden>
+              No matching courses found.
+            </div>
+
+            <div class="dashboard-course-list" data-dashboard-list>
+              <% myCourses.forEach((course, index) => { %>
+                <article
+                  class="dashboard-course-item <%= index >= 6 ? 'is-extra d-none' : '' %>"
+                  data-course-card
+                  data-search-title="<%= course.title %>"
+                  data-search-topic="<%= course.statusLabel || 'Course' %>"
+                  data-dashboard-status="<%= course.isCompleted ? 'completed' : (course.isInProgress ? 'in-progress' : 'all') %>"
+                >
+                  <div class="dashboard-course-media">
+                    <img src="<%= course.thumbnailUrl || '/default.png' %>" alt="<%= course.title %> thumbnail">
+                  </div>
+
+                  <div class="dashboard-course-copy">
+                    <div class="dashboard-course-top">
+                      <div>
+                        <h3><%= course.title %></h3>
+                        <p class="dashboard-course-lesson"><%= course.lastLessonName || 'Start your first lesson' %></p>
+                      </div>
+                      <span class="dashboard-course-pill"><%= course.lastLessonTypeLabel || 'Lesson' %></span>
+                    </div>
+
+                    <div class="dashboard-course-progress" role="progressbar" aria-label="Progress for <%= course.title %>" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= course.progressPercent %>">
+                      <span style="width: <%= course.progressPercent %>%"></span>
+                    </div>
+
+                    <div class="dashboard-course-meta">
+                      <span><%= course.progressPercent %>% complete</span>
+                      <span><%= course.completedLessons %> / <%= course.totalLessons %> lessons</span>
+                      <span><%= course.lastAccessedLabel %></span>
+                    </div>
+                  </div>
+
+                  <div class="dashboard-course-actions">
+                    <a class="btn btn-primary" href="<%= course.continueUrl %>"><%= course.cardCtaLabel %></a>
+                  </div>
+                </article>
+              <% }) %>
+            </div>
+
+            <% if (myCourses.length > 6) { %>
+              <div class="dashboard-show-more-row">
+                <button type="button" class="btn btn-outline-secondary" id="dashboardShowMoreBtn" data-dashboard-show-more>Show more</button>
+              </div>
+            <% } %>
+          <% } %>
+        </section>
+      </div>
+
+      <aside class="dashboard-side-column">
+        <section class="dashboard-section-card dashboard-side-card">
+          <div class="dashboard-section-head">
+            <div>
+              <h2>Recent Activity</h2>
+              <p>Your latest lesson and quiz events</p>
+            </div>
+          </div>
+
+          <% if (!recentActivity.length) { %>
+            <div class="dashboard-empty-inline">
+              Start a lesson to build your recent activity timeline.
+            </div>
+          <% } else { %>
+            <div class="activity-timeline">
+              <% recentActivity.forEach((entry) => { %>
+                <article class="activity-item">
+                  <div class="activity-icon" aria-hidden="true">
+                    <% if (entry.type.includes('quiz')) { %>?</% } else if (entry.type.includes('slide')) { %>≣<% } else if (entry.type.includes('video') || entry.type.includes('lesson')) { %>▶<% } else { %>•<% } %>
+                  </div>
+                  <div class="activity-copy">
+                    <strong><%= entry.label %></strong>
+                    <div class="small text-muted"><%= entry.courseTitle %><% if (entry.lessonName) { %> • <%= entry.lessonName %><% } %></div>
+                    <div class="small text-muted"><%= entry.createdAtLabel || new Date(entry.createdAt).toLocaleString() %></div>
+                  </div>
+                </article>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+
+      </aside>
     </section>
   </div>
 </div>
 
 <script id="my-courses-search-data" type="application/json"><%- serializeJson(searchCourses) %></script>
 <script src="/javascripts/course-search.js"></script>
+<script>
+  (function() {
+    const root = document.querySelector('.learner-dashboard');
+    if (!root) return;
+
+    const filterButtons = Array.from(root.querySelectorAll('[data-dashboard-filter]'));
+    const items = Array.from(root.querySelectorAll('.dashboard-course-item'));
+    const showMoreBtn = root.querySelector('[data-dashboard-show-more]');
+    let activeFilter = 'all';
+    let expanded = false;
+
+    function updateFilters() {
+      let visibleCount = 0;
+      items.forEach(function(item, index) {
+        const status = item.dataset.dashboardStatus || 'all';
+        const matchesFilter = activeFilter === 'all'
+          ? true
+          : activeFilter === 'in-progress'
+            ? status === 'in-progress'
+            : status === 'completed';
+        const withinInitialLimit = expanded || index < 6;
+        item.classList.toggle('d-none', !matchesFilter || !withinInitialLimit);
+        if (matchesFilter) visibleCount += 1;
+      });
+
+      if (showMoreBtn) {
+        const needsExpansion = items.filter(function(item) {
+          const status = item.dataset.dashboardStatus || 'all';
+          return activeFilter === 'all'
+            ? true
+            : activeFilter === 'in-progress'
+              ? status === 'in-progress'
+              : status === 'completed';
+        }).length > 6;
+        showMoreBtn.classList.toggle('d-none', !needsExpansion);
+        showMoreBtn.textContent = expanded ? 'Show less' : 'Show more';
+      }
+    }
+
+    filterButtons.forEach(function(button) {
+      button.addEventListener('click', function() {
+        activeFilter = button.dataset.dashboardFilter || 'all';
+        expanded = false;
+        filterButtons.forEach(function(node) {
+          const isActive = node === button;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+        updateFilters();
+      });
+    });
+
+    if (showMoreBtn) {
+      showMoreBtn.addEventListener('click', function() {
+        expanded = !expanded;
+        updateFilters();
+      });
+    }
+
+    updateFilters();
+  })();
+</script>

@@ -321,6 +321,17 @@ app.use((err, req, res, next) => {
   if (err && err.code === 'EBADCSRFTOKEN') {
     const message = 'Your form expired or the request could not be verified. Please try again.';
 
+    if (!isProduction) {
+      console.warn('[CSRF Failure]', {
+        method: req.method,
+        path: req.originalUrl || req.path,
+        hasBodyToken: Boolean(req.body && req.body._csrf),
+        hasHeaderToken: Boolean(req.get('CSRF-Token') || req.get('X-CSRF-Token')),
+        hasRequestedWith: Boolean(req.get('X-Requested-With')),
+        contentType: req.get('Content-Type') || ''
+      });
+    }
+
     if (requestWantsJson(req)) {
       return res.status(403).json({
         success: false,

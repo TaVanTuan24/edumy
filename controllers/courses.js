@@ -8,6 +8,13 @@ const mongoose = require('mongoose');
 const { awardGamification, buildGamificationViewModel, recordLearningActivity } = require('../utils/gamification');
 const Discussion = require('../models/discussion');
 const { logAuditEvent } = require('../utils/auditLogger');
+const { buildLearnerDashboard } = require('../services/learnerDashboardService');
+const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
+const { findLessonContext } = require('../utils/lessonLocator');
+const { buildLessonAiContext, buildLessonAiPrompt } = require('../services/lessonAiContextService');
+const { generatePromptReply } = require('../services/ai/chatOrchestrator');
+const { normalizeAiModel } = require('../config/ai');
+const { buildCourseSectionsFromPreview } = require('../services/youtube/youtubeCourseImportService');
 const {
   getCanonicalSections,
   syncCourseContent
@@ -24,13 +31,32 @@ function countCourseLessons(course) {
 function sanitizeCourseInput(rawCourse) {
   const source = rawCourse && typeof rawCourse === 'object' ? rawCourse : {};
   const allowedFields = ['title', 'description', 'driveLink', 'topic', 'sections'];
+  let parsedSections = Array.isArray(source.sections) ? source.sections : null;
 
-  return allowedFields.reduce((acc, key) => {
+  if (!parsedSections && typeof source.sectionsJson === 'string' && source.sectionsJson.trim()) {
+    try {
+      const candidate = JSON.parse(source.sectionsJson);
+      if (Array.isArray(candidate)) {
+        const looksLikePreview = candidate.some((section) => Array.isArray(section && section.videos));
+        parsedSections = looksLikePreview ? buildCourseSectionsFromPreview(candidate) : candidate;
+      }
+    } catch {
+      parsedSections = null;
+    }
+  }
+
+  const sanitized = allowedFields.reduce((acc, key) => {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
       acc[key] = source[key];
     }
     return acc;
   }, {});
+
+  if (parsedSections) {
+    sanitized.sections = parsedSections;
+  }
+
+  return sanitized;
 }
 
 function buildCourseFormData(rawCourse = {}) {
@@ -38,6 +64,9 @@ function buildCourseFormData(rawCourse = {}) {
     title: String(rawCourse.title || '').trim(),
     description: String(rawCourse.description || '').trim(),
     driveLink: String(rawCourse.driveLink || '').trim(),
+    youtubePlaylistUrl: String(rawCourse.youtubePlaylistUrl || '').trim(),
+    importSource: String(rawCourse.importSource || '').trim().toLowerCase() === 'youtube' ? 'youtube' : 'drive',
+    sectionsJson: String(rawCourse.sectionsJson || '').trim(),
     topic: String(rawCourse.topic || '').trim(),
     imageUrl: String(rawCourse.imageUrl || '').trim(),
     thumbnailMode: String(rawCourse.thumbnailMode || '').trim().toLowerCase() === 'url' ? 'url' : 'upload'
@@ -104,12 +133,47 @@ function resolveCourseImages({ files, imageUrl, thumbnailMode }) {
   };
 }
 
-function getEnrolledCourseIds(user) {
-  if (!user || typeof user.getEnrolledCourseIdSet !== 'function') return [];
 
-  return Array.from(user.getEnrolledCourseIdSet())
-    .filter((id) => mongoose.isValidObjectId(id))
-    .map((id) => new mongoose.Types.ObjectId(id));
+function appendRecentActivity(progressDoc, activity) {
+  const entry = {
+    type: String(activity && activity.type || 'activity'),
+    label: String(activity && activity.label || 'Learning activity'),
+    lessonId: String(activity && activity.lessonId || ''),
+    lessonName: String(activity && activity.lessonName || ''),
+    lessonType: String(activity && activity.lessonType || ''),
+    sectionIndex: Number.isInteger(Number(activity && activity.sectionIndex)) ? Number(activity.sectionIndex) : null,
+    lessonIndex: Number.isInteger(Number(activity && activity.lessonIndex)) ? Number(activity.lessonIndex) : null,
+    createdAt: activity && activity.createdAt ? new Date(activity.createdAt) : new Date()
+  };
+
+  progressDoc.recentActivity = Array.isArray(progressDoc.recentActivity) ? progressDoc.recentActivity : [];
+  progressDoc.recentActivity.push(entry);
+  progressDoc.recentActivity = progressDoc.recentActivity
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .slice(-20);
+}
+
+function setResumeMetadata(progressDoc, course, payload = {}) {
+  const sectionIndex = Number.isInteger(Number(payload.sectionIndex)) ? Number(payload.sectionIndex) : null;
+  const lessonIndex = Number.isInteger(Number(payload.lessonIndex)) ? Number(payload.lessonIndex) : null;
+  const lessonId = String(payload.lessonId || '').trim();
+  const lessonName = String(payload.lessonName || '').trim();
+  const lessonType = String(payload.lessonType || '').trim();
+
+  let lessonContext = null;
+  if (course) {
+    lessonContext = findLessonContext(course, {
+      lessonId,
+      sectionIndex,
+      lessonIndex
+    });
+  }
+
+  progressDoc.lastLessonId = lessonId || String(lessonContext && lessonContext.lesson && lessonContext.lesson._id || progressDoc.lastLessonId || '');
+  progressDoc.lastLessonName = lessonName || String(lessonContext && lessonContext.lesson && lessonContext.lesson.title || progressDoc.lastLessonName || '');
+  progressDoc.lastLessonType = lessonType || String(lessonContext && lessonContext.lesson && lessonContext.lesson.type || progressDoc.lastLessonType || '');
+  progressDoc.lastSectionIndex = sectionIndex !== null ? sectionIndex : (lessonContext ? lessonContext.sectionIndex : progressDoc.lastSectionIndex);
+  progressDoc.lastLessonIndex = lessonIndex !== null ? lessonIndex : (lessonContext ? lessonContext.lessonIndex : progressDoc.lastLessonIndex);
 }
 
 async function markUserLearningActivity(userId, activityDate) {
@@ -161,18 +225,11 @@ async function markCourseSeenForUser(userId, course) {
 }
 
 module.exports.index = async (req, res) => {
-  const user = await User.findById(req.user._id);
-  const enrolledIds = getEnrolledCourseIds(user);
-  const idOrder = new Map(enrolledIds.map((id, idx) => [String(id), idx]));
-
-  const courses = await Course.find({ _id: { $in: enrolledIds } }).sort({ updatedAt: -1 });
-  courses.sort((a, b) => {
-    const orderA = idOrder.get(String(a._id));
-    const orderB = idOrder.get(String(b._id));
-    return (orderA ?? 0) - (orderB ?? 0);
+  const dashboard = await buildLearnerDashboard(req.user._id);
+  res.render('courses/index', {
+    courses: dashboard.myCourses,
+    dashboard
   });
-
-  res.render('courses/index', { courses });
 };
 
 module.exports.renderNewForm = (req, res) => {
@@ -200,7 +257,9 @@ module.exports.createCourse = async (req, res) => {
   const course = new Course(sanitizeCourseInput(req.body.course));
   course.images = imageResult.images;
   course.author = req.user._id;
+  const importSource = String(req.body && req.body.course && req.body.course.importSource || 'drive').trim().toLowerCase();
 
+  if (importSource !== 'youtube') {
   const driveLink = String(course.driveLink || '');
   const match = driveLink.match(/\/folders\/([a-zA-Z0-9_-]+)/);
   if (match) {
@@ -212,8 +271,10 @@ module.exports.createCourse = async (req, res) => {
       console.error("Lỗi khi quét Google Drive:", err.message);
       req.flash('error', 'Không thể quét nội dung Drive. Vui lòng kiểm tra link!');
     }
-  } else {
+  } else if (!Array.isArray(course.sections) || !course.sections.length) {
     req.flash('error', 'Drive link không hợp lệ!');
+  }
+
   }
 
   await course.save();
@@ -225,7 +286,8 @@ module.exports.createCourse = async (req, res) => {
     metadata: {
       title: course.title,
       topic: course.topic,
-      sectionCount: Array.isArray(course.sections) ? course.sections.length : 0
+      sectionCount: Array.isArray(course.sections) ? course.sections.length : 0,
+      importSource
     }
   });
   req.flash('success', 'Successfully made a new course!');
@@ -243,6 +305,7 @@ module.exports.showCourses = async (req, res) => {
   }
 
   const updateStatus = await markCourseSeenForUser(req.user && req.user._id, course);
+  const effectiveStatus = getEffectiveCourseStatus(course);
 
   syncCourseContent(course);
 
@@ -289,7 +352,10 @@ module.exports.showCourses = async (req, res) => {
     sectionNotes,
     hasCourseUpdate: updateStatus.hadUpdate,
     gamification,
-    discussionHighlights: normalizedDiscussionHighlights
+    discussionHighlights: normalizedDiscussionHighlights,
+    courseStatusNotice: effectiveStatus !== 'published'
+      ? 'This course is currently not publicly listed, but you can continue learning because you are already enrolled.'
+      : ''
   });
 };
 
@@ -364,7 +430,7 @@ module.exports.deleteCourse = async (req, res) => {
 module.exports.updateProgress = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { video, completed, lessonId } = req.body;
+    const { video, completed, lessonId, lessonName, lessonType, sectionIndex, lessonIndex } = req.body;
     const userId = req.user._id;
 
     const hasLessonId = !!lessonId;
@@ -418,14 +484,27 @@ module.exports.updateProgress = async (req, res) => {
         progressDoc.lessonViews[lessonKey] = current + 1;
       }
 
+      const course = await Course.findById(courseObjectId).select('sections');
       progressDoc.lastAccessed = new Date();
+      setResumeMetadata(progressDoc, course, { lessonId, lessonName, lessonType, sectionIndex, lessonIndex });
+      appendRecentActivity(progressDoc, {
+        type: completed === true || completed === 'true' ? 'lesson-complete' : 'lesson-progress',
+        label: completed === true || completed === 'true'
+          ? `Completed ${progressDoc.lastLessonName || 'lesson'}`
+          : `Continued ${progressDoc.lastLessonName || 'lesson'}`,
+        lessonId,
+        lessonName: progressDoc.lastLessonName,
+        lessonType: progressDoc.lastLessonType,
+        sectionIndex: progressDoc.lastSectionIndex,
+        lessonIndex: progressDoc.lastLessonIndex,
+        createdAt: progressDoc.lastAccessed
+      });
 
       const watchDelta = Number(req.body.watchTime);
       if (Number.isFinite(watchDelta) && watchDelta > 0) {
         progressDoc.watchTime = Number(progressDoc.watchTime || 0) + watchDelta;
       }
 
-      const course = await Course.findById(courseObjectId).select('sections');
       const totalLessons = countCourseLessons(course);
       progressDoc.completionRate = totalLessons
         ? Math.round((progressDoc.completedLessons.length / totalLessons) * 100)
@@ -456,7 +535,7 @@ module.exports.updateProgress = async (req, res) => {
 module.exports.saveQuizResult = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { quizId, score, total } = req.body;
+    const { quizId, score, total, lessonName, lessonType, sectionIndex, lessonIndex } = req.body;
     const userId = req.user._id;
 
     if (!quizId) {
@@ -482,7 +561,25 @@ module.exports.saveQuizResult = async (req, res) => {
       progressDoc.quizResults.push({ quizId: quizKey, score: nextScore, total: nextTotal });
     }
 
+    const course = await Course.findById(courseObjectId).select('sections');
     progressDoc.lastAccessed = new Date();
+    setResumeMetadata(progressDoc, course, {
+      lessonId: quizKey,
+      lessonName,
+      lessonType,
+      sectionIndex,
+      lessonIndex
+    });
+    appendRecentActivity(progressDoc, {
+      type: 'quiz-result',
+      label: `Completed quiz ${progressDoc.lastLessonName || ''}`.trim(),
+      lessonId: quizKey,
+      lessonName: progressDoc.lastLessonName,
+      lessonType: progressDoc.lastLessonType || 'quiz',
+      sectionIndex: progressDoc.lastSectionIndex,
+      lessonIndex: progressDoc.lastLessonIndex,
+      createdAt: progressDoc.lastAccessed
+    });
 
     await progressDoc.save();
     await markUserLearningActivity(userId, progressDoc.lastAccessed);
@@ -572,6 +669,78 @@ module.exports.getReviews = async (req, res) => {
   } catch (err) {
     console.error('[Review Fetch Error]', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+module.exports.askLessonAi = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { lessonId, sectionIndex, lessonIndex, action, question, model } = req.body || {};
+
+    const course = await Course.findById(courseId).select('title topic description sections');
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
+    syncCourseContent(course);
+
+    const context = await buildLessonAiContext({
+      userId: req.user._id,
+      course,
+      lessonId,
+      sectionIndex,
+      lessonIndex
+    });
+
+    if (!context) {
+      return res.status(400).json({ success: false, error: 'Invalid lesson reference' });
+    }
+
+    const selectedModel = normalizeAiModel(model);
+    const prompt = buildLessonAiPrompt({
+      context,
+      action,
+      question
+    });
+
+    const reply = await generatePromptReply({
+      userId: req.user._id,
+      model: selectedModel,
+      prompt,
+      options: {
+        temperature: 0.3,
+        topP: 0.9,
+        maxTokens: 1400,
+        timeoutMs: 120000
+      }
+    });
+
+    const safeAction = String(action || 'custom').trim().toLowerCase() || 'custom';
+    const profileUser = await User.findById(req.user._id);
+    if (profileUser) {
+      await awardGamification(profileUser, { action: 'aiTutor', meta: { lessonAction: safeAction } });
+    }
+
+    return res.json({
+      success: true,
+      model: selectedModel,
+      lesson: {
+        id: context.lessonId,
+        name: context.lessonName,
+        type: context.lessonType,
+        sectionTitle: context.sectionTitle
+      },
+      answer: reply
+    });
+  } catch (err) {
+    console.error('[Lesson AI Error]', err.message);
+    if (err.publicMessage) {
+      return res.status(err.statusCode || 503).json({ success: false, error: err.publicMessage });
+    }
+    if (err.code === 'ECONNREFUSED') {
+      return res.status(503).json({ success: false, error: 'AI service unavailable. Is Ollama running?' });
+    }
+    return res.status(500).json({ success: false, error: 'Failed to generate AI tutor response.' });
   }
 };
 

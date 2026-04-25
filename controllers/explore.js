@@ -4,6 +4,8 @@ const { generateCourseDescription } = require('../utils/courseDescriptionGenerat
 const { syncCourseContent } = require('../utils/courseContentAdapter');
 const { buildStoredCourseStats } = require('../utils/courseStats');
 const { summarizeCourseReviews } = require('../utils/courseReviews');
+const { isCourseCatalogVisible } = require('../utils/courseLifecycle');
+const { isAdminUser } = require('../middleware');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -11,6 +13,7 @@ module.exports.showExplore = async (req, res) => {
     const enrolledIdSet = user.getEnrolledCourseIdSet();
 
     const unjoinedCourses = allCourses.filter(course =>
+        isCourseCatalogVisible(course) &&
         !enrolledIdSet.has(String(course._id))
     );
 
@@ -38,6 +41,10 @@ module.exports.previewCourse = async (req, res) => {
             populate: { path: 'author' }
         });
     if (!course) return res.redirect('/explore');
+    if (!isCourseCatalogVisible(course) && !isAdminUser(req.user)) {
+        req.flash('error', 'This course is not available for public preview yet.');
+        return res.redirect('/explore');
+    }
     syncCourseContent(course);
     const previewStats = buildStoredCourseStats(course);
     const reviewSummary = summarizeCourseReviews(course);
@@ -63,6 +70,10 @@ module.exports.enrollCourse = async (req, res) => {
     }
 
     const existingEnrollment = user.findEnrollment(course._id);
+    if (!isCourseCatalogVisible(course) && !isAdminUser(req.user)) {
+        req.flash('error', 'This course is not open for enrollment yet.');
+        return res.redirect('/explore');
+    }
     if (!existingEnrollment) {
         user.enrolledCourses.push({
             courseId: course._id,

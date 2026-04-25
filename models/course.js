@@ -5,6 +5,7 @@ const { formatDuration, parseDurationToSeconds } = require('../utils/duration');
 const { extractDriveFileMeta } = require('../utils/driveVideoMetadata');
 const { syncCourseAggregateFields } = require('../utils/courseStats');
 const Schema = mongoose.Schema;
+const VALID_COURSE_STATUSES = ['draft', 'published', 'archived'];
 
 const opts = { toJSON: { virtuals: true }, timestamps: true }
 
@@ -251,6 +252,28 @@ const CourseSchema = new Schema({
         enum: ['Software', 'Hardware', 'AI', 'Network', 'Language', 'Security', 'Other'],
         required: true
     },
+    status: {
+        type: String,
+        enum: VALID_COURSE_STATUSES,
+        default: 'draft'
+    },
+    publishedAt: {
+        type: Date,
+        default: null
+    },
+    lastEditedAt: {
+        type: Date,
+        default: Date.now
+    },
+    unpublishedReason: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    archivedAt: {
+        type: Date,
+        default: null
+    },
     author: {
         type: Schema.Types.ObjectId,
         ref: 'User'
@@ -396,6 +419,12 @@ CourseSchema.pre('validate', function(next) {
     }
 
     syncCourseAggregateFields(this)
+
+    if (!this.status || !VALID_COURSE_STATUSES.includes(String(this.status))) {
+        this.status = 'published'
+    }
+
+    this.lastEditedAt = new Date()
 
     next()
 })

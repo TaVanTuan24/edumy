@@ -931,6 +931,34 @@ html[data-theme="dark"] .interactive-quiz-option.wrong {
     min-width: 0;
 }
 
+.youtube-import-card {
+    border-radius: 20px;
+    border: 1px solid var(--app-border);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--app-surface) 98%, transparent) 0%, color-mix(in srgb, var(--app-surface-soft) 94%, transparent) 100%);
+}
+
+.youtube-import-source-switch {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.youtube-import-preview {
+    border-top: 1px solid var(--app-border);
+    padding-top: 1rem;
+}
+
+.youtube-import-panel {
+    display: grid;
+    gap: 1rem;
+}
+
+.youtube-import-video-row img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+}
+
 @media (max-width: 767px) {
     .course-thumbnail-preview-card {
         grid-template-columns: 1fr;

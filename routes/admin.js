@@ -10,6 +10,8 @@ const adminAnalyticsRoutes = require('./adminAnalytics');
 const grokSetupService = require('../services/ai/grokSetupService')
 const { adminActionLimiter } = require('../utils/rateLimiters')
 const { logAuditEvent } = require('../utils/auditLogger')
+const { getEffectiveCourseStatus, computeCourseReadiness, setCourseStatus, buildCourseStatusBadge } = require('../utils/courseLifecycle')
+const { previewYoutubeImport, buildCourseSectionsFromPreview } = require('../services/youtube/youtubeCourseImportService')
 const {
     getCanonicalSections,
     syncCourseContent
@@ -33,6 +35,30 @@ async function recordAdminAudit(req, action, targetType, targetId, metadata) {
         targetId,
         metadata
     })
+}
+
+function matchesStatusFilter(course, statusFilter) {
+    if (!statusFilter || statusFilter === 'all') return true
+    return getEffectiveCourseStatus(course) === statusFilter
+}
+
+function normalizeImportedPreviewSections(sections) {
+    return (Array.isArray(sections) ? sections : [])
+        .map((section, sectionIndex) => ({
+            title: String(section && section.title || '').trim() || `Section ${sectionIndex + 1}`,
+            description: String(section && section.description || '').trim(),
+            videos: (Array.isArray(section && section.videos) ? section.videos : [])
+                .map((video) => ({
+                    title: String(video && video.title || '').trim(),
+                    videoId: String(video && video.videoId || '').trim(),
+                    url: String(video && video.url || '').trim(),
+                    thumbnail: String(video && video.thumbnail || '').trim(),
+                    durationSeconds: Number.isFinite(Number(video && video.durationSeconds)) ? Number(video.durationSeconds) : null,
+                    durationFormatted: String(video && video.durationFormatted || '').trim()
+                }))
+                .filter((video) => video.title && video.videoId && video.url)
+        }))
+        .filter((section) => Array.isArray(section.videos) && section.videos.length > 0)
 }
 
 router.get('/ai/grok/status', async (_req, res) => {
@@ -76,6 +102,73 @@ router.post('/ai/grok/disable', async (_req, res) => {
         res.json({ success: true, status })
     } catch (error) {
         res.status(400).json({ success: false, error: error.publicMessage || error.message })
+    }
+})
+
+router.post('/youtube/import/preview', async (req, res) => {
+    try {
+        const playlistUrl = String(req.body && req.body.playlistUrl || '').trim()
+        if (!playlistUrl) {
+            return res.status(400).json({ success: false, error: 'Playlist URL is required.' })
+        }
+
+        const preview = await previewYoutubeImport({
+            playlistUrl,
+            userId: req.user && req.user._id,
+            options: {
+                courseTitle: req.body && req.body.courseTitle,
+                topic: req.body && req.body.topic
+            }
+        })
+
+        return res.json({ success: true, preview })
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.publicMessage || error.message || 'Failed to import YouTube playlist.'
+        })
+    }
+})
+
+router.post('/youtube/import/apply', async (req, res) => {
+    try {
+        const courseId = String(req.body && req.body.courseId || '').trim()
+        if (!courseId) {
+            return res.status(400).json({ success: false, error: 'Course id is required.' })
+        }
+
+        const course = await loadEditableCourse(courseId)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found.' })
+        }
+
+        const previewSections = normalizeImportedPreviewSections(req.body && req.body.sections)
+        if (!previewSections.length) {
+            return res.status(400).json({ success: false, error: 'No playlist sections were provided.' })
+        }
+
+        const mappedSections = buildCourseSectionsFromPreview(previewSections)
+        for (const section of mappedSections) {
+            for (const lesson of section.lessons) {
+                await prepareLessonForWrite(lesson, { debug: false, allowDriveLookup: false })
+            }
+        }
+
+        course.sections = Array.isArray(course.sections) ? course.sections.concat(mappedSections) : mappedSections
+        reindexCanonicalSections(course)
+        await saveEditableCourse(course)
+        await recordAdminAudit(req, 'youtube_playlist_imported', 'course', String(course._id), {
+            playlistTitle: String(req.body && req.body.playlistTitle || '').trim(),
+            sectionCount: mappedSections.length,
+            lessonCount: mappedSections.reduce((sum, section) => sum + section.lessons.length, 0)
+        })
+
+        return res.json({ success: true, courseId: String(course._id) })
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.publicMessage || error.message || 'Failed to apply playlist import.'
+        })
     }
 })
 
@@ -475,9 +568,11 @@ function averageQuizPercent(quizResults) {
 
 router.get('/', async (req, res) => {
     try {
+        const statusFilter = String(req.query.status || 'all').trim().toLowerCase();
         const courses = await Course.find({}).populate('author', 'username email');
         
         let totalEnrollments = 0;
+        const visibleCourses = courses.filter((course) => matchesStatusFilter(course, statusFilter));
         const totalCourses = courses.length;
         const totalUsers = await User.countDocuments();
         
@@ -486,9 +581,16 @@ router.get('/', async (req, res) => {
             totalEnrollments += (u.enrolledCourseIds?.length || 0) + (u.enrolledCourses?.length || 0);
         });
 
+        const coursesWithStatus = visibleCourses.map((course) => ({
+            ...course.toObject(),
+            statusBadge: buildCourseStatusBadge(course),
+            readiness: computeCourseReadiness(course)
+        }));
+
         res.render('admin/courseManager', { 
-            courses, 
-            stats: { totalCourses, totalUsers, totalEnrollments } 
+            courses: coursesWithStatus, 
+            stats: { totalCourses, totalUsers, totalEnrollments },
+            statusFilter
         });
     } catch (err) {
         console.error("Dashboard Load Error:", err);
@@ -510,8 +612,67 @@ router.get('/courses/:id/editor', async (req, res) => {
         return res.status(404).send('Course not found')
     }
 
-    res.render('admin/courseEditor', { course })
+    res.render('admin/courseEditor', {
+        course,
+        statusBadge: buildCourseStatusBadge(course),
+        readiness: computeCourseReadiness(course)
+    })
 
+})
+
+router.post('/courses/:id/publish', async (req, res) => {
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        req.flash('error', 'Course not found')
+        return res.redirect('/admin')
+    }
+
+    const readiness = computeCourseReadiness(course)
+    setCourseStatus(course, 'published')
+    await course.save()
+    await recordAdminAudit(req, 'course_published', 'course', String(course._id), {
+        title: course.title,
+        isPublishReady: readiness.isPublishReady
+    })
+
+    req.flash(readiness.isPublishReady ? 'success' : 'error', readiness.isPublishReady
+        ? 'Course published successfully.'
+        : 'Course published, but the readiness checklist still has incomplete items.')
+    res.redirect(req.get('Referrer') || '/admin')
+})
+
+router.post('/courses/:id/unpublish', async (req, res) => {
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        req.flash('error', 'Course not found')
+        return res.redirect('/admin')
+    }
+
+    setCourseStatus(course, 'draft', { unpublishedReason: 'Unpublished from admin' })
+    await course.save()
+    await recordAdminAudit(req, 'course_unpublished', 'course', String(course._id), {
+        title: course.title
+    })
+
+    req.flash('success', 'Course moved back to draft.')
+    res.redirect(req.get('Referrer') || '/admin')
+})
+
+router.post('/courses/:id/archive', async (req, res) => {
+    const course = await loadEditableCourse(req.params.id)
+    if (!course) {
+        req.flash('error', 'Course not found')
+        return res.redirect('/admin')
+    }
+
+    setCourseStatus(course, 'archived')
+    await course.save()
+    await recordAdminAudit(req, 'course_archived', 'course', String(course._id), {
+        title: course.title
+    })
+
+    req.flash('success', 'Course archived.')
+    res.redirect(req.get('Referrer') || '/admin')
 })
 
 router.get('/courses/:id/video-settings', async (req, res) => {

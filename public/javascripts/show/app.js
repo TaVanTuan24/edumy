@@ -14,7 +14,9 @@
   window.currentContext = {
     lessonId: null,
     type: null,
-    slideIndex: null
+    slideIndex: null,
+    sectionIndex: null,
+    lessonIndex: null
   };
 
   window.__videoPlayback = window.__videoPlayback || { isPlaying: false };
@@ -127,10 +129,28 @@
   function resumeLastContext() {
     const deps = window.LearningStore;
     const store = deps.store;
+    const search = new URLSearchParams(window.location.search);
+    const queryLesson = String(search.get('lesson') || '').trim();
+    const querySection = Number(search.get('section'));
+    const queryItem = Number(search.get('item'));
 
     const savedSection = Number(localStorage.getItem(deps.storageKey(deps.STORAGE_SUFFIX.lastSection)) || 0);
     const sectionIndex = Number.isFinite(savedSection) && store.sections[savedSection] ? savedSection : 0;
     window.LearningRender.showSection(sectionIndex);
+
+    if (queryLesson && deps.getLessonById(queryLesson)) {
+      selectLesson(queryLesson);
+      return;
+    }
+
+    if (Number.isFinite(querySection) && Number.isFinite(queryItem)) {
+      const section = store.sections[querySection];
+      const lesson = section && section.items && section.items[queryItem];
+      if (lesson) {
+        selectLesson(lesson._id);
+        return;
+      }
+    }
 
     const savedLesson = localStorage.getItem(deps.storageKey(deps.STORAGE_SUFFIX.lastLesson));
     if (savedLesson && deps.getLessonById(savedLesson)) {
@@ -156,7 +176,9 @@
     updateContext({
       lessonId: activeLessonId,
       type: activeLessonType === 'lecture' ? 'video' : activeLessonType,
-      slideIndex: null
+      slideIndex: null,
+      sectionIndex: lesson.sectionIndex,
+      lessonIndex: lesson.lessonIndex
     });
     window.__videoPlayback = window.__videoPlayback || {};
     if (activeLessonType !== 'lecture') {
@@ -172,6 +194,7 @@
 
     localStorage.setItem(deps.storageKey(deps.STORAGE_SUFFIX.lastLesson), String(lesson._id));
     localStorage.setItem(deps.storageKey(deps.STORAGE_SUFFIX.lastSection), String(lesson.sectionIndex));
+    trackLessonOpen(lesson);
 
     if (lesson.sectionIndex !== deps.store.currentSectionIndex) {
       window.LearningRender.showSection(lesson.sectionIndex);
@@ -179,6 +202,7 @@
 
     window.LearningRender.renderContent();
     window.LearningRender.updateSidebarUI();
+    window.dispatchEvent(new CustomEvent('lessonchange', { detail: { lessonId: activeLessonId } }));
   }
 
   function setLessonProgress(lessonId, completed, syncBackend) {
@@ -194,10 +218,19 @@
 
   function syncProgressBackend(videoUrl, completed, lessonId) {
     const course = window.LearningStore.store.course || {};
+    const lesson = window.LearningStore.getLessonById(lessonId);
     fetch('/courses/' + String(course._id || '') + '/progress', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ video: videoUrl, completed: !!completed, lessonId: lessonId })
+      body: JSON.stringify({
+        video: videoUrl,
+        completed: !!completed,
+        lessonId: lessonId,
+        lessonName: lesson && lesson.title || '',
+        lessonType: lesson && lesson.type || '',
+        sectionIndex: lesson && lesson.sectionIndex,
+        lessonIndex: lesson && lesson.lessonIndex
+      })
     })
       .then(function() {
         if (completed) {
@@ -273,6 +306,9 @@
       courseId: String(course._id),
       lessonId: String(lesson._id || ''),
       lessonType: String(lesson.type || ''),
+      lessonName: String(lesson.title || ''),
+      sectionIndex: Number.isFinite(Number(lesson.sectionIndex)) ? Number(lesson.sectionIndex) : undefined,
+      lessonIndex: Number.isFinite(Number(lesson.lessonIndex)) ? Number(lesson.lessonIndex) : undefined,
       eventType: eventType,
       position: Number.isFinite(Number(position)) ? Number(position) : undefined
     };
@@ -283,11 +319,15 @@
   function sendWatchTime(lessonId, lessonType, watchTimeMs) {
     const course = window.LearningStore.store.course || {};
     if (!course._id || !lessonId) return;
+    const lesson = window.LearningStore.getLessonById(lessonId);
 
     const payload = {
       courseId: String(course._id),
       lessonId: String(lessonId),
       lessonType: String(lessonType || ''),
+      lessonName: lesson && lesson.title || '',
+      sectionIndex: lesson && lesson.sectionIndex,
+      lessonIndex: lesson && lesson.lessonIndex,
       watchTime: Math.max(0, Math.round(watchTimeMs))
     };
 
@@ -297,6 +337,7 @@
   function sendSlideEvent(lessonId, lessonType, slideIndex) {
     const course = window.LearningStore.store.course || {};
     if (!course._id || !lessonId) return;
+    const lesson = window.LearningStore.getLessonById(lessonId);
 
     const now = Date.now();
     if (now - lastSlideEventAt < 800) return;
@@ -306,6 +347,9 @@
       courseId: String(course._id),
       lessonId: String(lessonId),
       lessonType: String(lessonType || 'slide'),
+      lessonName: lesson && lesson.title || '',
+      sectionIndex: lesson && lesson.sectionIndex,
+      lessonIndex: lesson && lesson.lessonIndex,
       slideIndex: Number.isFinite(Number(slideIndex)) ? Number(slideIndex) : 0
     };
 
@@ -315,11 +359,15 @@
   function sendQuizEvent(lessonId, lessonType, score, total, attempts) {
     const course = window.LearningStore.store.course || {};
     if (!course._id || !lessonId) return;
+    const lesson = window.LearningStore.getLessonById(lessonId);
 
     const payload = {
       courseId: String(course._id),
       lessonId: String(lessonId),
       lessonType: String(lessonType || 'quiz'),
+      lessonName: lesson && lesson.title || '',
+      sectionIndex: lesson && lesson.sectionIndex,
+      lessonIndex: lesson && lesson.lessonIndex,
       score: Number(score) || 0,
       total: Number(total) || 0,
       attempts: Number(attempts) || 1
@@ -380,9 +428,11 @@
   function updateContext(payload) {
     const next = payload || {};
     window.currentContext = {
-      lessonId: next.lessonId || null,
-      type: next.type || null,
-      slideIndex: next.slideIndex !== undefined ? next.slideIndex : null
+      lessonId: next.lessonId !== undefined ? next.lessonId : window.currentContext.lessonId,
+      type: next.type !== undefined ? next.type : window.currentContext.type,
+      slideIndex: next.slideIndex !== undefined ? next.slideIndex : window.currentContext.slideIndex,
+      sectionIndex: next.sectionIndex !== undefined ? next.sectionIndex : window.currentContext.sectionIndex,
+      lessonIndex: next.lessonIndex !== undefined ? next.lessonIndex : window.currentContext.lessonIndex
     };
 
     console.log('[Context Updated]', window.currentContext);
@@ -589,6 +639,21 @@
       .catch(function(err) {
         console.error('[Lỗi lưu ghi chú]', err);
       });
+  }
+
+  function trackLessonOpen(lesson) {
+    const course = window.LearningStore.store.course || {};
+    if (!course._id || !lesson || !lesson._id) return;
+
+    postTrack('/track/event', {
+      courseId: String(course._id),
+      lessonId: String(lesson._id),
+      lessonType: String(lesson.type || ''),
+      lessonName: String(lesson.title || ''),
+      sectionIndex: Number.isFinite(Number(lesson.sectionIndex)) ? Number(lesson.sectionIndex) : undefined,
+      lessonIndex: Number.isFinite(Number(lesson.lessonIndex)) ? Number(lesson.lessonIndex) : undefined,
+      eventType: 'open'
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);

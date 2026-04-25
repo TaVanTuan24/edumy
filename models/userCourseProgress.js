@@ -36,6 +36,26 @@ const userCourseSchema = new mongoose.Schema({
     default: []
   },
   lastAccessed: { type: Date, default: null },
+  lastLessonId: { type: String, default: '' },
+  lastLessonName: { type: String, default: '' },
+  lastLessonType: { type: String, default: '' },
+  lastSectionIndex: { type: Number, default: null },
+  lastLessonIndex: { type: Number, default: null },
+  recentActivity: {
+    type: [
+      {
+        type: { type: String, default: '' },
+        label: { type: String, default: '' },
+        lessonId: { type: String, default: '' },
+        lessonName: { type: String, default: '' },
+        lessonType: { type: String, default: '' },
+        sectionIndex: { type: Number, default: null },
+        lessonIndex: { type: Number, default: null },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
+    default: []
+  },
   watchTime: { type: Number, default: 0 },
   completionRate: { type: Number, default: 0 },
   lessonViews: {

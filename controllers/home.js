@@ -1,5 +1,6 @@
 const Course = require('../models/course');
 const User = require('../models/user');
+const { isCourseCatalogVisible } = require('../utils/courseLifecycle');
 
 function buildFallbackViewModel() {
   return {
@@ -23,7 +24,6 @@ module.exports.renderHome = async (req, res) => {
       Course.find({})
         .select('title topic description images totalLessonCount updatedAt')
         .sort({ updatedAt: -1 })
-        .limit(6)
         .lean(),
       User.countDocuments(),
       Course.aggregate([
@@ -45,7 +45,7 @@ module.exports.renderHome = async (req, res) => {
         courses: Number(aggregate.totalCourses || 0),
         lessons: Number(aggregate.totalLessons || 0)
       },
-      featuredCourses: featuredCourses.map((course) => ({
+      featuredCourses: featuredCourses.filter(isCourseCatalogVisible).slice(0, 6).map((course) => ({
         ...course,
         imageUrl: Array.isArray(course.images) && course.images[0] && course.images[0].url
           ? course.images[0].url
