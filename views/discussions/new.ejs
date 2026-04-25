@@ -1,7 +1,7 @@
 <% layout('/layouts/boilerplate') %>
 <link rel="stylesheet" href="/stylesheets/discussions.css">
 
-<div class="discussion-shell container py-4">
+<div class="discussion-shell app-page-shell">
   <header class="discussion-head mb-3">
     <div>
       <h1 class="mb-1">Ask A Question</h1>
@@ -10,7 +10,7 @@
     <a class="btn btn-outline-secondary" href="/courses/<%= course._id %>/discussions">Back to Discussions</a>
   </header>
 
-  <form class="card card-body" method="POST" action="/courses/<%= course._id %>/discussions">
+  <form class="card card-body app-card" method="POST" action="/courses/<%= course._id %>/discussions">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="mb-3">
       <label class="form-label" for="title">Title</label>

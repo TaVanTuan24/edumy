@@ -1,39 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
+<% hideFooter = true; mainClass = 'app-content-full'; layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/stylesheets/slide-editor.css">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slide Editor - <%= course.title %></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="/stylesheets/slide-editor.css">
-</head>
-
-<body class="slide-editor-page" data-course-id="<%= course._id %>" data-section-index="<%= sectionIndex %>" data-lesson-index="<%= lessonIndex %>">
+<div class="slide-editor-page" data-course-id="<%= course._id %>" data-section-index="<%= sectionIndex %>" data-lesson-index="<%= lessonIndex %>">
     <script id="slide-editor-data" type="application/json"><%- serializeJson(slideData || []) %></script>
+    <script id="slide-editor-pdf-data" type="application/json"><%- serializeJson(pdfData || null) %></script>
 
     <header class="se-topbar">
         <div class="se-topbar-left">
             <a href="/admin/courses/<%= course._id %>/editor" class="btn btn-outline-secondary">
-                <- Back to Course
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Course</span>
             </a>
             <div class="se-chip">Course Slide Studio</div>
             <input id="slideDeckTitle" class="se-title-input" type="text" value="<%= lessonTitle || (course.title + ' Deck') %>" aria-label="Slide title" maxlength="120">
         </div>
         <div class="se-topbar-actions">
-            <button class="btn btn-outline-secondary" id="addSlideBtn" type="button">
-                <i class="fa-solid fa-plus me-2"></i>New Slide
-            </button>
-            <button class="btn btn-outline-dark" id="previewBtn" type="button">
-                <i class="fa-regular fa-eye me-2"></i>Preview
-            </button>
-            <button class="btn btn-primary" id="saveDeckBtn" type="button">
-                <i class="fa-regular fa-floppy-disk me-2"></i>Save
-            </button>
-            <button class="btn btn-success" id="saveToLibraryBtn" type="button">
-                 Save to Library
-            </button>
+            <div class="se-topbar-group se-topbar-group-secondary">
+                <button class="btn btn-outline-danger" id="importPdfBtn" type="button">
+                    <i class="fa-regular fa-file-pdf"></i>
+                    <span>PDF</span>
+                </button>
+                <button class="btn btn-outline-secondary" id="addSlideBtn" type="button">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Slide</span>
+                </button>
+                <button class="btn btn-outline-dark" id="previewBtn" type="button">
+                    <i class="fa-regular fa-eye"></i>
+                    <span>Preview</span>
+                </button>
+            </div>
+            <div class="se-topbar-group se-topbar-group-primary">
+                <button class="btn btn-success" id="saveToLibraryBtn" type="button">
+                    <i class="fa-solid fa-bookmark"></i>
+                    <span>Library</span>
+                </button>
+                <button class="btn btn-primary" id="saveDeckBtn" type="button">
+                    <i class="fa-regular fa-floppy-disk"></i>
+                    <span>Save</span>
+                </button>
+            </div>
         </div>
     </header>
 
@@ -79,6 +84,32 @@
         <aside class="se-panel se-right">
             <section class="se-card">
                 <h2 class="se-panel-title">Slide Settings</h2>
+                <div class="se-pdf-helper mb-3">
+                    Upload a PDF to use it as a lesson document. Learners will view it directly in the course player.
+                </div>
+                <div class="se-pdf-card" id="pdfMetaCard">
+                    <div class="se-pdf-card-header">
+                        <div>
+                            <div class="se-pdf-label">Lesson document</div>
+                            <div class="se-pdf-name" id="pdfMetaName">No PDF uploaded</div>
+                        </div>
+                        <span class="se-pdf-badge" id="pdfMetaBadge">No PDF</span>
+                    </div>
+                    <div class="se-pdf-meta" id="pdfMetaDetails">Upload a PDF to attach a lesson document.</div>
+                    <div class="se-pdf-actions">
+                        <button class="btn btn-sm btn-outline-danger" id="replacePdfBtn" type="button">
+                            <i class="fa-solid fa-upload me-2"></i>Upload / Replace
+                        </button>
+                        <a class="btn btn-sm btn-outline-secondary d-none" id="viewPdfBtn" href="#" target="_blank" rel="noopener noreferrer">
+                            <i class="fa-regular fa-eye me-2"></i>View PDF
+                        </a>
+                        <button class="btn btn-sm btn-outline-secondary d-none" id="removePdfBtn" type="button">
+                            <i class="fa-regular fa-trash-can me-2"></i>Remove PDF
+                        </button>
+                    </div>
+                    <div class="se-pdf-status" id="pdfUploadStatus" aria-live="polite"></div>
+                </div>
+                <div class="se-content-mode-note" id="contentModeNote" aria-live="polite"></div>
                 <div class="mb-2">
                     <label class="form-label se-label" for="slideThemeSelect">Theme</label>
                     <select id="slideThemeSelect" class="form-select form-select-sm">
@@ -163,14 +194,16 @@
         </aside>
     </main>
 
+    <input type="file" id="pdfUploadInput" class="d-none" accept="application/pdf,.pdf">
+
     <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
+            <div class="modal-content app-modal-shell">
+                <div class="modal-header app-modal-head">
                     <h5 class="modal-title">Slide Preview</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body app-modal-body">
                     <div class="se-preview-ratio">
                         <div id="previewCanvas" class="se-preview-canvas"></div>
                     </div>
@@ -178,9 +211,6 @@
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
-    <script src="/javascripts/slide-editor.js"></script>
-</body>
-
-</html>
+<script src="/javascripts/slide-editor.js"></script>

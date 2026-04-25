@@ -45,6 +45,7 @@
     startHeartbeat();
 
     window.__setVideoPlaybackState = setVideoPlaybackState;
+    syncLearningStageHeader();
   }
 
   function bindEvents() {
@@ -79,6 +80,17 @@
 
       const checkbox = e.target.closest('.lesson-progress-checkbox');
       if (checkbox) return;
+
+      const stageNavBtn = e.target.closest('[data-stage-nav]');
+      if (stageNavBtn) {
+        const direction = stageNavBtn.dataset.stageNav === 'prev' ? -1 : 1;
+        if (direction < 0) {
+          goPrevLesson();
+        } else {
+          goNextLesson();
+        }
+        return;
+      }
 
       const itemEl = e.target.closest('.lesson-item');
       if (!itemEl) return;
@@ -202,6 +214,7 @@
 
     window.LearningRender.renderContent();
     window.LearningRender.updateSidebarUI();
+    syncLearningStageHeader();
     window.dispatchEvent(new CustomEvent('lessonchange', { detail: { lessonId: activeLessonId } }));
   }
 
@@ -434,19 +447,61 @@
       sectionIndex: next.sectionIndex !== undefined ? next.sectionIndex : window.currentContext.sectionIndex,
       lessonIndex: next.lessonIndex !== undefined ? next.lessonIndex : window.currentContext.lessonIndex
     };
-
-    console.log('[Context Updated]', window.currentContext);
-
-    const ctxLabel = document.getElementById('aiContextLabel') || document.getElementById('aiStatus');
-    if (ctxLabel) {
-      const typeLabel = window.currentContext.type || 'N/A';
-      const lessonLabel = window.currentContext.lessonId || 'N/A';
-      ctxLabel.innerText = 'Type: ' + typeLabel + ' | Lesson: ' + lessonLabel;
-    }
+    syncLearningStageHeader();
   }
 
   function isYouTubeUrl(url) {
     return /(?:youtube\.com|youtu\.be)/i.test(String(url || ''));
+  }
+
+  function getCurrentLessonContentLabel(lesson) {
+    if (!lesson) return 'Course';
+    if (lesson.type === 'slide') {
+      const content = lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+      const slides = Array.isArray(content.slides) ? content.slides : [];
+      const pdf = content.pdf || lesson.pdf;
+      const hasPdf = typeof pdf === 'string'
+        ? Boolean(pdf.trim())
+        : Boolean(pdf && typeof pdf === 'object' && String(pdf.url || '').trim());
+      if (slides.length && hasPdf) return 'Slides + PDF';
+      if (hasPdf) return 'PDF';
+      if (slides.length) return 'Slides';
+    }
+    if (lesson.type === 'quiz') return 'Quiz';
+    if (lesson.type === 'lecture') return 'Video';
+    return String(lesson.type || 'Lesson');
+  }
+
+  function syncLearningStageHeader() {
+    const deps = window.LearningStore;
+    if (!deps || !deps.store) return;
+
+    const courseTitleEl = document.getElementById('learningStageCourseTitle');
+    const lessonTitleEl = document.getElementById('learningStageLessonTitle');
+    const lessonTypeEl = document.getElementById('learningStageLessonType');
+    const prevBtn = document.querySelector('[data-stage-nav="prev"]');
+    const nextBtn = document.querySelector('[data-stage-nav="next"]');
+    const course = deps.store.course || {};
+    const lesson = deps.store.currentLesson;
+
+    if (courseTitleEl) {
+      courseTitleEl.textContent = String(course.title || 'Course');
+    }
+
+    if (lessonTitleEl) {
+      lessonTitleEl.textContent = lesson
+        ? (lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title)
+        : 'Select a lesson from the course outline.';
+    }
+
+    if (lessonTypeEl) {
+      lessonTypeEl.textContent = getCurrentLessonContentLabel(lesson);
+    }
+
+    const prevLesson = deps.getAdjacentLesson(-1);
+    const nextLesson = deps.getAdjacentLesson(1);
+    if (prevBtn) prevBtn.disabled = !prevLesson;
+    if (nextBtn) nextBtn.disabled = !nextLesson;
   }
 
   function updateProgressUI() {
@@ -462,6 +517,7 @@
     bar.style.width = percent + '%';
     bar.setAttribute('aria-valuenow', completed);
     label.innerText = 'Tiến độ học: ' + completed + ' / ' + total + ' video (' + percent + '%)';
+    syncLearningStageHeader();
   }
 
   function initializeTabs() {
@@ -500,9 +556,12 @@
 
     const rating = ratingInput ? Number(ratingInput.value) : 0;
     const comment = commentInput ? commentInput.value.trim() : '';
+    const notify = typeof window.showAppToast === 'function'
+      ? window.showAppToast
+      : function(message) { window.alert(message); };
 
     if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-      alert('Vui lòng chọn số sao từ 1 đến 5.');
+      notify('Vui lòng chọn số sao từ 1 đến 5.', 'warning');
       return;
     }
 
@@ -525,7 +584,7 @@
       })
       .catch(function(err) {
         console.error('[Review Submit Error]', err);
-        alert('Gửi đánh giá thất bại.');
+        notify('Gửi đánh giá thất bại.', 'danger');
       })
       .finally(function() {
         if (button) button.disabled = false;
@@ -624,6 +683,9 @@
     const course = window.LearningStore.store.course || {};
     const input = document.getElementById('note-section-' + index);
     const content = input ? input.value : '';
+    const notify = typeof window.showAppToast === 'function'
+      ? window.showAppToast
+      : function(message) { window.alert(message); };
 
     fetch('/courses/' + String(course._id || '') + '/notes', {
       method: 'POST',
@@ -633,7 +695,7 @@
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (!data.success) {
-          alert('Lưu ghi chú thất bại');
+          notify('Lưu ghi chú thất bại', 'danger');
         }
       })
       .catch(function(err) {

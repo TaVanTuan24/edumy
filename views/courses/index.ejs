@@ -19,7 +19,7 @@
 
 <div class="learner-dashboard">
   <div class="learner-dashboard-shell">
-    <section class="dashboard-hero-card">
+    <section class="dashboard-hero-card app-card-elevated">
       <div class="dashboard-hero-copy">
         <span class="dashboard-eyebrow">Learning Home</span>
         <h1 class="dashboard-title">Welcome back, <%= username %></h1>
@@ -46,7 +46,7 @@
       </div>
     </section>
 
-    <section class="continue-card">
+    <section class="continue-card app-card-elevated">
       <% if (continueLearning) { %>
         <div class="continue-card-media">
           <img src="<%= continueLearning.thumbnailUrl || '/default.png' %>" alt="<%= continueLearning.title %> thumbnail">
@@ -61,7 +61,7 @@
             <span class="continue-lesson-badge"><%= continueLearning.lastLessonTypeLabel || 'Lesson' %></span>
           </div>
 
-          <p class="continue-card-lesson"><%= continueLearning.lastLessonName || 'Open the course to continue your next lesson.' %></p>
+          <p class="continue-card-lesson"><%= stripFileExtension(continueLearning.lastLessonName) || 'Open the course to continue your next lesson.' %></p>
 
           <div class="continue-progress-meta">
             <span><%= continueLearning.progressPercent %>% complete</span>
@@ -70,7 +70,7 @@
           </div>
 
           <div class="continue-progress-track" role="progressbar" aria-label="Course progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= continueLearning.progressPercent %>">
-            <span style="width: <%= continueLearning.progressPercent %>%"></span>
+            <span data-progress-width="<%= continueLearning.progressPercent %>"></span>
           </div>
 
           <div class="continue-card-actions">
@@ -91,7 +91,7 @@
 
     <section class="dashboard-main-grid">
       <div class="dashboard-main-column">
-        <section class="dashboard-section-card">
+        <section class="dashboard-section-card app-card">
           <div class="dashboard-section-head">
             <div>
               <h2>My Courses</h2>
@@ -109,7 +109,7 @@
               >
                 <label class="visually-hidden" for="myCoursesSearchInput">Search your courses</label>
                 <div class="course-search-input-wrap">
-                  <span class="course-search-icon" aria-hidden="true">⌕</span>
+                  <span class="course-search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
                   <input
                     id="myCoursesSearchInput"
                     class="course-search-input"
@@ -161,13 +161,13 @@
                     <div class="dashboard-course-top">
                       <div>
                         <h3><%= course.title %></h3>
-                        <p class="dashboard-course-lesson"><%= course.lastLessonName || 'Start your first lesson' %></p>
+                        <p class="dashboard-course-lesson"><%= stripFileExtension(course.lastLessonName) || 'Start your first lesson' %></p>
                       </div>
                       <span class="dashboard-course-pill"><%= course.lastLessonTypeLabel || 'Lesson' %></span>
                     </div>
 
                     <div class="dashboard-course-progress" role="progressbar" aria-label="Progress for <%= course.title %>" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= course.progressPercent %>">
-                      <span style="width: <%= course.progressPercent %>%"></span>
+                      <span data-progress-width="<%= course.progressPercent %>"></span>
                     </div>
 
                     <div class="dashboard-course-meta">
@@ -194,7 +194,7 @@
       </div>
 
       <aside class="dashboard-side-column">
-        <section class="dashboard-section-card dashboard-side-card">
+        <section class="dashboard-section-card dashboard-side-card app-card">
           <div class="dashboard-section-head">
             <div>
               <h2>Recent Activity</h2>
@@ -211,11 +211,11 @@
               <% recentActivity.forEach((entry) => { %>
                 <article class="activity-item">
                   <div class="activity-icon" aria-hidden="true">
-                    <% if (entry.type.includes('quiz')) { %>?</% } else if (entry.type.includes('slide')) { %>≣<% } else if (entry.type.includes('video') || entry.type.includes('lesson')) { %>▶<% } else { %>•<% } %>
+                    <% if (entry.type.includes('quiz')) { %><i class="fa-solid fa-circle-question"></i><% } else if (entry.type.includes('slide')) { %><i class="fa-regular fa-file-lines"></i><% } else if (entry.type.includes('video') || entry.type.includes('lesson')) { %><i class="fa-solid fa-play"></i><% } else { %><i class="fa-solid fa-circle"></i><% } %>
                   </div>
                   <div class="activity-copy">
                     <strong><%= entry.label %></strong>
-                    <div class="small text-muted"><%= entry.courseTitle %><% if (entry.lessonName) { %> • <%= entry.lessonName %><% } %></div>
+                    <div class="small text-muted"><%= entry.courseTitle %><% if (entry.lessonName) { %> &bull; <%= stripFileExtension(entry.lessonName) %><% } %></div>
                     <div class="small text-muted"><%= entry.createdAtLabel || new Date(entry.createdAt).toLocaleString() %></div>
                   </div>
                 </article>

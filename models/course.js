@@ -314,6 +314,7 @@ function inferLessonType(lesson) {
 
     if (Array.isArray(lesson.quiz) && lesson.quiz.length > 0) return 'quiz'
     if (lesson.content && typeof lesson.content === 'object' && Array.isArray(lesson.content.slides) && lesson.content.slides.length > 0) return 'slide'
+    if (lesson.content && typeof lesson.content === 'object' && lesson.content.pdf && typeof lesson.content.pdf === 'object' && String(lesson.content.pdf.url || '').trim()) return 'slide'
 
     return 'video'
 }

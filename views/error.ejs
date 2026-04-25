@@ -1,9 +1,32 @@
-<% layout('/layouts/boilerplate')%>
-<div class="row">
-    <div class="col-6 offset-3">
-        <div class="alert alert-danger" role="alert">
-            <h4 class="alert-heading"><%=err.message%></h4>
-            <p><%= err.stack %></p>
-          </div>
+<% layout('/layouts/boilerplate') %>
+
+<%
+  const isDevelopment = typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production';
+  const errorTitle = err && err.status === 404 ? 'Page not found' : 'Something went wrong';
+  const errorMessage = err && err.status === 404
+    ? 'The page you requested is unavailable or may have been moved.'
+    : 'We could not complete that request right now. Please try again or return to a safe page.';
+%>
+
+<section class="app-error-page">
+  <div class="app-error-card">
+    <div class="app-error-icon" aria-hidden="true">
+      <i class="fa-solid fa-circle-exclamation"></i>
     </div>
-</div>
+    <p class="app-error-kicker">Edumy</p>
+    <h1 class="app-error-title"><%= errorTitle %></h1>
+    <p class="app-error-copy"><%= errorMessage %></p>
+
+    <div class="app-error-actions">
+      <a class="btn btn-primary" href="/">Go Home</a>
+      <button class="btn btn-outline-secondary" type="button" onclick="window.history.back()">Go Back</button>
+    </div>
+
+    <% if (isDevelopment && err && err.stack) { %>
+      <details class="app-error-debug">
+        <summary>Development Details</summary>
+        <pre><%= err.stack %></pre>
+      </details>
+    <% } %>
+  </div>
+</section>

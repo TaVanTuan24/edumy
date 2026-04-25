@@ -63,6 +63,7 @@ function normalizeLessonType(rawType, lesson) {
   if (Array.isArray(lesson && lesson.quiz) && lesson.quiz.length > 0) return 'quiz';
   if (lesson && lesson.content && Array.isArray(lesson.content.questions) && lesson.content.questions.length > 0) return 'quiz';
   if (lesson && lesson.content && Array.isArray(lesson.content.slides) && lesson.content.slides.length > 0) return 'slide';
+  if (lesson && lesson.content && lesson.content.pdf && typeof lesson.content.pdf === 'object' && String(lesson.content.pdf.url || '').trim()) return 'slide';
 
   return 'video';
 }

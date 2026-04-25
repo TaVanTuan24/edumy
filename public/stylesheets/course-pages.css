@@ -38,9 +38,9 @@ html[data-theme="dark"] .learner-dashboard {
 .continue-card,
 .dashboard-section-card {
     border: 1px solid var(--ld-border);
-    border-radius: 24px;
+    border-radius: var(--app-radius-xl);
     background: var(--ld-surface);
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+    box-shadow: var(--app-shadow-md);
 }
 
 .dashboard-hero-card {
@@ -1471,6 +1471,19 @@ html[data-theme="dark"] .course-show-page {
     background: #ffffff;
     border: 1px solid var(--cp-border);
     box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+}
+
+.preview-tab-pane {
+    display: block;
+    padding-top: 0;
+}
+
+.preview-progress {
+    height: 8px;
+}
+
+.preview-progress-bar {
+    width: 100%;
 }
 
 .learning-sidebar-inner > .mb-3:first-child,

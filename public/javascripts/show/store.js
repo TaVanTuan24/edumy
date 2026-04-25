@@ -18,6 +18,13 @@
     lastSection: 'lastSection'
   };
 
+  function formatLessonTitle(value) {
+    if (typeof window.stripLessonFileExtension === 'function') {
+      return window.stripLessonFileExtension(value);
+    }
+    return String(value || '').trim();
+  }
+
   function initStore(coursePayload, completedVideosPayload) {
     store.course = coursePayload || {};
     store.sections = normalizeSections(store.course);
@@ -65,10 +72,12 @@
       lessonIndex: index,
       type: type,
       title: item && item.title ? item.title : 'Untitled Lesson',
+      displayTitle: formatLessonTitle(item && item.title ? item.title : 'Untitled Lesson') || 'Untitled Lesson',
       preview: item && item.preview ? item.preview : '',
       content: {
         videoUrl: content.videoUrl || (item && (item.videoUrl || item.preview)) || '',
-        slides: Array.isArray(content.slides) ? content.slides : [],
+        slides: Array.isArray(content.slides) ? content.slides : Array.isArray(item && item.slides) ? item.slides : [],
+        pdf: content.pdf || (item && item.pdf) || null,
         questions: Array.isArray(content.questions) ? content.questions : Array.isArray(item && item.questions) ? item.questions : Array.isArray(item && item.quiz) ? item.quiz : [],
         interactiveQuizzes: Array.isArray(content.interactiveQuizzes)
           ? content.interactiveQuizzes
@@ -226,6 +235,7 @@
     readJson: readJson,
     writeJson: writeJson,
     normalizeMediaKey: normalizeMediaKey,
+    formatLessonTitle: formatLessonTitle,
     escapeHtml: escapeHtml,
     capitalize: capitalize,
     isSectionOpen: isSectionOpen,

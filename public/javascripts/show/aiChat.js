@@ -4,84 +4,122 @@
   function init() {
     const chatToggle = document.getElementById('aiChatToggle');
     const popup = document.getElementById('aiChatPopup');
-    if (!chatToggle || !popup) return;
+    if (!popup) return;
 
+    const composer = document.getElementById('aiChatComposer');
     const input = document.getElementById('chatInput');
     const sendBtn = document.getElementById('chatSendBtn');
     const messages = document.getElementById('chatMessages');
+    const transcript = document.getElementById('chatTranscript');
     const typing = document.getElementById('chatTyping');
     const status = document.getElementById('aiStatus');
-    const contextLabel = document.getElementById('aiLessonContext');
+    const contextSummary = document.getElementById('aiLessonContextSummary');
+    const contextDetails = document.getElementById('aiLessonContextDetails');
+    const contextToggle = document.getElementById('aiContextToggle');
     const modelSelect = document.getElementById('courseAiModel');
 
     const courseId = popup.dataset.courseId || '';
-    if (!input || !sendBtn || !messages || !courseId) return;
+    if (!input || !sendBtn || !messages || !transcript || !composer || !courseId) return;
 
-    chatToggle.addEventListener('click', function() {
-      toggleChat(popup);
-      syncLessonContext(contextLabel, status);
-    });
+    const state = {
+      contextExpanded: false,
+      loading: false
+    };
+
+    ensureWelcomeMessage(transcript);
+    resizeComposer(input);
+
+    if (chatToggle) {
+      chatToggle.addEventListener('click', function() {
+        toggleChat(popup);
+        syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
+        scrollMessagesToBottom(messages);
+      });
+    } else {
+      popup.classList.remove('hidden');
+    }
 
     const closeBtn = popup.querySelector('[data-chat-close]');
-    if (closeBtn) {
+    if (closeBtn && chatToggle) {
       closeBtn.addEventListener('click', function() {
         toggleChat(popup, false);
       });
     }
 
-    sendBtn.addEventListener('click', function() {
-      sendCustomMessage(courseId, input, messages, typing, status, contextLabel, sendBtn, modelSelect);
+    composer.addEventListener('submit', function(event) {
+      event.preventDefault();
+      sendCustomMessage(courseId, input, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state);
     });
 
     input.addEventListener('keydown', function(event) {
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
-        sendCustomMessage(courseId, input, messages, typing, status, contextLabel, sendBtn, modelSelect);
+        composer.requestSubmit();
       }
+    });
+
+    input.addEventListener('input', function() {
+      resizeComposer(input);
     });
 
     document.querySelectorAll('[data-ai-action]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const action = btn.dataset.aiAction || 'custom';
-        runLessonAiAction(courseId, action, input.value, messages, typing, status, contextLabel, sendBtn, modelSelect);
+        runLessonAiAction(courseId, action, input.value, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state);
       });
     });
 
+    if (contextToggle) {
+      contextToggle.addEventListener('click', function() {
+        state.contextExpanded = !state.contextExpanded;
+        syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
+      });
+    }
+
     window.addEventListener('lessonchange', function() {
-      syncLessonContext(contextLabel, status);
+      syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
     });
 
-    syncLessonContext(contextLabel, status);
+    syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
   }
 
-  function sendCustomMessage(courseId, input, messages, typing, status, contextLabel, sendBtn, modelSelect) {
+  function sendCustomMessage(courseId, input, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state) {
     const message = String(input.value || '').trim();
-    if (!message) return;
+    if (!message || state.loading) return;
 
-    addMessage(messages, 'user', message);
+    addMessage(transcript, 'user', message);
     input.value = '';
-    runLessonAiAction(courseId, 'custom', message, messages, typing, status, contextLabel, sendBtn, modelSelect);
+    resizeComposer(input);
+    scrollMessagesToBottom(messages);
+    runLessonAiAction(courseId, 'custom', message, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state);
   }
 
-  function runLessonAiAction(courseId, action, message, messages, typing, status, contextLabel, sendBtn, modelSelect) {
+  function runLessonAiAction(courseId, action, message, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state) {
     const model = modelSelect && modelSelect.value ? modelSelect.value : 'llama3.2';
     const context = getCurrentContext();
 
     if (!context.lessonId && (context.sectionIndex == null || context.lessonIndex == null)) {
-      addMessage(messages, 'ai', 'Open a lesson first so the AI tutor knows what to explain.', model);
+      addMessage(transcript, 'ai', 'Open a lesson first so the AI tutor knows what to explain.', model);
+      scrollMessagesToBottom(messages);
       return;
     }
 
     if (action !== 'custom') {
-      addMessage(messages, 'user', buildActionLabel(action));
+      addMessage(transcript, 'user', buildActionLabel(action));
+      scrollMessagesToBottom(messages);
     }
 
-    setLoading(true, typing, status, sendBtn);
-    syncLessonContext(contextLabel, status);
+    setLoading(true, typing, status, sendBtn, state);
+    syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
+    scrollMessagesToBottom(messages);
 
-    fetch('/courses/' + encodeURIComponent(courseId) + '/lessons/ai', {
+    const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+    fetcher('/courses/' + encodeURIComponent(courseId) + '/lessons/ai', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
       body: JSON.stringify({
         lessonId: context.lessonId,
         sectionIndex: context.sectionIndex,
@@ -94,37 +132,45 @@
       .then(function(res) { return res.json(); })
       .then(function(data) {
         const answer = data && data.answer ? data.answer : (data && data.error ? data.error : 'No response.');
-        addMessage(messages, 'ai', answer, data && data.model ? data.model : model);
+        addMessage(transcript, 'ai', answer, data && data.model ? data.model : model);
+        scrollMessagesToBottom(messages);
         refreshGamificationWidget();
       })
       .catch(function(err) {
         console.error('[Lesson AI Error]', err);
-        addMessage(messages, 'ai', 'Unable to reach the lesson AI tutor right now.', model);
+        addMessage(transcript, 'ai', 'Unable to reach the lesson AI tutor right now.', model);
+        scrollMessagesToBottom(messages);
       })
       .finally(function() {
-        setLoading(false, typing, status, sendBtn);
-        syncLessonContext(contextLabel, status);
+        setLoading(false, typing, status, sendBtn, state);
+        syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
+        scrollMessagesToBottom(messages);
       });
   }
 
-  function addMessage(messages, role, text, model) {
-    const div = document.createElement('div');
-    div.className = 'ai-msg ' + role;
+  function ensureWelcomeMessage(transcript) {
+    if (!transcript || transcript.childElementCount > 0) return;
+    addMessage(transcript, 'ai', 'Ask about the current lesson, request a summary, or generate practice prompts.', 'llama3.2');
+  }
+
+  function addMessage(transcript, role, text, model) {
+    const div = document.createElement('article');
+    div.className = 'ai-msg lesson-ai-message ' + role;
 
     if (role === 'ai') {
       const meta = document.createElement('span');
-      meta.className = 'ai-msg-model';
+      meta.className = 'ai-msg-model lesson-ai-message-meta';
       meta.textContent = formatModelLabel(model) + ' • AI Tutor';
       div.appendChild(meta);
 
       const body = document.createElement('div');
-      body.className = 'ai-msg-body';
+      body.className = 'ai-msg-body lesson-ai-message-body';
       body.innerHTML = renderMarkdown(text);
       div.appendChild(body);
 
       const copyBtn = document.createElement('button');
       copyBtn.type = 'button';
-      copyBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
+      copyBtn.className = 'btn btn-sm btn-outline-secondary lesson-ai-copy-btn';
       copyBtn.textContent = 'Copy';
       copyBtn.addEventListener('click', function() {
         navigator.clipboard.writeText(String(text || ''));
@@ -134,8 +180,7 @@
       div.textContent = text;
     }
 
-    messages.appendChild(div);
-    messages.scrollTop = messages.scrollHeight;
+    transcript.appendChild(div);
   }
 
   function renderMarkdown(text) {
@@ -152,25 +197,65 @@
     popup.classList.toggle('hidden', !shouldOpen);
   }
 
-  function setLoading(isLoading, typing, status, sendBtn) {
-    if (typing) typing.style.display = isLoading ? 'block' : 'none';
-    if (status) status.textContent = isLoading ? 'Generating tutor response...' : 'Ready';
-    if (sendBtn) sendBtn.disabled = !!isLoading;
+  function setLoading(isLoading, typing, status, sendBtn, state) {
+    if (state) {
+      state.loading = !!isLoading;
+    }
+    if (typing) {
+      typing.classList.toggle('hidden', !isLoading);
+    }
+    if (status) {
+      status.textContent = isLoading ? 'AI is answering...' : 'Ready';
+    }
+    if (sendBtn) {
+      sendBtn.disabled = !!isLoading;
+    }
   }
 
-  function syncLessonContext(contextLabel, status) {
+  function syncLessonContext(contextSummary, contextDetails, contextToggle, status, state) {
     const lessonMeta = getCurrentLessonMeta();
-    if (contextLabel) {
-      contextLabel.textContent = lessonMeta
-        ? ('Current lesson: ' + lessonMeta.sectionTitle + ' • ' + lessonMeta.lessonTitle + ' • ' + lessonMeta.lessonType)
+    const isExpanded = !!(state && state.contextExpanded);
+
+    if (contextSummary) {
+      contextSummary.textContent = lessonMeta
+        ? ('Current lesson: ' + lessonMeta.lessonTitle + (lessonMeta.contentMode ? ' (' + lessonMeta.contentMode + ')' : ''))
         : 'Lesson context will appear here.';
+      contextSummary.title = lessonMeta
+        ? (lessonMeta.sectionTitle + ' • ' + lessonMeta.lessonTitle + ' • ' + lessonMeta.lessonType)
+        : '';
     }
 
-    if (status) {
-      status.textContent = lessonMeta
-        ? ('Ready • ' + lessonMeta.lessonTitle)
-        : 'Ready';
+    if (contextDetails) {
+      contextDetails.classList.toggle('hidden', !isExpanded);
+      contextDetails.innerHTML = lessonMeta
+        ? (
+          '<div><strong>Section</strong>: ' + escapeHtml(lessonMeta.sectionTitle) + '</div>' +
+          '<div><strong>Lesson</strong>: ' + escapeHtml(lessonMeta.lessonTitle) + '</div>' +
+          '<div><strong>Type</strong>: ' + escapeHtml(lessonMeta.lessonType) + '</div>' +
+          (lessonMeta.contentMode ? '<div><strong>Content</strong>: ' + escapeHtml(lessonMeta.contentMode) + '</div>' : '')
+        )
+        : '<div>No lesson is currently open.</div>';
     }
+
+    if (contextToggle) {
+      contextToggle.textContent = isExpanded ? 'Hide context' : 'Show context';
+      contextToggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    }
+
+    if (status && !state.loading) {
+      status.textContent = lessonMeta ? 'Ready' : 'Open a lesson to begin';
+    }
+  }
+
+  function resizeComposer(input) {
+    if (!(input instanceof HTMLTextAreaElement)) return;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  }
+
+  function scrollMessagesToBottom(messages) {
+    if (!messages) return;
+    messages.scrollTop = messages.scrollHeight;
   }
 
   function buildActionLabel(action) {
@@ -208,13 +293,35 @@
     }
     const lesson = window.LearningStore.store.currentLesson;
     const section = window.LearningStore.store.sections[lesson.sectionIndex];
+    const displayTitle = lesson.displayTitle
+      || (typeof window.LearningStore.formatLessonTitle === 'function' ? window.LearningStore.formatLessonTitle(lesson.title) : String(lesson.title || 'Lesson'));
     return {
-      lessonTitle: String(lesson.title || 'Lesson'),
+      lessonTitle: String(displayTitle || 'Lesson'),
       lessonType: String(lesson.type || 'lesson'),
+      contentMode: getLessonContentModeLabel(lesson),
       sectionTitle: String(section && section.title || 'Section'),
       sectionIndex: lesson.sectionIndex,
       lessonIndex: lesson.lessonIndex
     };
+  }
+
+  function getLessonContentModeLabel(lesson) {
+    if (!lesson || lesson.type !== 'slide') return '';
+    const content = lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+    const slides = Array.isArray(content.slides)
+      ? content.slides
+      : Array.isArray(lesson.slides)
+        ? lesson.slides
+        : [];
+    const pdf = content.pdf || lesson.pdf;
+    const hasPdf = typeof pdf === 'string'
+      ? Boolean(pdf.trim())
+      : Boolean(pdf && typeof pdf === 'object' && String(pdf.url || '').trim());
+    const hasSlides = slides.length > 0;
+    if (hasSlides && hasPdf) return 'Slides + PDF';
+    if (hasPdf) return 'PDF';
+    if (hasSlides) return 'Slides';
+    return 'Empty';
   }
 
   function refreshGamificationWidget() {

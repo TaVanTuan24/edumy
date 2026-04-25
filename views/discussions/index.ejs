@@ -1,7 +1,7 @@
 <% layout('/layouts/boilerplate') %>
 <link rel="stylesheet" href="/stylesheets/discussions.css">
 
-<div class="discussion-shell container py-4">
+<div class="discussion-shell app-page-shell">
   <header class="discussion-head mb-3">
     <div>
       <h1 class="mb-1">Course Discussions</h1>
@@ -10,7 +10,7 @@
     <a class="btn btn-primary" href="/courses/<%= course._id %>/discussions/new">Ask Question</a>
   </header>
 
-  <form class="discussion-filter card card-body mb-3" method="GET" action="/courses/<%= course._id %>/discussions">
+  <form class="discussion-filter card card-body app-card mb-3" method="GET" action="/courses/<%= course._id %>/discussions">
     <div class="row g-2 align-items-end">
       <div class="col-md-4">
         <label class="form-label" for="lessonId">Lesson ID</label>
@@ -35,7 +35,14 @@
 
   <section class="discussion-list">
     <% if (!questions.length) { %>
-      <article class="discussion-item empty">No questions yet. Be the first to ask.</article>
+      <article class="discussion-item empty">
+        <div class="app-empty-state">
+          <i class="fa-regular fa-comments"></i>
+          <strong>No questions yet</strong>
+          <p>Be the first learner to ask a question and start the course discussion thread.</p>
+          <a class="btn btn-primary" href="/courses/<%= course._id %>/discussions/new">Ask Question</a>
+        </div>
+      </article>
     <% } %>
     <% questions.forEach((item) => { %>
       <article class="discussion-item">

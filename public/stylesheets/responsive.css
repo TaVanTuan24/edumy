@@ -65,10 +65,19 @@ iframe {
 .app-navbar .navbar-toggler {
   border-color: var(--app-navbar-border);
   padding: 0.45rem 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
 }
 
 .app-navbar .navbar-toggler:focus {
   box-shadow: 0 0 0 0.2rem rgba(148, 163, 184, 0.3);
+}
+
+.app-navbar .navbar-toggler i {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.94);
 }
 
 .app-navbar .navbar-collapse {
@@ -174,26 +183,102 @@ iframe {
 }
 
 .auth-page {
-  padding: 1rem;
+  min-height: calc(100vh - 72px);
+  padding: 2rem 1rem;
+  display: grid;
+  place-items: center;
 }
 
 .auth-shell {
-  width: min(100%, 460px);
+  width: min(100%, 920px);
   margin: 0 auto;
 }
 
 .auth-card {
   overflow: hidden;
-  border-radius: 1rem;
+  border-radius: 1.5rem;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.95fr) minmax(0, 1fr);
+}
+
+.auth-card .card-img-top,
+.auth-media {
+  height: 100%;
 }
 
 .auth-card .card-img-top {
-  aspect-ratio: 16 / 8;
+  aspect-ratio: auto;
   object-fit: cover;
+  min-height: 100%;
 }
 
 .auth-submit {
   width: 100%;
+}
+
+.auth-body {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.75rem;
+}
+
+.auth-copy {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.auth-kicker {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: var(--app-accent-soft);
+  color: var(--app-accent-strong);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auth-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 800;
+  color: var(--app-text);
+}
+
+.auth-subtitle,
+.auth-switch {
+  margin: 0;
+  color: var(--app-text-muted);
+  line-height: 1.6;
+}
+
+.auth-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-form-group {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.auth-switch a {
+  color: var(--app-accent-strong);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-navbar .navbar-toggler {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.app-navbar .navbar-toggler-icon {
+  width: 1.35rem;
+  height: 1.35rem;
 }
 
 .analytics-grid,
@@ -237,7 +322,7 @@ iframe {
 }
 
 .ai-chat-popup {
-  width: min(100vw - 1rem, 360px);
+  width: min(100vw - 1rem, 420px);
   max-width: calc(100vw - 1rem);
   right: 0.5rem;
   bottom: 5rem;
@@ -282,6 +367,10 @@ iframe {
 }
 
 @media (max-width: 991.98px) {
+  .app-navbar .navbar-toggler {
+    display: inline-flex !important;
+  }
+
   .learning-layout {
     width: 100%;
     height: auto;
@@ -309,6 +398,18 @@ iframe {
   .app-flash,
   .app-footer .footer-inner {
     padding-inline: 0.875rem;
+  }
+
+  .auth-card {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-body {
+    padding: 1.25rem;
+  }
+
+  .auth-card .card-img-top {
+    aspect-ratio: 16 / 8;
   }
 
   .modal-footer {
@@ -339,13 +440,25 @@ iframe {
   }
 
   .ai-chat-popup {
-    left: 0.5rem;
-    right: 0.5rem;
-    width: auto;
-    height: min(70dvh, 520px);
-  }
+      left: 0.5rem;
+      right: 0.5rem;
+      width: auto;
+      height: min(82dvh, 720px);
+      max-height: calc(100dvh - 1rem);
+      bottom: 0.5rem;
+      border-radius: 18px;
+    }
 
-  .notification-menu {
-    position: static;
+    .lesson-ai-actions {
+      grid-template-columns: 1fr;
+    }
+
+    .lesson-ai-action-btn {
+      justify-content: flex-start;
+      text-align: left;
+    }
+
+    .notification-menu {
+      position: static;
   }
 }

@@ -200,6 +200,14 @@
     statusEl.classList.toggle('text-danger', Boolean(isError));
   }
 
+  function notify(message, variant) {
+    if (typeof window.showAppToast === 'function') {
+      window.showAppToast(message, variant || 'danger');
+      return;
+    }
+    window.alert(message);
+  }
+
   function _ensureYouTubeApi() {
     if (window.YT && window.YT.Player) return Promise.resolve();
     if (state.youtubeReadyPromise) return state.youtubeReadyPromise;
@@ -413,70 +421,43 @@
 
     // Keep the FAB fixed and use click only.
     fab.addEventListener('click', function() {
-      togglePopoverNearFab();
+      toggleQuizPanel();
     });
 
-    window.addEventListener('resize', positionPopoverNearFab);
+    window.addEventListener('resize', positionPanelState);
   }
 
-  function getPopover() {
-    return document.getElementById('timedQuizPopover');
+  function getQuizPanel() {
+    return document.getElementById('timedQuizPanel');
   }
 
-  function togglePopoverNearFab() {
-    const popover = getPopover();
-    if (!popover) return;
+  function toggleQuizPanel() {
+    const panel = getQuizPanel();
+    if (!panel) return;
 
-    if (popover.classList.contains('show')) {
-      closePopover();
+    if (panel.classList.contains('show')) {
+      closeQuizPanel();
       return;
     }
 
-    popover.classList.add('show');
-    popover.setAttribute('aria-hidden', 'false');
-    positionPopoverNearFab();
-    window.requestAnimationFrame(positionPopoverNearFab);
+    panel.classList.add('show');
+    panel.setAttribute('aria-hidden', 'false');
+    positionPanelState();
   }
 
-  function closePopover() {
-    const popover = getPopover();
-    if (!popover) return;
+  function closeQuizPanel() {
+    const panel = getQuizPanel();
+    if (!panel) return;
 
-    popover.classList.remove('show');
-    popover.setAttribute('aria-hidden', 'true');
+    panel.classList.remove('show');
+    panel.setAttribute('aria-hidden', 'true');
   }
 
-  function positionPopoverNearFab() {
-    const fab = document.getElementById('timedQuizFab');
-    const popover = getPopover();
-    if (!fab || !popover) return;
-
-    const fabRect = fab.getBoundingClientRect();
-    const width = popover.offsetWidth || 360;
-    const height = popover.offsetHeight || 520;
-    const margin = 8;
-    const gap = 14;
-    const viewportBottomPadding = 24;
-
-    let left = fabRect.left - width - gap;
-
-    // Prefer opening upward so the full form is easier to see.
-    let top = fabRect.bottom - height;
-    const minTop = margin;
-    const maxTop = window.innerHeight - height - viewportBottomPadding;
-
-    if (top < minTop) {
-      // Fallback when there is not enough space above.
-      top = Math.min(maxTop, fabRect.bottom + gap);
-    }
-
-    if (left < margin) left = fabRect.right + gap;
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
-    if (top + height > window.innerHeight - viewportBottomPadding) top = window.innerHeight - height - viewportBottomPadding;
-    if (top < margin) top = margin;
-
-    popover.style.left = left + 'px';
-    popover.style.top = top + 'px';
+  function positionPanelState() {
+    const panel = getQuizPanel();
+    if (!panel) return;
+    panel.style.left = '';
+    panel.style.top = '';
   }
 
   function bindPopoverActions() {
@@ -485,7 +466,7 @@
     const resetBtn = document.getElementById('timedQuizResetBtn');
 
     if (closeBtn) {
-      closeBtn.addEventListener('click', closePopover);
+      closeBtn.addEventListener('click', closeQuizPanel);
     }
 
     if (saveBtn) {
@@ -713,17 +694,17 @@
     const correctOptionIndex = checked ? Number(checked.dataset.correctIndex) : -1;
 
     if (!question) {
-      window.alert('Please enter a quiz question.');
+      notify('Please enter a quiz question.', 'warning');
       return;
     }
 
     if (options.some(function(opt) { return !opt; })) {
-      window.alert('Please fill all 4 options.');
+      notify('Please fill all 4 options.', 'warning');
       return;
     }
 
     if (correctOptionIndex < 0) {
-      window.alert('Please select the correct option.');
+      notify('Please select the correct option.', 'warning');
       return;
     }
 
@@ -779,17 +760,17 @@
         hidePreviewQuizPopup();
         renderQuizList();
         resetForm();
-        closePopover();
+        closeQuizPanel();
         setAiStatus(`Đã lưu ${state.quizzes.length} câu hỏi vào video thành công.`);
       })
       .catch(function(err) {
         console.error('[Timed Quiz Save Error]', err);
         setAiStatus(err && err.message ? err.message : 'Failed to save timed quizzes.', true);
-        window.alert(err && err.message ? err.message : 'Failed to save timed quizzes.');
+        notify(err && err.message ? err.message : 'Failed to save timed quizzes.', 'danger');
       });
   }
 
-  function handleListAction(e) {
+  async function handleListAction(e) {
     const button = e.target.closest('[data-quiz-action]');
     if (!button) return;
 
@@ -799,20 +780,31 @@
 
     if (action === 'edit') {
       loadQuizIntoForm(index);
-      const popover = getPopover();
-      if (popover) {
-        popover.classList.add('show');
-        popover.setAttribute('aria-hidden', 'false');
-        positionPopoverNearFab();
-        window.requestAnimationFrame(positionPopoverNearFab);
+      const panel = getQuizPanel();
+      if (panel) {
+        panel.classList.add('show');
+        panel.setAttribute('aria-hidden', 'false');
+        positionPanelState();
       }
       return;
     }
 
     if (action === 'delete') {
-      if (!window.confirm('Delete this timed quiz?')) return;
-      state.quizzes.splice(index, 1);
-      persistQuizzes();
+      const quiz = state.quizzes[index];
+      const quizLabel = String(quiz && quiz.question || 'Untitled timed quiz').trim() || 'Untitled timed quiz';
+      const confirmed = await window.showConfirmModal({
+        title: 'Delete Timed Quiz',
+        message: `Delete timed quiz "${quizLabel}"?`,
+        warning: 'This action cannot be undone.',
+        confirmText: 'Delete Quiz',
+        confirmingText: 'Deleting...',
+        variant: 'danger',
+        onConfirm: async function() {
+          state.quizzes.splice(index, 1);
+          persistQuizzes();
+        }
+      });
+      if (!confirmed) return;
     }
   }
 
@@ -838,7 +830,7 @@
       input.checked = i === Number(quiz.correctOptionIndex);
     });
 
-    const title = document.getElementById('timedQuizPopoverTitle');
+    const title = document.getElementById('timedQuizPanelTitle');
     if (title) title.textContent = 'Edit Timed Quiz';
     syncMarkerFromInputs();
   }
@@ -862,7 +854,7 @@
       input.checked = false;
     });
 
-    const title = document.getElementById('timedQuizPopoverTitle');
+    const title = document.getElementById('timedQuizPanelTitle');
     if (title) title.textContent = 'Add Timed Quiz';
     syncMarkerFromInputs();
   }

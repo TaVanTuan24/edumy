@@ -86,7 +86,7 @@
 }
 
 .video-preview-hotspot {
-  position: absolute;
+    position: absolute;
   width: 34px;
   height: 34px;
   border: 0;
@@ -98,6 +98,11 @@
   box-shadow: 0 10px 26px rgba(37, 99, 235, 0.45);
   animation: previewHotspotPulse 1.3s ease-in-out infinite;
   pointer-events: auto;
+}
+
+.video-preview-hotspot-hidden,
+.video-preview-quiz-popup-hidden {
+  display: none;
 }
 
 .video-preview-quiz-popup {
@@ -210,6 +215,13 @@
   margin-bottom: 10px;
 }
 
+.quiz-sidebar-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .ai-quiz-tools {
   border: 1px solid var(--vs-border);
   border-radius: 12px;
@@ -282,18 +294,20 @@
 }
 
 .timed-quiz-fab {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  border: none;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 22px;
-  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.35);
-  z-index: 2000;
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -301,24 +315,24 @@
   cursor: pointer;
 }
 
-.timed-quiz-popover {
-  position: fixed;
-  width: min(360px, calc(100vw - 24px));
-  max-height: calc(100vh - 16px);
+.timed-quiz-panel {
+  position: static;
+  width: 100%;
+  max-height: none;
   background: var(--vs-surface);
   border: 1px solid var(--vs-border);
   border-radius: 12px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
-  z-index: 2100;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   display: none;
   overflow: hidden;
+  margin: 0 0 12px;
 }
 
-.timed-quiz-popover.show {
+.timed-quiz-panel.show {
   display: block;
 }
 
-.timed-quiz-popover-head {
+.timed-quiz-panel-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -328,20 +342,18 @@
   background: var(--vs-surface-soft);
 }
 
-.timed-quiz-popover-body {
+.timed-quiz-panel-body {
   padding: 10px 12px;
   max-height: min(62vh, calc(100vh - 180px));
   overflow-y: auto;
 }
 
-.timed-quiz-popover-actions {
+.timed-quiz-panel-actions {
   padding: 10px 12px 12px;
   border-top: 1px solid var(--vs-border);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  position: sticky;
-  bottom: 0;
   background: var(--vs-surface);
 }
 

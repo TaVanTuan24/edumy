@@ -10,6 +10,7 @@ router.post('/library/save-slide', isLoggedIn, async (req, res) => {
         const name = String(req.body.name || 'AI Generated Slide').trim();
         const content = req.body.content && typeof req.body.content === 'object' ? req.body.content : {};
         const slides = Array.isArray(content.slides) ? content.slides : [];
+        const pdf = content.pdf && typeof content.pdf === 'object' ? content.pdf : null;
 
         if (type !== 'slide') {
             return res.status(400).json({ success: false, error: 'Invalid type' });
@@ -19,8 +20,13 @@ router.post('/library/save-slide', isLoggedIn, async (req, res) => {
             userId: req.user._id,
             type: 'slide',
             title: name,
-            data: { slides: slides },
-            preview: slides.length ? slides.length + ' slides' : 'Slide deck'
+            data: {
+                slides: slides,
+                ...(pdf && pdf.url ? { pdf } : {})
+            },
+            preview: pdf && pdf.originalName
+                ? pdf.originalName
+                : (slides.length ? slides.length + ' slides' : 'Slide deck')
         });
 
         res.json({ success: true, item: item });

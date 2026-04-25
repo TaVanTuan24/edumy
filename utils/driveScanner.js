@@ -1,6 +1,7 @@
 const { google } = require('googleapis');
 const { buildDrivePreviewUrl } = require('./driveVideoMetadata');
 const { prepareLessonForWrite } = require('./courseStats');
+const { stripFileExtension } = require('./formatLessonName');
 
 const drive = google.drive({
   version: 'v3',
@@ -25,7 +26,7 @@ async function scanDriveStructure(folderId) {
       } else if (file.mimeType.startsWith('video/')) {
         const videoUrl = buildDrivePreviewUrl(file.id, file.resourceKey);
         const lesson = {
-          title: file.name,
+          title: stripFileExtension(file.name),
           type: 'video',
           videoUrl,
           preview: videoUrl,

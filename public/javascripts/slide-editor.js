@@ -7,7 +7,10 @@
     const MIN_TEXT_FONT_SIZE = 10;
     const IMAGE_MAX_WIDTH = Math.round(BASE_WIDTH * 0.7);
     const IMAGE_MAX_HEIGHT = Math.round(BASE_HEIGHT * 0.65);
-    const pageMeta = document.body && document.body.dataset ? document.body.dataset : {};
+    const pageRoot = document.querySelector('.slide-editor-page[data-course-id]');
+    const pageMeta = pageRoot && pageRoot.dataset
+        ? pageRoot.dataset
+        : (document.body && document.body.dataset ? document.body.dataset : {});
     const courseId = pageMeta.courseId || '';
     const sectionIndex = pageMeta.sectionIndex || '';
     const lessonIndex = pageMeta.lessonIndex || '';
@@ -16,11 +19,15 @@
         slides: [],
         activeSlideId: null,
         selectedElementId: null,
+        pdf: null,
         drag: null,
         resize: null,
         activePointerId: null,
         toastTimer: null,
-        dragSlideId: null
+        dragSlideId: null,
+        pdfUploadInFlight: false,
+        pdfHealthByUrl: Object.create(null),
+        pdfHealthChecksInFlight: Object.create(null)
     };
 
     const els = {
@@ -35,6 +42,16 @@
         previewBtn: document.getElementById('previewBtn'),
         saveDeckBtn: document.getElementById('saveDeckBtn'),
         saveToLibraryBtn: document.getElementById('saveToLibraryBtn'),
+        importPdfBtn: document.getElementById('importPdfBtn'),
+        replacePdfBtn: document.getElementById('replacePdfBtn'),
+        removePdfBtn: document.getElementById('removePdfBtn'),
+        viewPdfBtn: document.getElementById('viewPdfBtn'),
+        pdfUploadInput: document.getElementById('pdfUploadInput'),
+        pdfMetaName: document.getElementById('pdfMetaName'),
+        pdfMetaBadge: document.getElementById('pdfMetaBadge'),
+        pdfMetaDetails: document.getElementById('pdfMetaDetails'),
+        pdfUploadStatus: document.getElementById('pdfUploadStatus'),
+        contentModeNote: document.getElementById('contentModeNote'),
         emptyProperties: document.getElementById('emptyProperties'),
         propertiesPanel: document.getElementById('propertiesPanel'),
         textProps: document.getElementById('textProps'),
@@ -69,11 +86,13 @@
     function init() {
         hydrateState();
         bindEvents();
+        renderPdfMeta();
         renderAll();
     }
 
     function hydrateState() {
         const json = document.getElementById('slide-editor-data');
+        const pdfJson = document.getElementById('slide-editor-pdf-data');
         let parsed = [];
 
         if (json) {
@@ -84,12 +103,20 @@
             }
         }
 
-        if (!Array.isArray(parsed) || parsed.length === 0) {
+        if (pdfJson) {
+            try {
+                state.pdf = normalizePdf(JSON.parse(pdfJson.textContent || 'null'));
+            } catch {
+                state.pdf = null;
+            }
+        }
+
+        if ((!Array.isArray(parsed) || parsed.length === 0) && !state.pdf) {
             parsed = [createSlide('Slide 1')];
         }
 
-        state.slides = parsed.map(normalizeSlide);
-        state.activeSlideId = state.slides[0].id;
+        state.slides = Array.isArray(parsed) ? parsed.map(normalizeSlide) : [];
+        state.activeSlideId = state.slides[0] ? state.slides[0].id : null;
         applyAiSlidesFromStorage();
     }
 
@@ -102,6 +129,18 @@
         els.saveDeckBtn.addEventListener('click', saveDeck);
         if (els.saveToLibraryBtn) {
             els.saveToLibraryBtn.addEventListener('click', saveToLibrary);
+        }
+        if (els.importPdfBtn) {
+            els.importPdfBtn.addEventListener('click', openPdfPicker);
+        }
+        if (els.replacePdfBtn) {
+            els.replacePdfBtn.addEventListener('click', openPdfPicker);
+        }
+        if (els.removePdfBtn) {
+            els.removePdfBtn.addEventListener('click', removePdf);
+        }
+        if (els.pdfUploadInput) {
+            els.pdfUploadInput.addEventListener('change', onPdfPicked);
         }
         els.previewBtn.addEventListener('click', openPreview);
         els.deleteElementBtn.addEventListener('click', deleteSelectedElement);
@@ -165,6 +204,11 @@
     }
 
     function onSlidesListClick(event) {
+        if (event.target.closest('[data-add-custom-slide]')) {
+            addSlide();
+            return;
+        }
+
         const deleteBtn = event.target.closest('.delete-slide-btn');
         if (deleteBtn) {
             event.stopPropagation();
@@ -231,6 +275,12 @@
     }
 
     function onCanvasClick(event) {
+        const addSlideControl = event.target.closest('[data-add-custom-slide]');
+        if (addSlideControl) {
+            addSlide();
+            return;
+        }
+
         const selected = event.target.closest('.slide-element');
         if (selected) {
             state.selectedElementId = selected.dataset.elementId;
@@ -398,7 +448,7 @@
     }
 
     function addTextElement() {
-        const slide = getActiveSlide();
+        const slide = ensureEditableSlide();
         if (!slide) return;
 
         const item = {
@@ -423,7 +473,7 @@
     }
 
     function handleAddImage() {
-        const slide = getActiveSlide();
+        const slide = ensureEditableSlide();
         if (!slide) return;
 
         const item = createImageElement('');
@@ -447,12 +497,12 @@
     }
 
     function addImageElement(src) {
-        const slide = getActiveSlide();
+        const slide = ensureEditableSlide();
         if (!slide) return;
 
         const candidateSrc = String(src || '').trim();
         if (!candidateSrc) {
-            showToast('Image URL is empty.');
+            showToast('Image URL is empty.', 'warning');
             return;
         }
 
@@ -473,7 +523,7 @@
 
         imageProbe.onerror = function() {
             console.error('[SlideEditor] Invalid image URL:', candidateSrc);
-            showToast('Unable to load image URL. Check the link and try again.');
+            showToast('Unable to load image URL. Check the link and try again.', 'danger');
         };
 
         imageProbe.src = candidateSrc;
@@ -516,8 +566,8 @@
     function deleteSlide(slideId) {
         if (!slideId) return;
 
-        if (state.slides.length <= 1) {
-            showToast('At least one slide is required.');
+        if (state.slides.length <= 1 && !hasPdfContent()) {
+            showToast('At least one slide is required.', 'warning');
             return;
         }
 
@@ -526,11 +576,15 @@
         });
 
         if (state.activeSlideId === slideId) {
-            state.activeSlideId = state.slides[0].id;
+            state.activeSlideId = state.slides[0] ? state.slides[0].id : null;
             state.selectedElementId = null;
         }
 
         renderAll();
+        if (!state.slides.length && hasPdfContent()) {
+            setPdfStatus('All custom slides removed. This lesson will use the imported PDF.', 'success');
+            showToast('All custom slides removed. This lesson will use the imported PDF.', 'success');
+        }
     }
 
     function duplicateSlide(slideId) {
@@ -626,7 +680,7 @@
         };
 
         probe.onerror = function() {
-            showToast('Unable to load image. Check the URL or choose another file.');
+            showToast('Unable to load image. Check the URL or choose another file.', 'danger');
             if (els.propImageSrc) {
                 els.propImageSrc.value = previousSrc;
             }
@@ -644,9 +698,329 @@
         renderProperties();
     }
 
+    function normalizePdf(pdf) {
+        if (!pdf || typeof pdf !== 'object') return null;
+        const url = String(pdf.url || '').trim();
+        if (!url) return null;
+        return {
+            url: url,
+            filename: String(pdf.filename || '').trim(),
+            originalName: String(pdf.originalName || '').trim(),
+            size: Number(pdf.size) || 0,
+            mimeType: String(pdf.mimeType || '').trim() || 'application/pdf',
+            uploadedAt: pdf.uploadedAt || null
+        };
+    }
+
+    function isLikelyRestrictedPdfUrl(url) {
+        const value = String(url || '').trim();
+        if (!value) return false;
+        return /\/raw\/(authenticated|private)\//i.test(value);
+    }
+
+    function getPdfHealthWarning(status, likelyRestricted) {
+        const numericStatus = Number(status) || 0;
+        if (numericStatus === 401 || numericStatus === 403 || likelyRestricted) {
+            return 'PDF uploaded but not publicly accessible. Please check Cloudinary settings.';
+        }
+        if (numericStatus >= 400) {
+            return 'This PDF URL returned HTTP ' + numericStatus + '. Replace the PDF if it no longer opens.';
+        }
+        return '';
+    }
+
+    function createPdfUploadError(data, fallbackMessage) {
+        const error = new Error(data && data.error ? data.error : fallbackMessage);
+        error.code = data && data.code ? String(data.code) : '';
+        error.deliveryStatus = Number(data && data.deliveryStatus) || 0;
+        return error;
+    }
+
+    async function ensurePdfHealthCheck(url, force) {
+        const targetUrl = String(url || '').trim();
+        if (!targetUrl || !courseId || sectionIndex === '' || lessonIndex === '') {
+            return '';
+        }
+
+        if (!force && state.pdfHealthByUrl[targetUrl] && typeof state.pdfHealthByUrl[targetUrl].warning === 'string') {
+            return state.pdfHealthByUrl[targetUrl].warning;
+        }
+
+        if (state.pdfHealthChecksInFlight[targetUrl]) {
+            return state.pdfHealthChecksInFlight[targetUrl];
+        }
+
+        state.pdfHealthChecksInFlight[targetUrl] = (async function() {
+            try {
+                const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+                const response = await csrfFetch('/admin/slides/' + encodeURIComponent(courseId) + '/' + encodeURIComponent(sectionIndex) + '/' + encodeURIComponent(lessonIndex) + '/pdf-health', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                const data = await response.json().catch(() => ({}));
+                const status = Number(data && data.status) || 0;
+                let warning = '';
+
+                if (!response.ok || !data || !data.success) {
+                    warning = 'Unable to verify PDF availability. Use "View PDF" to test manually or replace the file.';
+                } else {
+                    warning = getPdfHealthWarning(status, Boolean(data.likelyRestricted || isLikelyRestrictedPdfUrl(targetUrl)));
+                }
+
+                state.pdfHealthByUrl[targetUrl] = {
+                    status,
+                    warning
+                };
+
+                return warning;
+            } catch {
+                state.pdfHealthByUrl[targetUrl] = {
+                    status: 0,
+                    warning: 'Unable to verify PDF availability. Use "View PDF" to test manually or replace the file.'
+                };
+                return state.pdfHealthByUrl[targetUrl].warning;
+            } finally {
+                delete state.pdfHealthChecksInFlight[targetUrl];
+            }
+        })();
+
+        return state.pdfHealthChecksInFlight[targetUrl];
+    }
+
+    function getSerializedPdf() {
+        return state.pdf ? { ...state.pdf } : null;
+    }
+
+    function hasCustomSlides() {
+        return Array.isArray(state.slides) && state.slides.length > 0;
+    }
+
+    function hasPdfContent() {
+        return Boolean(state.pdf && state.pdf.url);
+    }
+
+    function getContentMode() {
+        const slides = hasCustomSlides();
+        const pdf = hasPdfContent();
+        if (slides && pdf) return 'hybrid';
+        if (pdf) return 'pdf';
+        if (slides) return 'slides';
+        return 'empty';
+    }
+
+    function getContentModeMessage() {
+        const mode = getContentMode();
+        if (mode === 'hybrid') return 'This lesson has custom slides and a PDF. Learners can view both Slides and PDF.';
+        if (mode === 'pdf') return 'No custom slides. This lesson is using the imported PDF.';
+        if (mode === 'slides') return 'This lesson uses custom slides.';
+        return 'Add at least one slide or import a PDF before saving.';
+    }
+
+    function ensureEditableSlide() {
+        let slide = getActiveSlide();
+        if (slide) return slide;
+        addSlide();
+        return getActiveSlide();
+    }
+
+    function openPdfPicker() {
+        if (!els.pdfUploadInput || state.pdfUploadInFlight) return;
+        els.pdfUploadInput.value = '';
+        els.pdfUploadInput.click();
+    }
+
+    async function onPdfPicked(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        if (String(file.type || '').toLowerCase() !== 'application/pdf') {
+            setPdfStatus('Only PDF files are allowed.', 'error');
+            return;
+        }
+        await uploadPdf(file);
+    }
+
+    function setPdfStatus(message, tone) {
+        if (!els.pdfUploadStatus) return;
+        els.pdfUploadStatus.textContent = String(message || '').trim();
+        els.pdfUploadStatus.dataset.tone = tone || '';
+    }
+
+    function formatPdfSize(bytes) {
+        const size = Number(bytes) || 0;
+        if (size <= 0) return '';
+        if (size < 1024 * 1024) return Math.round(size / 1024) + ' KB';
+        return (size / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function renderPdfMeta() {
+        const pdf = state.pdf;
+        if (els.pdfMetaName) {
+            els.pdfMetaName.textContent = pdf ? (pdf.originalName || 'PDF document') : 'No PDF uploaded';
+        }
+        if (els.pdfMetaBadge) {
+            const mode = getContentMode();
+            els.pdfMetaBadge.textContent = mode === 'hybrid' ? 'Slides + PDF' : pdf ? 'PDF' : 'No PDF';
+            els.pdfMetaBadge.classList.toggle('is-active', !!pdf);
+        }
+        if (els.pdfMetaDetails) {
+            const parts = [];
+            if (pdf && pdf.mimeType) parts.push(pdf.mimeType);
+            if (pdf && pdf.size) parts.push(formatPdfSize(pdf.size));
+            if (pdf && pdf.uploadedAt) {
+                const stamp = new Date(pdf.uploadedAt);
+                if (!Number.isNaN(stamp.getTime())) parts.push('Uploaded ' + stamp.toLocaleString());
+            }
+            els.pdfMetaDetails.textContent = pdf
+                ? (parts.join(' • ') || 'PDF imported and ready for learners.')
+                : 'Upload a PDF to attach a lesson document.';
+        }
+        if (els.viewPdfBtn) {
+            els.viewPdfBtn.classList.toggle('d-none', !(pdf && pdf.url));
+            els.viewPdfBtn.href = pdf && pdf.url ? pdf.url : '#';
+            els.viewPdfBtn.target = '_blank';
+            els.viewPdfBtn.rel = 'noopener noreferrer';
+        }
+        if (els.removePdfBtn) {
+            els.removePdfBtn.classList.toggle('d-none', !pdf);
+            els.removePdfBtn.disabled = state.pdfUploadInFlight;
+        }
+        if (els.importPdfBtn) {
+            els.importPdfBtn.disabled = state.pdfUploadInFlight;
+        }
+        if (els.replacePdfBtn) {
+            els.replacePdfBtn.disabled = state.pdfUploadInFlight;
+        }
+
+        renderContentModeNote();
+
+        if (pdf && pdf.url) {
+            const cachedHealth = state.pdfHealthByUrl[pdf.url];
+            if (cachedHealth && cachedHealth.warning && !state.pdfUploadInFlight) {
+                setPdfStatus(cachedHealth.warning, 'error');
+            } else if (!cachedHealth) {
+                ensurePdfHealthCheck(pdf.url, false).then((warning) => {
+                    const currentUrl = state.pdf && state.pdf.url ? String(state.pdf.url) : '';
+                    if (warning && currentUrl && currentUrl === String(pdf.url) && !state.pdfUploadInFlight) {
+                        setPdfStatus(warning, 'error');
+                    }
+                }).catch(() => {
+                    // Ignore async health-check errors in UI rendering path.
+                });
+            }
+        }
+    }
+
+    function renderContentModeNote() {
+        if (!els.contentModeNote) return;
+        const mode = getContentMode();
+        els.contentModeNote.textContent = getContentModeMessage();
+        els.contentModeNote.dataset.mode = mode;
+    }
+
+    async function uploadPdf(file) {
+        if (!courseId || sectionIndex === '' || lessonIndex === '') {
+            setPdfStatus('Missing lesson location. Open editor from a lesson first.', 'error');
+            return;
+        }
+
+        state.pdfUploadInFlight = true;
+        renderPdfMeta();
+        setPdfStatus('Uploading PDF...', 'loading');
+
+        const formData = new FormData();
+        formData.append('pdf', file);
+
+        try {
+            const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+            const response = await csrfFetch('/admin/slides/' + encodeURIComponent(courseId) + '/' + encodeURIComponent(sectionIndex) + '/' + encodeURIComponent(lessonIndex) + '/import-pdf', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success || !data.pdf) {
+                throw createPdfUploadError(data, 'Failed to import PDF.');
+            }
+
+            state.pdf = normalizePdf(data.pdf);
+            renderPdfMeta();
+            const warning = await ensurePdfHealthCheck(state.pdf && state.pdf.url, true);
+            if (warning) {
+                setPdfStatus(warning, 'error');
+            } else {
+                setPdfStatus('PDF imported successfully. Save when you are ready.', 'success');
+            }
+        } catch (error) {
+            console.error('[SlideEditor] PDF upload failed:', error);
+            const message = error && (error.code === 'PDF_NOT_PUBLIC' || error.code === 'PDF_URL_INVALID')
+                ? 'PDF uploaded but not publicly accessible. Please check Cloudinary settings.'
+                : (error && error.message ? error.message : 'Failed to import PDF.');
+            setPdfStatus(message, 'error');
+        } finally {
+            state.pdfUploadInFlight = false;
+            renderPdfMeta();
+        }
+    }
+
+    async function removePdf() {
+        if (!state.pdf || state.pdfUploadInFlight) return;
+        if (!hasCustomSlides()) {
+            setPdfStatus('Add at least one slide before removing the PDF.', 'error');
+            showToast('Add at least one slide before removing the PDF.', 'warning');
+            return;
+        }
+
+        const pdfName = String(state.pdf.originalName || state.pdf.filename || 'this PDF').trim() || 'this PDF';
+        await window.showConfirmModal({
+            title: 'Remove PDF',
+            message: `Remove "${pdfName}" from this lesson?`,
+            warning: 'Slides will remain, but this PDF attachment will be deleted.',
+            confirmText: 'Remove PDF',
+            confirmingText: 'Removing...',
+            variant: 'danger',
+            onConfirm: async function() {
+                state.pdfUploadInFlight = true;
+                renderPdfMeta();
+                setPdfStatus('Removing PDF...', 'loading');
+
+                try {
+                    const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+                    const response = await csrfFetch('/admin/slides/' + encodeURIComponent(courseId) + '/' + encodeURIComponent(sectionIndex) + '/' + encodeURIComponent(lessonIndex) + '/pdf', {
+                        method: 'DELETE',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data && data.error ? data.error : 'Failed to remove PDF.');
+                    }
+                    state.pdf = null;
+                    renderPdfMeta();
+                    setPdfStatus('PDF removed.', 'success');
+                } catch (error) {
+                    console.error('[SlideEditor] PDF remove failed:', error);
+                    setPdfStatus(error.message || 'Failed to remove PDF.', 'error');
+                    throw error;
+                } finally {
+                    state.pdfUploadInFlight = false;
+                    renderPdfMeta();
+                }
+            }
+        });
+    }
+
     async function saveDeck() {
         if (!courseId || sectionIndex === '' || lessonIndex === '') {
-            showToast('Missing lesson location. Open editor from a lesson first.');
+            showToast('Missing lesson location. Open editor from a lesson first.', 'danger');
             return;
         }
 
@@ -655,7 +1029,8 @@
             sectionIndex: Number(sectionIndex),
             lessonIndex: Number(lessonIndex),
             content: {
-                slides: serializeSlides(state.slides)
+                slides: serializeSlides(state.slides),
+                ...(getSerializedPdf() ? { pdf: getSerializedPdf() } : {})
             }
         };
         console.log('[SlideEditor] save payload:', {
@@ -666,11 +1041,13 @@
         });
 
         try {
-            const response = await fetch('/admin/course/' + encodeURIComponent(courseId) + '/slide-editor/save', {
+            const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+            const response = await csrfFetch('/admin/course/' + encodeURIComponent(courseId) + '/slide-editor/save', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify(payload)
             });
 
@@ -679,16 +1056,16 @@
                 throw new Error(data.error || 'Save failed');
             }
 
-            showToast('Slides saved successfully.');
+            showToast('Slides saved successfully.', 'success');
         } catch (error) {
             console.error('[SlideEditor] Save failed:', error);
-            showToast('Save failed. Please try again.');
+            showToast('Save failed. Please try again.', 'danger');
         }
     }
 
     async function saveToLibrary() {
-        if (!state.slides.length) {
-            showToast('Add at least one slide before saving.');
+        if (!state.slides.length && !state.pdf) {
+            showToast('Add at least one slide or import a PDF before saving.', 'warning');
             return;
         }
 
@@ -698,14 +1075,17 @@
             type: 'slide',
             name: title,
             content: {
-                slides: serializeSlides(state.slides)
+                slides: serializeSlides(state.slides),
+                ...(getSerializedPdf() ? { pdf: getSerializedPdf() } : {})
             }
         };
 
         try {
-            const response = await fetch('/library/save-slide', {
+            const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+            const response = await csrfFetch('/library/save-slide', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify(payload)
             });
 
@@ -714,10 +1094,10 @@
                 throw new Error(data && data.error ? data.error : 'Save failed');
             }
 
-            showToast('Saved to Content Library!');
+            showToast('Saved to Content Library!', 'success');
         } catch (error) {
             console.error('[SlideEditor] Save to library failed:', error);
-            showToast('Save to library failed. Please try again.');
+            showToast('Save to library failed. Please try again.', 'danger');
         }
     }
 
@@ -762,6 +1142,7 @@
     }
 
     function renderAll() {
+        renderPdfMeta();
         renderSlidesList();
         renderLayersList();
         renderCanvas();
@@ -770,6 +1151,16 @@
 
     function renderSlidesList() {
         const activeId = state.activeSlideId;
+
+        if (!state.slides.length) {
+            els.slidesList.innerHTML = '' +
+                '<li class="se-list-empty">' +
+                    '<strong>No custom slides</strong>' +
+                    '<span>This lesson is using the imported PDF.</span>' +
+                    '<button class="btn btn-sm btn-primary mt-2" type="button" data-add-custom-slide>Add custom slide</button>' +
+                '</li>';
+            return;
+        }
 
         els.slidesList.innerHTML = state.slides.map(function(slide, index) {
             const isActive = slide.id === activeId ? 'active' : '';
@@ -819,7 +1210,7 @@
     function renderLayersList() {
         const slide = getActiveSlide();
         if (!slide) {
-            els.layersList.innerHTML = '';
+            els.layersList.innerHTML = '<li class="se-list-empty">Add a custom slide to edit layers.</li>';
             return;
         }
 
@@ -840,7 +1231,13 @@
     function renderCanvas() {
         const slide = getActiveSlide();
         if (!slide) {
-            els.canvas.innerHTML = '';
+            els.canvas.innerHTML = '' +
+                '<div class="se-canvas-empty">' +
+                    '<strong>No custom slides</strong>' +
+                    '<span>This lesson is using the imported PDF.</span>' +
+                    '<button class="btn btn-primary" type="button" data-add-custom-slide>Add custom slide</button>' +
+                '</div>';
+            els.canvas.style.background = '';
             return;
         }
 
@@ -1326,24 +1723,12 @@
             .replace(/\n/g, '<br>');
     }
 
-    function showToast(message) {
-        let toast = document.querySelector('.se-toast');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.className = 'se-toast';
-            document.body.appendChild(toast);
+    function showToast(message, type) {
+        if (typeof window.showAppToast === 'function') {
+            window.showAppToast(message, type || 'normal');
+            return;
         }
-
-        toast.textContent = message;
-        toast.classList.add('show');
-
-        if (state.toastTimer) {
-            window.clearTimeout(state.toastTimer);
-        }
-
-        state.toastTimer = window.setTimeout(function() {
-            toast.classList.remove('show');
-        }, 1800);
+        window.alert(String(message || ''));
     }
 
     function applySlideTheme(slide, target) {

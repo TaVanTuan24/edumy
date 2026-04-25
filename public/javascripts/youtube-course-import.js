@@ -1,6 +1,14 @@
 (function() {
   'use strict';
 
+  function notify(message, variant) {
+    if (typeof window.showAppToast === 'function') {
+      window.showAppToast(message, variant || 'danger');
+      return;
+    }
+    window.alert(message);
+  }
+
   document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('[data-youtube-import-root]').forEach(initYoutubeImport);
     bindNewCourseFormSubmission();
@@ -80,7 +88,7 @@
 
       if (!ensureFormCsrf(form)) {
         event.preventDefault();
-        window.alert('Security token missing. Please refresh the page and try again.');
+        notify('Security token missing. Please refresh the page and try again.', 'danger');
         return;
       }
 
@@ -90,7 +98,7 @@
 
       if (importSource === 'youtube' && !(sectionsField instanceof HTMLInputElement)) {
         event.preventDefault();
-        window.alert('Imported course data is missing. Please import the playlist again.');
+        notify('Imported course data is missing. Please import the playlist again.', 'danger');
         return;
       }
 
@@ -158,7 +166,7 @@
         document.close();
       }
     } catch (error) {
-      window.alert(error.message || 'Failed to create course.');
+      notify(error.message || 'Failed to create course.', 'danger');
     } finally {
       form.dataset.submitting = 'false';
       if (submitButton) {

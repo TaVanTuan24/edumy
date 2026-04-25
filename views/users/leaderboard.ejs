@@ -58,7 +58,7 @@
     <% if (topThree.length) { %>
       <section class="leaderboard-podium">
         <% topThree.forEach((entry) => { %>
-          <article class="podium-card podium-rank-<%= entry.rank %> <%= entry.isCurrentUser ? 'is-current-user' : '' %>" data-animate>
+          <article class="podium-card app-card-elevated podium-rank-<%= entry.rank %> <%= entry.isCurrentUser ? 'is-current-user' : '' %>" data-animate>
             <div class="podium-emblem podium-emblem-<%= entry.rank %>">
               <% if (entry.rank === 1) { %>
                 <svg viewBox="0 0 64 48" aria-hidden="true"><path d="M8 38 4 10l14 10L32 4l14 16L60 10l-4 28Z"/><path d="M14 44h36"/></svg>
@@ -80,7 +80,7 @@
             <p class="podium-meta">Cấp <%= entry.level %></p>
             <div class="podium-xp"><%= entry.totalXP %> XP</div>
             <div class="podium-bar">
-              <span style="width:<%= maxXP ? Math.max(18, Math.round((entry.totalXP / maxXP) * 100)) : 18 %>%"></span>
+              <span data-progress-width="<%= maxXP ? Math.max(18, Math.round((entry.totalXP / maxXP) * 100)) : 18 %>"></span>
             </div>
           </article>
         <% }) %>
@@ -88,7 +88,7 @@
     <% } %>
 
     <section class="leaderboard-grid">
-      <div class="leaderboard-card leaderboard-main-card" data-animate>
+      <div class="leaderboard-card app-card-elevated leaderboard-main-card" data-animate>
         <div class="leaderboard-card-head">
           <div>
             <h2>Bảng xếp hạng chi tiết</h2>
@@ -114,7 +114,7 @@
 
                 <div class="leaderboard-row-progress">
                   <div class="leaderboard-row-progress-track">
-                    <span style="width:<%= maxXP ? Math.max(10, Math.round((entry.totalXP / maxXP) * 100)) : 10 %>%"></span>
+                    <span data-progress-width="<%= maxXP ? Math.max(10, Math.round((entry.totalXP / maxXP) * 100)) : 10 %>"></span>
                   </div>
                 </div>
 
@@ -129,7 +129,7 @@
       </div>
 
       <aside class="leaderboard-side">
-        <section class="leaderboard-card current-user-card" data-animate>
+        <section class="leaderboard-card app-card-elevated current-user-card" data-animate>
           <div class="leaderboard-card-head leaderboard-card-head-tight">
             <div>
               <h2>Vị trí của bạn</h2>
@@ -148,7 +148,7 @@
           <% } %>
         </section>
 
-        <section class="leaderboard-card leaderboard-tip-card" data-animate>
+        <section class="leaderboard-card app-card-elevated leaderboard-tip-card" data-animate>
           <div class="leaderboard-card-head leaderboard-card-head-tight">
             <div>
               <h2>Cách leo hạng</h2>
@@ -163,7 +163,7 @@
         </section>
 
         <% if (restUsers.length) { %>
-          <section class="leaderboard-card leaderboard-mini-card" data-animate>
+          <section class="leaderboard-card app-card-elevated leaderboard-mini-card" data-animate>
             <div class="leaderboard-card-head leaderboard-card-head-tight">
               <div>
                 <h2>Nhóm bám đuổi</h2>

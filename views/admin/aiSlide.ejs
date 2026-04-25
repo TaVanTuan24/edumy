@@ -1,7 +1,7 @@
 <% layout('/layouts/boilerplate')%>
 <link rel="stylesheet" href="/stylesheets/aiSlide.css">
 
-<div class="ai-builder-page">
+<div class="ai-builder-page app-page-shell">
   <header class="ai-builder-header">
     <div>
       <p class="ai-builder-eyebrow">AI Slide Builder</p>
@@ -15,7 +15,7 @@
 
   <div class="ai-builder-shell">
     <aside class="ai-builder-sidebar">
-      <section class="builder-panel">
+      <section class="builder-panel app-card-elevated">
         <div class="builder-panel-head">
           <span class="builder-step">Step 1</span>
           <h3>Generate Draft</h3>
@@ -65,7 +65,7 @@
         <div id="aiSlideStatus" class="ai-status">Ready to generate a draft.</div>
       </section>
 
-      <section class="builder-panel">
+      <section class="builder-panel app-card-elevated">
         <div class="builder-panel-head">
           <span class="builder-step">Step 2</span>
           <h3>Draft Controls</h3>
@@ -85,14 +85,15 @@
     </aside>
 
     <main class="ai-builder-preview">
-      <section class="builder-panel preview-panel">
+      <section class="builder-panel preview-panel app-card-elevated">
         <div class="builder-panel-head">
           <span class="builder-step">Step 3</span>
           <h3>Draft Preview</h3>
           <div id="draftMeta" class="draft-meta">0 slides</div>
         </div>
 
-        <div id="previewEmptyState" class="preview-empty">
+        <div id="previewEmptyState" class="preview-empty app-empty-state">
+          <i class="fa-regular fa-file-lines"></i>
           <h4>No draft slides yet</h4>
           <p>Generate a draft first. You will be able to edit every slide before the final deck is created.</p>
         </div>

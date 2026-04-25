@@ -23,6 +23,7 @@ const { isAdminUser, sanitizeReturnTo } = require('./middleware');
 const serializeJsonForHtml = require('./utils/serializeJsonForHtml');
 const catchAsync = require('./utils/catchAsync');
 const homeController = require('./controllers/home');
+const { stripFileExtension } = require('./utils/formatLessonName');
 
 const userRoutes = require('./routes/users');
 const courseRoutes = require('./routes/courses');
@@ -182,7 +183,8 @@ app.use(helmet.contentSecurityPolicy({
       "'self'",
       "https://drive.google.com/",
       "https://www.youtube.com",
-      "https://www.youtube-nocookie.com"
+      "https://www.youtube-nocookie.com",
+      "https://res.cloudinary.com"
     ],
     objectSrc: [],
     imgSrc: [
@@ -215,7 +217,10 @@ app.use(async (req, res, next) => {
   res.locals.currentUser = req.user;
   res.locals.isCurrentUserAdmin = isAdminUser(req.user);
   res.locals.serializeJson = serializeJsonForHtml;
+  res.locals.stripFileExtension = stripFileExtension;
   res.locals.csrfToken = csrfToken;
+  res.locals.currentPath = String(req.path || '');
+  res.locals.currentUrl = String(req.originalUrl || req.path || '');
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.courseNotifications = [];

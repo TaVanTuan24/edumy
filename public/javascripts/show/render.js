@@ -9,6 +9,9 @@
   let submittedQuestions = [];
   let currentSlideIndex = 0;
   let slideData = [];
+  let currentSlideLesson = null;
+  let currentSlidePdf = null;
+  let currentSlideContentMode = 'slides';
   const SLIDE_BASE_WIDTH = 1003;
   const SLIDE_MAX_TEXT_FONT_SIZE = 40;
   let slideResizeBound = false;
@@ -178,7 +181,7 @@
             return '' +
               '<li class="lesson-item d-flex justify-content-between align-items-center" data-id="' + deps.escapeHtml(id) + '">' +
                 '<div>' +
-                  '<span class="lesson-title">' + deps.escapeHtml(item.title) + '</span>' +
+                  '<span class="lesson-title">' + deps.escapeHtml(item.displayTitle || deps.formatLessonTitle(item.title) || item.title) + '</span>' +
                   '<small class="text-muted ms-2">' + deps.capitalize(item.type) + '</small>' +
                   completedBadge +
                 '</div>' +
@@ -303,6 +306,9 @@
   }
 
   function renderVideo(lesson) {
+    const deps = getDeps();
+    currentSlideLesson = null;
+    currentSlidePdf = null;
     const imageContainer = document.getElementById('imageContainer');
     const player = document.getElementById('videoPlayerContainer');
     const iframe = document.getElementById('videoIframe');
@@ -317,7 +323,7 @@
     const interactiveQuizzes = normalizeInteractiveQuizzes(lesson && lesson.content && lesson.content.interactiveQuizzes);
     setPlaybackTimeBadgeVisible(false);
     if (!url) {
-      renderPanel('Lecture', lesson.title, '<p class="text-muted mb-0">No video source found.</p>', false);
+      renderPanel('Lecture', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, '<p class="text-muted mb-0">No video source found.</p>', false);
       return;
     }
 
@@ -331,7 +337,7 @@
       if (!videoId) {
         renderPanel(
           'Lecture',
-          lesson.title,
+          lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title,
           '<p class="text-danger mb-2">Invalid YouTube video URL.</p><p class="text-muted mb-0">Use links like https://www.youtube.com/watch?v=VIDEO_ID, https://youtu.be/VIDEO_ID, or https://www.youtube.com/shorts/VIDEO_ID.</p>',
           false
         );
@@ -415,63 +421,180 @@
   }
 
   function renderSlide(lesson) {
+    const deps = getDeps();
     resetInteractiveVideoQuizState();
     setPlaybackTimeBadgeVisible(false);
     teardownYouTubePlayer();
     teardownHtml5Player();
     setProviderNotice('', '');
-    console.log('SLIDE LESSON:', lesson);
-    console.log('Slides:', lesson && lesson.content);
 
-    const slides = lesson && lesson.content ? lesson.content.slides : undefined;
+    const slides = getCustomSlides(lesson);
+    const pdf = getPdfContent(lesson);
+    const mode = getLessonContentMode(lesson);
+    currentSlideLesson = lesson || null;
+    currentSlidePdf = null;
+    currentSlideContentMode = mode === 'pdf' ? 'pdf' : 'slides';
 
-    if (!slides || !Array.isArray(slides) || slides.length === 0) {
-      console.error('No slide data', lesson);
-      renderPanel('Slide', lesson && lesson.title, '<p class="text-danger mb-0">No slide data</p>', false);
+    if (mode === 'pdf') {
+      renderPdfLesson(lesson, pdf);
+      if (typeof window.__updateContext === 'function') {
+        window.__updateContext({
+          lessonId: String(lesson._id || ''),
+          type: 'slide',
+          slideIndex: null
+        });
+      }
+      return;
+    }
+
+    if (mode === 'empty') {
+      renderPanel('Slide', lesson && (lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title), '<p class="text-danger mb-0">No slide data</p>', false);
       return;
     }
 
     window.slideData = slides;
     slideData = window.slideData;
     currentSlideIndex = 0;
+    currentSlidePdf = pdf;
+    currentSlideContentMode = mode === 'hybrid' ? getPreferredSlideContentMode(lesson) : 'slides';
 
     if (!slideResizeBound) {
       window.addEventListener('resize', function() {
-        showSlide(lesson);
+        if (currentSlideLesson) renderCurrentSlideSurface(currentSlideLesson);
       });
       slideResizeBound = true;
     }
 
-    showSlide(lesson);
+    renderCurrentSlideSurface(lesson);
     if (typeof window.__updateContext === 'function') {
       window.__updateContext({
         lessonId: String(lesson._id || ''),
         type: 'slide',
-        slideIndex: currentSlideIndex
+        slideIndex: currentSlideContentMode === 'pdf' ? null : currentSlideIndex
+      });
+    }
+  }
+
+  function getCustomSlides(lesson) {
+    const content = lesson && lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+    return Array.isArray(content.slides)
+      ? content.slides
+      : Array.isArray(lesson && lesson.slides)
+        ? lesson.slides
+        : [];
+  }
+
+  function getPdfContent(lesson) {
+    const content = lesson && lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+    const pdf = content.pdf || (lesson && lesson.pdf);
+    if (typeof pdf === 'string' && pdf.trim()) {
+      return { url: pdf.trim(), originalName: 'PDF document' };
+    }
+    return pdf && typeof pdf === 'object' && String(pdf.url || '').trim() ? pdf : null;
+  }
+
+  function getLessonContentMode(lesson) {
+    const hasSlides = getCustomSlides(lesson).length > 0;
+    const hasPdf = Boolean(getPdfContent(lesson));
+    if (hasSlides && hasPdf) return 'hybrid';
+    if (hasPdf) return 'pdf';
+    if (hasSlides) return 'slides';
+    return 'empty';
+  }
+
+  function getSlideModeStorageKey(lesson) {
+    const deps = getDeps();
+    return deps.storageKey('slide-content-mode:' + String(lesson && lesson._id || 'current'));
+  }
+
+  function getPreferredSlideContentMode(lesson) {
+    try {
+      const stored = localStorage.getItem(getSlideModeStorageKey(lesson));
+      return stored === 'pdf' ? 'pdf' : 'slides';
+    } catch {
+      return 'slides';
+    }
+  }
+
+  function setPreferredSlideContentMode(lesson, mode) {
+    currentSlideContentMode = mode === 'pdf' ? 'pdf' : 'slides';
+    try {
+      localStorage.setItem(getSlideModeStorageKey(lesson), currentSlideContentMode);
+    } catch {
+      // Ignore storage write errors.
+    }
+  }
+
+  function renderCurrentSlideSurface(lesson) {
+    if (currentSlidePdf && currentSlideContentMode === 'pdf') {
+      renderHybridPdfLesson(lesson, currentSlidePdf);
+      return;
+    }
+    if (currentSlideContentMode === 'pdf') {
+      const pdf = getPdfContent(lesson);
+      if (pdf) {
+        renderPdfLesson(lesson, pdf);
+        return;
+      }
+    }
+    showSlide(lesson);
+  }
+
+  function renderPdfLesson(lesson, pdf) {
+    const deps = getDeps();
+    renderPanel('PDF', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, renderLessonModeToolbar(null, pdf) + renderPdfLessonBody(pdf), false);
+  }
+
+  function renderPdfLessonBody(pdf) {
+    const deps = getDeps();
+    const viewerUrl = String(pdf && pdf.url || '').trim();
+    const fileName = deps.escapeHtml(pdf && (pdf.originalName || pdf.filename) || 'PDF document');
+    const pdfUrl = deps.escapeHtml(viewerUrl);
+    return '' +
+      '<div class="lesson-pdf-shell">' +
+        '<div class="lesson-pdf-viewer-wrap">' +
+          '<iframe src="' + pdfUrl + '#view=FitH" class="lesson-pdf-viewer" loading="lazy" title="' + fileName + '"></iframe>' +
+        '</div>' +
+        '<div class="lesson-pdf-fallback">If the document does not load here (including 401/403 errors), use "Open PDF in new tab" or ask an admin to replace the PDF.</div>' +
+      '</div>';
+  }
+
+  function renderHybridPdfLesson(lesson, pdf) {
+    const deps = getDeps();
+    renderPanel('Slide', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, renderLessonModeToolbar('pdf', pdf) + renderPdfLessonBody(pdf), false);
+    bindSlideContentModeSwitches(lesson);
+    if (typeof window.__updateContext === 'function') {
+      window.__updateContext({
+        lessonId: String(lesson._id || ''),
+        type: 'slide',
+        slideIndex: null
       });
     }
   }
 
   function showSlide(lesson) {
+    const deps = getDeps();
     const slide = slideData[currentSlideIndex];
     if (!slide) {
-      renderPanel('Slide', lesson.title, '<p class="text-muted mb-0">Slide not found.</p>', false);
+      renderPanel('Slide', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, '<p class="text-muted mb-0">Slide not found.</p>', false);
       return;
     }
 
     const html = '' +
+      (currentSlidePdf ? renderLessonModeToolbar('slides', currentSlidePdf) : '') +
       '<div class="slide-wrapper">' +
         '<div id="slide-stage">' +
           '<div id="slide-canvas"></div>' +
           '<div class="slide-nav">' +
-            '<button class="btn btn-light" type="button" data-slide-nav="prev" ' + (currentSlideIndex === 0 ? 'disabled' : '') + '>←</button>' +
+            '<button class="btn btn-light" type="button" data-slide-nav="prev" aria-label="Previous slide" ' + (currentSlideIndex === 0 ? 'disabled' : '') + '><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>' +
             '<span id="slide-indicator"></span>' +
-            '<button class="btn btn-light" type="button" data-slide-nav="next" ' + (currentSlideIndex >= slideData.length - 1 ? 'disabled' : '') + '>→</button>' +
+            '<button class="btn btn-light" type="button" data-slide-nav="next" aria-label="Next slide" ' + (currentSlideIndex >= slideData.length - 1 ? 'disabled' : '') + '><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>' +
           '</div>' +
         '</div>' +
       '</div>';
 
-    renderPanel('Slide', lesson.title, html, false);
+    renderPanel('Slide', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, html, false);
+    bindSlideContentModeSwitches(lesson);
 
     renderSlideElements(slide);
 
@@ -498,6 +621,44 @@
     if (typeof window.__trackSlideChange === 'function') {
       window.__trackSlideChange(String(lesson._id || ''), String(lesson.type || 'slide'), currentSlideIndex);
     }
+  }
+
+  function renderLessonModeToolbar(activeMode, pdf) {
+    const deps = getDeps();
+    const viewerUrl = String(pdf && pdf.url || '').trim();
+    const fileName = deps.escapeHtml(pdf && (pdf.originalName || pdf.filename) || 'PDF document');
+    const pdfUrl = deps.escapeHtml(viewerUrl);
+    const hasModeSwitcher = activeMode === 'slides' || activeMode === 'pdf';
+    const switcherHtml = hasModeSwitcher
+      ? '<div class="lesson-content-switcher" role="tablist" aria-label="Slide lesson content">' +
+          '<button class="lesson-content-tab ' + (activeMode === 'slides' ? 'active' : '') + '" type="button" data-slide-content-mode="slides" role="tab" aria-selected="' + (activeMode === 'slides' ? 'true' : 'false') + '">Slides</button>' +
+          '<button class="lesson-content-tab ' + (activeMode === 'pdf' ? 'active' : '') + '" type="button" data-slide-content-mode="pdf" role="tab" aria-selected="' + (activeMode === 'pdf' ? 'true' : 'false') + '">PDF</button>' +
+        '</div>'
+      : '';
+    const pdfMetaHtml = viewerUrl
+      ? '<div class="lesson-pdf-toolbar-title" title="' + fileName + '">' + fileName + '</div>' +
+        '<a class="btn btn-sm btn-outline-secondary lesson-pdf-open-btn" href="' + pdfUrl + '" target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>'
+      : '';
+
+    if (!switcherHtml && !pdfMetaHtml) return '';
+
+    return '' +
+      '<div class="lesson-mode-toolbar' + (hasModeSwitcher ? ' has-switcher' : '') + '">' +
+        switcherHtml +
+        pdfMetaHtml +
+      '</div>';
+  }
+
+  function bindSlideContentModeSwitches(lesson) {
+    const panel = document.getElementById('lessonFallbackPanel');
+    if (!panel || !currentSlidePdf) return;
+    panel.querySelectorAll('[data-slide-content-mode]').forEach(function(button) {
+      button.addEventListener('click', function() {
+        const mode = button.dataset.slideContentMode === 'pdf' ? 'pdf' : 'slides';
+        setPreferredSlideContentMode(lesson, mode);
+        renderCurrentSlideSurface(lesson);
+      });
+    });
   }
 
   function getSlideElements(slide) {
@@ -636,6 +797,9 @@
   }
 
   function renderQuiz(lesson) {
+    const deps = getDeps();
+    currentSlideLesson = null;
+    currentSlidePdf = null;
     resetInteractiveVideoQuizState();
     setPlaybackTimeBadgeVisible(false);
     teardownYouTubePlayer();
@@ -643,7 +807,7 @@
     setProviderNotice('', '');
     const questions = Array.isArray(lesson.content.questions) ? lesson.content.questions : [];
     if (!questions.length) {
-      renderPanel('Quiz', lesson.title, '<p class="text-muted mb-0">No quiz data.</p>', true);
+      renderPanel('Quiz', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, '<p class="text-muted mb-0">No quiz data.</p>', true);
       return;
     }
 
@@ -714,7 +878,7 @@
         '</div>' +
       '</div>';
 
-    renderPanel('Quiz', lesson.title, html, false);
+    renderPanel('Quiz', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, html, false);
 
     const panel = document.getElementById('lessonFallbackPanel');
     if (!panel) return;
@@ -779,6 +943,7 @@
   }
 
   function showResult(lesson) {
+    const deps = getDeps();
     const percent = quizData.length ? Math.round((score / quizData.length) * 100) : 0;
     const html = '' +
       '<div class="quiz-result">' +
@@ -790,7 +955,7 @@
         '</div>' +
       '</div>';
 
-    renderPanel('Quiz', lesson.title, html, false);
+    renderPanel('Quiz', lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title, html, false);
 
     saveQuizResult(lesson, score, quizData.length);
 
@@ -1446,6 +1611,7 @@
     const player = document.getElementById('videoPlayerContainer');
     const iframe = document.getElementById('videoIframe');
     const html5 = document.getElementById('html5VideoPlayer');
+    const displayTitle = deps.formatLessonTitle(title || 'Lesson') || 'Lesson';
 
     if (imageContainer) imageContainer.style.display = 'none';
     if (iframe) iframe.src = '';
@@ -1468,7 +1634,7 @@
 
     panel.innerHTML = '' +
       '<div class="card-body">' +
-        '<h5 class="card-title mb-3">' + deps.escapeHtml(typeLabel) + ': ' + deps.escapeHtml(title || 'Lesson') + '</h5>' +
+        '<h5 class="card-title mb-3">' + deps.escapeHtml(typeLabel) + ': ' + deps.escapeHtml(displayTitle) + '</h5>' +
         htmlBody +
         (showCompleteButton ? '<button id="completeCurrentLessonBtn" class="btn btn-sm btn-primary mt-2">Mark as Completed</button>' : '') +
       '</div>';

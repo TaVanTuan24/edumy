@@ -2,6 +2,7 @@ const Video = require('../models/video');
 const Transcript = require('../models/Transcript');
 const Note = require('../models/note');
 const { findLessonContext } = require('../utils/lessonLocator');
+const { getLessonContentMode, hasPdfContent } = require('../utils/lessonContentMode');
 
 function trimText(value, maxChars) {
   const text = String(value || '').trim();
@@ -10,13 +11,40 @@ function trimText(value, maxChars) {
 }
 
 function extractSlideText(lesson) {
-  const slides = Array.isArray(lesson && lesson.content && lesson.content.slides) ? lesson.content.slides : [];
+  const slides = Array.isArray(lesson && lesson.content && lesson.content.slides)
+    ? lesson.content.slides
+    : Array.isArray(lesson && lesson.slides)
+      ? lesson.slides
+      : [];
   return slides.flatMap((slide) => {
     const elements = Array.isArray(slide && slide.elements) ? slide.elements : [];
     return elements
       .filter((element) => element && element.type === 'text' && element.text)
       .map((element) => String(element.text).trim());
   }).filter(Boolean).join('\n');
+}
+
+function getLessonContentModeLabel(mode) {
+  if (mode === 'hybrid') return 'Slides + PDF';
+  if (mode === 'pdf') return 'PDF';
+  if (mode === 'slides') return 'Slides';
+  return 'Empty';
+}
+
+function extractPdfMetadataText(lesson) {
+  const content = lesson && lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+  const pdf = content.pdf || (lesson && lesson.pdf);
+  if (typeof pdf === 'string' && pdf.trim()) return 'PDF URL available.';
+  if (!pdf || typeof pdf !== 'object') return '';
+
+  const parts = [
+    pdf.originalName ? `Filename: ${String(pdf.originalName).trim()}` : '',
+    pdf.filename ? `Storage name: ${String(pdf.filename).trim()}` : '',
+    pdf.mimeType ? `MIME type: ${String(pdf.mimeType).trim()}` : '',
+    pdf.size ? `Size: ${Number(pdf.size) || 0} bytes` : ''
+  ].filter(Boolean);
+
+  return parts.join('\n');
 }
 
 function extractQuizText(lesson) {
@@ -58,6 +86,8 @@ async function buildLessonAiContext({ userId, course, lessonId, sectionIndex, le
 
   const slideText = extractSlideText(lesson);
   const quizText = extractQuizText(lesson);
+  const lessonContentMode = lesson.type === 'slide' ? getLessonContentMode(lesson) : '';
+  const pdfMetadata = hasPdfContent(lesson) ? extractPdfMetadataText(lesson) : '';
 
   const parts = [
     `Course: ${String(course.title || '').trim()}`,
@@ -66,7 +96,9 @@ async function buildLessonAiContext({ userId, course, lessonId, sectionIndex, le
     `Section: ${String(section && section.title || '').trim()}`,
     `Lesson: ${String(lesson.title || '').trim()}`,
     `Lesson type: ${String(lesson.type || '').trim()}`,
+    lessonContentMode ? `Slide lesson content: ${getLessonContentModeLabel(lessonContentMode)}` : '',
     slideText ? `Slide content:\n${trimText(slideText, 1800)}` : '',
+    hasPdfContent(lesson) ? `This lesson includes a PDF. I can answer based on available metadata unless PDF text extraction is implemented.${pdfMetadata ? `\nPDF metadata:\n${trimText(pdfMetadata, 500)}` : ''}` : '',
     quizText ? `Quiz content:\n${trimText(quizText, 1400)}` : '',
     transcriptText ? `Transcript excerpt:\n${trimText(transcriptText, 2500)}` : '',
     note && note.content ? `Learner note excerpt:\n${trimText(note.content, 600)}` : ''
@@ -76,6 +108,7 @@ async function buildLessonAiContext({ userId, course, lessonId, sectionIndex, le
     lessonId: String(lesson._id || ''),
     lessonName: String(lesson.title || ''),
     lessonType: String(lesson.type || ''),
+    lessonContentMode: lessonContentMode || String(lesson.type || ''),
     sectionTitle: String(section && section.title || ''),
     sectionIndex: resolvedSectionIndex,
     lessonIndex: resolvedLessonIndex,

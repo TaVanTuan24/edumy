@@ -207,23 +207,31 @@
             return;
         }
 
-        const shouldDelete = window.confirm('Delete this question? This action cannot be undone.');
-        if (!shouldDelete) return;
-
-        const response = await requestJson(endpoints.delete, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                sectionIndex,
-                quizIndex,
-                questionIndex: selectedQuestionIndex
-            })
+        const question = quizData.questions[selectedQuestionIndex];
+        const questionTitle = String(question && question.question || 'Untitled question').trim() || 'Untitled question';
+        const confirmed = await window.showConfirmModal({
+            title: 'Delete Question',
+            message: `Delete "${questionTitle}"?`,
+            warning: 'This action cannot be undone.',
+            confirmText: 'Delete Question',
+            confirmingText: 'Deleting...',
+            variant: 'danger',
+            onConfirm: async function() {
+                const response = await requestJson(endpoints.delete, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sectionIndex,
+                        quizIndex,
+                        questionIndex: selectedQuestionIndex
+                    })
+                });
+                if (!response.success) {
+                    throw new Error(response.error || 'Unable to delete question.');
+                }
+            }
         });
-
-        if (!response.success) {
-            showAlert(response.error || 'Unable to delete question.', 'danger');
-            return;
-        }
+        if (!confirmed) return;
 
         quizData.questions.splice(selectedQuestionIndex, 1);
 

@@ -15,8 +15,8 @@
 .profile-card {
   background: var(--profile-surface);
   border: 1px solid var(--profile-border);
-  border-radius: 16px;
-  box-shadow: var(--app-shadow-md);
+  border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .profile-header-card {
@@ -142,7 +142,7 @@
 .profile-modal-shell {
   background: var(--profile-surface);
   border: 1px solid var(--profile-border);
-  border-radius: 18px;
+  border-radius: var(--app-radius-xl);
   box-shadow: var(--app-shadow-lg);
   overflow: hidden;
 }

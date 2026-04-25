@@ -8,6 +8,7 @@ const ExpressError = require('../utils/ExpressError');
 const { resolveStream, safeUrlParse } = require('../services/streamResolver');
 const { createStreamProxyToken, verifyStreamProxyToken } = require('../utils/signStreamToken');
 const { getCanonicalSections } = require('../utils/courseContentAdapter');
+const { stripFileExtension } = require('../utils/formatLessonName');
 
 function getEnrolledCourseIdStrings(userDoc) {
   const ids = [];
@@ -71,7 +72,7 @@ function getOrderedLessonsFromSections(sections) {
 function getCourseLessons(courseDoc) {
   return getOrderedLessonsFromSections(getCanonicalSections(courseDoc)).map((lesson, lessonIndex) => ({
     id: String((lesson && lesson._id) || `lesson_${lessonIndex + 1}`),
-    title: String((lesson && lesson.title) || 'Untitled Lesson'),
+    title: stripFileExtension(String((lesson && lesson.title) || 'Untitled Lesson')),
     type: String((lesson && lesson.type) || ''),
     duration: lesson && lesson.duration ? lesson.duration : null,
     order: Number.isFinite(Number(lesson && lesson.order)) ? Number(lesson.order) : lessonIndex,
@@ -713,7 +714,7 @@ module.exports.getVrCourseLessons = async (req, res) => {
     const shapedLesson = {
       type: normalizedType,
       id: String(lesson.id),
-      title: String(lesson.title || ''),
+      title: stripFileExtension(String(lesson.title || '')),
       videoUrl: getPlayableVideoSource(lesson),
       slideText,
       slides,

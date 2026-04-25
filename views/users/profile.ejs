@@ -8,7 +8,7 @@
 %>
 
 <div class="profile-page container py-4">
-  <div class="profile-header-card">
+  <div class="profile-header-card app-card-elevated">
     <div class="profile-avatar-wrap">
       <% if (avatarUrl) { %>
         <img class="profile-avatar-image" src="<%= avatarUrl %>" alt="Ảnh đại diện của <%= user.username %>">
@@ -50,11 +50,11 @@
   </div>
 
   <section class="profile-grid mt-4">
-    <article class="profile-card">
+    <article class="profile-card app-card">
       <h2>Tiến độ cấp độ</h2>
       <div class="level-row">
-        <span class="level-pill">Cấp <%= gamification.currentLevel %></span>
-        <span class="xp-pill"><%= gamification.totalXP %> XP</span>
+        <span class="level-pill app-badge app-badge-status">Cấp <%= gamification.currentLevel %></span>
+        <span class="xp-pill app-badge app-badge-xp"><%= gamification.totalXP %> XP</span>
       </div>
       <div class="xp-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= gamification.levelProgress.progressPercent %>">
         <div id="xpProgressFill" class="xp-fill" data-progress="<%= gamification.levelProgress.progressPercent %>"></div>
@@ -68,7 +68,7 @@
       </p>
     </article>
 
-    <article class="profile-card">
+    <article class="profile-card app-card">
       <h2>Chuỗi học tập</h2>
       <div class="streak-row">
         <div class="streak-box">
@@ -95,7 +95,7 @@
       </p>
     </article>
 
-    <article class="profile-card">
+    <article class="profile-card app-card">
       <h2>Thống kê học tập</h2>
       <ul class="stat-list">
         <li><span>Tổng XP</span><strong><%= gamification.totalXP %></strong></li>
@@ -107,13 +107,13 @@
     </article>
   </section>
 
-  <section class="profile-card mt-4">
+  <section class="profile-card app-card mt-4">
     <div class="badge-head">
       <div>
         <h2 class="mb-0">Bộ sưu tập huy hiệu</h2>
         <p class="badge-subtitle mb-0">Mở khóa thêm huy hiệu bằng cách học đều, làm quiz và dùng các công cụ AI.</p>
       </div>
-      <span class="badge-count"><%= gamification.earnedBadges.length %> / <%= gamification.badges.length %> đã mở khóa</span>
+      <span class="badge-count app-badge app-badge-topic"><%= gamification.earnedBadges.length %> / <%= gamification.badges.length %> đã mở khóa</span>
     </div>
 
     <div class="badge-grid mt-3">
@@ -134,7 +134,7 @@
     </div>
   </section>
 
-  <section class="profile-card mt-4">
+  <section class="profile-card app-card mt-4">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
         <h2 class="mb-1">Bảng xếp hạng</h2>
@@ -172,14 +172,14 @@
 
 <div class="modal fade profile-vr-modal" id="vrPairingModal" tabindex="-1" aria-labelledby="vrPairingModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content profile-modal-shell">
-      <div class="modal-header">
+    <div class="modal-content profile-modal-shell app-modal-shell">
+      <div class="modal-header app-modal-head">
         <h5 class="modal-title" id="vrPairingModalLabel">Pair VR Device</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form id="vrPairingForm">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <div class="modal-body">
+        <div class="modal-body app-modal-body">
           <label class="form-label fw-semibold" for="vrPairingCodeInput">5-digit pairing PIN</label>
           <input
             id="vrPairingCodeInput"
@@ -194,7 +194,7 @@
           <p class="text-muted small mb-0 mt-2">Open the VR app, request a login code, then enter it here.</p>
           <div id="vrPairingMessage" class="alert d-none mt-3 mb-0" role="alert"></div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer app-modal-actions">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" id="vrPairingSubmit" class="btn btn-primary" disabled>Confirm</button>
         </div>

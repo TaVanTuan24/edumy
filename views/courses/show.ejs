@@ -10,232 +10,280 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
-    <div id="imageContainer">
-      <div id="carouselExample" class="carousel slide">
-        <div class="carousel-inner">
-          <% course.images.forEach((img, i) =>{ %>
-            <div class="carousel-item  <%= i === 0 ? 'active' : ''%>">
-              <img src="<%=img.url%>" class="d-block w-100" alt="">
-            </div>
-          <% }) %>
+    <section class="learning-stage-shell">
+      <header class="learning-stage-header">
+        <div class="learning-stage-copy">
+          <span class="learning-stage-kicker">Now Learning</span>
+          <h1 class="learning-stage-title" id="learningStageCourseTitle"><%= course.title %></h1>
+          <div class="learning-stage-meta">
+            <span class="learning-stage-badge" id="learningStageLessonType">Course</span>
+            <span class="learning-stage-current" id="learningStageLessonTitle">Select a lesson from the course outline.</span>
+          </div>
         </div>
-        <% if(course.images.length > 1) {%>
-          <button class="carousel-control-prev" type="button" data-bs-target="#carouselExample" data-bs-slide="prev">
-            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-            <span class="visually-hidden">Previous</span>
+        <div class="learning-stage-actions">
+          <button class="btn btn-secondary" type="button" data-stage-nav="prev">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Previous</span>
           </button>
-          <button class="carousel-control-next" type="button" data-bs-target="#carouselExample" data-bs-slide="next">
-            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-            <span class="visually-hidden">Next</span>
-          </button>
-        <% } %>
-      </div>
-    </div>
-
-    <div class="lesson-video-shell">
-      <div class="lesson-video-frame">
-        <div id="videoPlayerContainer" class="video-player-shell mb-3" style="display: none;">
-          <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
-          <video id="html5VideoPlayer" controls playsinline webkit-playsinline="true" controlslist="nofullscreen noremoteplayback" disablepictureinpicture style="display:none; width:100%; height:100%; background:#000;"></video>
-          <button id="interactiveQuizHotspot" class="interactive-quiz-hotspot" type="button" aria-label="Open interactive quiz" style="display:none;">
-            ?
+          <button class="btn btn-primary" type="button" data-stage-nav="next">
+            <span>Next</span>
+            <i class="fa-solid fa-arrow-right"></i>
           </button>
         </div>
-      </div>
-    </div>
-    <div id="videoProviderNotice" class="small mb-3" style="display:none;"></div>
+      </header>
 
-    <div class="course-tabs-wrap">
-      <div class="course-tabs">
-        <button class="tab-btn active" type="button" data-tab="overview">Overview</button>
-        <button class="tab-btn" type="button" data-tab="notes">Notes</button>
-        <button class="tab-btn" type="button" data-tab="reviews">Reviews</button>
-        <button class="tab-btn" type="button" data-tab="discussions">Discussions</button>
-      </div>
-      <div class="tab-content">
-        <div id="tab-overview" class="tab-pane active">
-          <div class="card mb-3" id="courseInfo">
-            <div class="card-body">
-              <h5 class="card-title"><%= course.title %></h5>
-              <p class="card-text"><%= course.description %></p>
-            </div>
-
-            <% if (currentUser && (course.author.equals(currentUser._id) || isCurrentUserAdmin)) { %>
-              <div class="card-body">
-                <!-- <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
-                  <button class="btn btn-danger">Delete</button>
-                </form> -->
-              </div>
-            <% } %>
+      <div class="lesson-video-shell">
+        <div class="lesson-video-frame">
+          <div id="videoPlayerContainer" class="video-player-shell video-player-shell-hidden mb-3">
+            <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            <video id="html5VideoPlayer" controls playsinline webkit-playsinline="true" controlslist="nofullscreen noremoteplayback" disablepictureinpicture class="lesson-video-html5-player"></video>
+            <button id="interactiveQuizHotspot" class="interactive-quiz-hotspot" type="button" aria-label="Open interactive quiz">
+              <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+            </button>
           </div>
-        </div>
-        <div id="tab-notes" class="tab-pane">
-          <div class="card mb-3" id="videoNoteSection">
-            <div class="card-body">
-              <h5 class="card-title">Ghi chú buổi học</h5>
-              <% (course.sections || []).forEach((section, index) => { %>
-                <textarea class="form-control section-note"
-                  id="note-section-<%= index %>"
-                  rows="5"
-                  placeholder="Nhập ghi chú cho <%= section.title %>..."
-                  onblur="saveNote(<%= index %>)"
-                  style="display:none;"><%= sectionNotes[index] || '' %></textarea>
-              <% }) %>
-            </div>
-          </div>
-        </div>
-        <div id="tab-reviews" class="tab-pane">
-          <div class="card mb-3">
-            <div class="card-body">
-              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-                <h5 class="mb-0">Student Reviews</h5>
-                <span id="ratingSummary" class="text-muted">No reviews yet.</span>
-              </div>
-
-              <form id="reviewForm" class="mb-3">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <div class="row g-2 align-items-end">
-                  <div class="col-12 col-md-3">
-                    <label class="form-label" for="rating">Rating</label>
-                    <select id="rating" class="form-select">
-                      <option value="">Select rating</option>
-                      <option value="5">5 - Excellent</option>
-                      <option value="4">4 - Good</option>
-                      <option value="3">3 - Average</option>
-                      <option value="2">2 - Poor</option>
-                      <option value="1">1 - Terrible</option>
-                    </select>
-                  </div>
-                  <div class="col-12 col-md-7">
-                    <label class="form-label" for="comment">Comment</label>
-                    <textarea id="comment" class="form-control" rows="2" placeholder="Share your experience..."></textarea>
-                  </div>
-                  <div class="col-12 col-md-2">
-                    <button id="reviewSubmitBtn" type="button" class="btn btn-primary w-100">Submit</button>
-                  </div>
-                </div>
-              </form>
-
-              <div id="review-list"></div>
-            </div>
-          </div>
-        </div>
-        <div id="tab-discussions" class="tab-pane">
-          <div class="card mb-3">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                <h5 class="mb-0">Q&A Discussions</h5>
-                <div class="d-flex gap-2">
-                  <a class="btn btn-sm btn-outline-primary" href="/courses/<%= course._id %>/discussions">View All</a>
-                  <a class="btn btn-sm btn-primary" href="/courses/<%= course._id %>/discussions/new">Ask Question</a>
-                </div>
-              </div>
-
-              <% if (!discussionHighlights || !discussionHighlights.length) { %>
-                <p class="text-muted mb-0">No questions yet. Start the first discussion for this course.</p>
-              <% } %>
-
-              <% (discussionHighlights || []).forEach((q) => { %>
-                <div class="border rounded p-2 mb-2">
-                  <div class="d-flex justify-content-between align-items-center gap-2">
-                    <a href="/courses/<%= course._id %>/discussions/<%= q._id %>"><strong><%= q.title %></strong></a>
-                    <span class="badge bg-light text-dark"><%= q.score %> votes</span>
-                  </div>
-                  <div class="small text-muted mt-1">
-                    <span><%= q.answersCount %> answers</span>
-                    <span class="ms-2">by <%= q.author && q.author.username ? q.author.username : 'User' %></span>
-                  </div>
-                </div>
-              <% }) %>
-            </div>
-          </div>
+          <div id="videoProviderNotice" class="small mb-3 video-provider-notice-hidden"></div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <button id="aiChatToggle" class="ai-chat-toggle" type="button" aria-label="Open AI chat">💬</button>
-    <div id="aiChatPopup" class="ai-chat-popup hidden" data-course-id="<%= course._id %>">
-      <div class="ai-chat-header">
+    <section class="learning-support-shell">
+      <div class="learning-support-head">
         <div>
-          <h6 class="mb-0">AI Tutor</h6>
-          <small class="text-muted">Ask about the current lesson</small>
-        </div>
-        <div class="ai-chat-header-actions">
-          <select id="courseAiModel" class="ai-chat-model-select" aria-label="Choose AI model">
-            <option value="llama3.2">llama3.2</option>
-            <option value="grok">Grok</option>
-            <option value="gpt-5.4">GPT-5.4</option>
-          </select>
-          <button class="ai-chat-close" type="button" data-chat-close>✖</button>
+          <h2>Course Support</h2>
+          <p>Reference material, notes, reviews, and course discussions live here.</p>
         </div>
       </div>
 
-      <div class="ai-quick-actions">
-        <button class="btn btn-sm btn-outline-secondary" data-ai-action="summarize">Summarize this lesson</button>
-        <button class="btn btn-sm btn-outline-secondary" data-ai-action="explain">Explain like I'm a beginner</button>
-        <button class="btn btn-sm btn-outline-secondary" data-ai-action="practice">Generate practice questions</button>
-        <button class="btn btn-sm btn-outline-secondary" data-ai-action="flashcards">Create flashcards</button>
-      </div>
+      <div class="course-tabs-wrap">
+        <div class="course-tabs">
+          <button class="tab-btn active" type="button" data-tab="overview">Overview</button>
+          <button class="tab-btn" type="button" data-tab="notes">Notes</button>
+          <button class="tab-btn" type="button" data-tab="reviews">Reviews</button>
+          <button class="tab-btn" type="button" data-tab="discussions">Discussions</button>
+        </div>
+        <div class="tab-content">
+          <div id="tab-overview" class="tab-pane active">
+            <div class="card mb-3 support-panel-card" id="courseInfo">
+              <div class="card-body support-overview-grid">
+                <div class="support-overview-copy">
+                  <h5 class="card-title"><%= course.title %></h5>
+                  <p class="card-text"><%= course.description %></p>
+                </div>
+                <div class="support-overview-media">
+                  <% if (course.images && course.images.length > 0) { %>
+                    <img src="<%= course.images[0].url %>" alt="<%= course.title %> cover image">
+                  <% } else { %>
+                    <div class="support-overview-placeholder">
+                      <i class="fa-solid fa-book-open-reader"></i>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="tab-notes" class="tab-pane">
+            <div class="card mb-3 support-panel-card" id="videoNoteSection">
+              <div class="card-body">
+                <h5 class="card-title">Ghi chú buổi học</h5>
+                <% (course.sections || []).forEach((section, index) => { %>
+                  <textarea class="form-control section-note section-note-hidden"
+                    id="note-section-<%= index %>"
+                    rows="5"
+                    placeholder="Nhập ghi chú cho <%= section.title %>..."
+                    onblur="saveNote(<%= index %>)"
+                    ><%= sectionNotes[index] || '' %></textarea>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+          <div id="tab-reviews" class="tab-pane">
+            <div class="card mb-3 support-panel-card">
+              <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                  <h5 class="mb-0">Student Reviews</h5>
+                  <span id="ratingSummary" class="text-muted">No reviews yet.</span>
+                </div>
 
-      <div class="ai-context px-3 pt-2" id="aiLessonContext">Lesson context will appear here.</div>
-      <div id="chatMessages" class="ai-chat-messages"></div>
+                <form id="reviewForm" class="mb-3">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-3">
+                      <label class="form-label" for="rating">Rating</label>
+                      <select id="rating" class="form-select">
+                        <option value="">Select rating</option>
+                        <option value="5">5 - Excellent</option>
+                        <option value="4">4 - Good</option>
+                        <option value="3">3 - Average</option>
+                        <option value="2">2 - Poor</option>
+                        <option value="1">1 - Terrible</option>
+                      </select>
+                    </div>
+                    <div class="col-12 col-md-7">
+                      <label class="form-label" for="comment">Comment</label>
+                      <textarea id="comment" class="form-control" rows="2" placeholder="Share your experience..."></textarea>
+                    </div>
+                    <div class="col-12 col-md-2">
+                      <button id="reviewSubmitBtn" type="button" class="btn btn-primary w-100">Submit</button>
+                    </div>
+                  </div>
+                </form>
 
-      <div class="ai-chat-input">
-        <input id="chatInput" class="form-control" placeholder="Hỏi về bài học..." maxlength="800" />
-        <button id="chatSendBtn" class="btn btn-primary">➤</button>
+                <div id="review-list"></div>
+              </div>
+            </div>
+          </div>
+          <div id="tab-discussions" class="tab-pane">
+            <div class="card mb-3 support-panel-card">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                  <h5 class="mb-0">Q&A Discussions</h5>
+                  <div class="d-flex gap-2">
+                    <a class="btn btn-sm btn-outline-primary" href="/courses/<%= course._id %>/discussions">View All</a>
+                    <a class="btn btn-sm btn-primary" href="/courses/<%= course._id %>/discussions/new">Ask Question</a>
+                  </div>
+                </div>
+
+                <% if (!discussionHighlights || !discussionHighlights.length) { %>
+                  <p class="text-muted mb-0">No questions yet. Start the first discussion for this course.</p>
+                <% } %>
+
+                <% (discussionHighlights || []).forEach((q) => { %>
+                  <div class="border rounded p-2 mb-2">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                      <a href="/courses/<%= course._id %>/discussions/<%= q._id %>"><strong><%= q.title %></strong></a>
+                      <span class="badge bg-light text-dark"><%= q.score %> votes</span>
+                    </div>
+                    <div class="small text-muted mt-1">
+                      <span><%= q.answersCount %> answers</span>
+                      <span class="ms-2">by <%= q.author && q.author.username ? q.author.username : 'User' %></span>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div id="chatTyping" class="ai-typing" style="display:none;">AI đang trả lời...</div>
-      <div class="ai-context" id="aiStatus">Sẵn sàng</div>
-    </div>
+    </section>
   </main>
 
   <aside class="learning-sidebar">
     <div class="learning-sidebar-inner">
-    <% const totalVideos = (course.sections || []).reduce((acc, sec) => acc + ((sec.lessons || []).length), 0); %>
-    <% const completedCount = completedVideos.length; %>
-    <% const gm = gamification || { currentLevel: 1, totalXP: 0, currentStreak: 0, levelProgress: { progressPercent: 0, nextLevel: 2, xpToNextLevel: 500 } }; %>
-    <div class="mb-3">
-      <h6 class="text-success">Tiến độ học: <%= completedCount %> / <%= totalVideos %> bài học (<%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>%)</h6>
-      <div class="progress">
-        <div class="progress-bar bg-success" role="progressbar" style="width: <%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>%"
-          aria-valuenow="<%= completedCount %>" aria-valuemin="0" aria-valuemax="<%= totalVideos %>"></div>
-      </div>
-    </div>
+      <% const totalVideos = (course.sections || []).reduce((acc, sec) => acc + ((sec.lessons || []).length), 0); %>
+      <% const completedCount = completedVideos.length; %>
+      <% const gm = gamification || { currentLevel: 1, totalXP: 0, currentStreak: 0, levelProgress: { progressPercent: 0, nextLevel: 2, xpToNextLevel: 500 } }; %>
+      <section class="learner-sidebar-card learner-progress-card">
+        <div class="learner-sidebar-card-head">
+          <div>
+            <h5>Learning Progress</h5>
+            <p><%= completedCount %> / <%= totalVideos %> lessons completed</p>
+          </div>
+          <span class="app-badge app-badge-topic"><%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>%</span>
+        </div>
+        <div class="progress learner-progress-track">
+          <div class="progress-bar bg-success" role="progressbar" data-progress-width="<%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>"
+            aria-valuenow="<%= completedCount %>" aria-valuemin="0" aria-valuemax="<%= totalVideos %>"></div>
+        </div>
+      </section>
 
-    <div class="card mb-3" id="learningGamificationCard">
-      <div class="card-body py-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0">Level <span id="gmLevelValue"><%= gm.currentLevel %></span></h6>
-          <span class="badge bg-primary" id="gmXpValue"><%= gm.totalXP %> XP</span>
-        </div>
-        <div class="progress mb-2" style="height: 8px;">
-          <div id="gmLevelProgress" class="progress-bar bg-info" role="progressbar" style="width: <%= gm.levelProgress.progressPercent || 0 %>%"></div>
-        </div>
-        <div class="small text-muted mb-2" id="gmNextLevelText">
-          <% if (gm.levelProgress.nextLevel) { %>
-            <%= gm.levelProgress.xpToNextLevel %> XP to Level <%= gm.levelProgress.nextLevel %>
-          <% } else { %>
-            Max level reached
-          <% } %>
-        </div>
-        <div class="d-flex justify-content-between align-items-center">
-          <span class="small"><i class="fa-solid fa-fire text-danger me-1"></i>Streak: <strong id="gmStreakValue"><%= gm.currentStreak %></strong></span>
-          <div class="d-flex gap-2">
+      <section class="card learner-sidebar-card" id="learningGamificationCard">
+        <div class="card-body py-3">
+          <div class="learner-sidebar-card-head">
+            <div>
+              <h5>Gamification</h5>
+              <p id="gmNextLevelText">
+                <% if (gm.levelProgress.nextLevel) { %>
+                  <%= gm.levelProgress.xpToNextLevel %> XP to Level <%= gm.levelProgress.nextLevel %>
+                <% } else { %>
+                  Max level reached
+                <% } %>
+              </p>
+            </div>
+            <span class="app-badge app-badge-xp" id="gmXpValue"><%= gm.totalXP %> XP</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Level <span id="gmLevelValue"><%= gm.currentLevel %></span></h6>
+            <span class="small"><i class="fa-solid fa-fire text-danger me-1"></i>Streak: <strong id="gmStreakValue"><%= gm.currentStreak %></strong></span>
+          </div>
+          <div class="progress progress-thin mb-2">
+            <div id="gmLevelProgress" class="progress-bar bg-info" role="progressbar" data-progress-width="<%= gm.levelProgress.progressPercent || 0 %>"></div>
+          </div>
+          <div class="learner-sidebar-links">
             <a href="/profile" class="btn btn-sm btn-outline-primary">Profile</a>
             <a href="/leaderboard" class="btn btn-sm btn-outline-secondary">Leaderboard</a>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <% if (course.sections && course.sections.length > 0) { %>
-      <div class="learning-sections-wrap">
-        <h5 class="mb-3">Course Content</h5>
-        <div id="sectionsAccordion" class="sections-accordion">
-          <p class="text-muted">Loading sections...</p>
+      <% if (course.sections && course.sections.length > 0) { %>
+        <section class="learner-sidebar-card learning-sections-wrap">
+          <div class="learner-sidebar-card-head">
+            <div>
+              <h5>Course Content</h5>
+              <p>Jump between lessons and keep your place.</p>
+            </div>
+          </div>
+          <div id="sectionsAccordion" class="sections-accordion">
+            <div class="app-loading-state" aria-hidden="true">
+              <div class="app-loading-line is-short"></div>
+              <div class="app-loading-line"></div>
+              <div class="app-loading-line"></div>
+            </div>
+          </div>
+        </section>
+      <% } %>
+
+      <section class="learner-sidebar-card learner-ai-card">
+        <div class="learner-sidebar-card-head">
+          <div>
+            <h5>AI Tutor</h5>
+            <p>Lesson-aware help without leaving the course.</p>
+          </div>
+          <span class="app-badge app-badge-topic">Lesson aware</span>
         </div>
-      </div>
-    <% } %>
+        <div id="aiChatPopup" class="lesson-ai-dock" data-course-id="<%= course._id %>">
+          <div class="lesson-ai-panel">
+            <div class="ai-chat-header lesson-ai-header">
+              <div class="lesson-ai-header-copy">
+                <h6 class="mb-0">AI Tutor</h6>
+              </div>
+              <div class="ai-chat-header-actions lesson-ai-header-actions">
+                <select id="courseAiModel" class="ai-chat-model-select" aria-label="Choose AI model">
+                  <option value="llama3.2">llama3.2</option>
+                  <option value="grok">Grok</option>
+                  <option value="gpt-5.4">GPT-5.4</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="ai-quick-actions lesson-ai-actions">
+              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="summarize">Summarize</button>
+              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="explain">Explain</button>
+              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="practice">Practice</button>
+              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="flashcards">Flashcards</button>
+            </div>
+
+            <div class="lesson-ai-context">
+              <div class="lesson-ai-context-row">
+                <div id="aiLessonContextSummary" class="lesson-ai-context-summary">Lesson context will appear here.</div>
+                <button id="aiContextToggle" class="lesson-ai-context-toggle" type="button" aria-expanded="false">Show context</button>
+              </div>
+              <div id="aiLessonContextDetails" class="lesson-ai-context-details hidden"></div>
+            </div>
+
+            <div id="chatMessages" class="ai-chat-messages lesson-ai-messages" aria-live="polite">
+              <div id="aiStatus" class="lesson-ai-status">Ready</div>
+              <div id="chatTranscript" class="lesson-ai-transcript"></div>
+              <div id="chatTyping" class="ai-typing lesson-ai-typing hidden">AI is answering...</div>
+            </div>
+
+            <form id="aiChatComposer" class="ai-chat-input lesson-ai-composer">
+              <textarea id="chatInput" class="form-control lesson-ai-input" rows="1" placeholder="Ask about this lesson..." maxlength="800"></textarea>
+              <button id="chatSendBtn" class="btn btn-primary lesson-ai-send-btn" type="submit">Send</button>
+            </form>
+          </div>
+        </div>
+      </section>
     </div>
   </aside>
   </div>

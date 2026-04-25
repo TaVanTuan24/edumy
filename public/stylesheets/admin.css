@@ -10,7 +10,7 @@
   --admin-shadow-sm: var(--app-shadow-sm);
   --admin-shadow-md: var(--app-shadow-md);
   --admin-shadow-hover: var(--app-shadow-lg);
-  --admin-radius: 12px;
+  --admin-radius: var(--app-radius-lg);
 }
 
 body {
@@ -28,6 +28,18 @@ html[data-theme="dark"] {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+}
+
+.admin-page-title {
+  font-weight: 700;
+  color: var(--admin-text-main);
+}
+
+.admin-section-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--admin-text-main);
 }
 
 .admin-stats-row {
@@ -275,12 +287,53 @@ html[data-theme="dark"] {
   gap: 0.35rem;
 }
 
+.admin-rating-summary {
+  font-size: 0.8rem;
+}
+
 .course-card .card-footer {
   background: transparent;
   border-top: none;
   padding: 0 1.25rem 1.25rem;
   display: flex;
   gap: 0.5rem;
+}
+
+.course-card-footer {
+  align-items: stretch;
+}
+
+.course-card-primary-btn {
+  min-height: 44px;
+}
+
+.course-card-menu-btn {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.course-card-menu {
+  min-width: 220px;
+  padding: 0.4rem;
+}
+
+.course-card-menu form {
+  margin: 0;
+}
+
+.course-card-menu .dropdown-item {
+  border-radius: 10px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+
+.course-card-menu .dropdown-item i {
+  width: 16px;
+  text-align: center;
 }
 
 .course-card .btn-icon {
@@ -307,6 +360,22 @@ html[data-theme="dark"] {
 .course-card .btn-danger {
   background-color: var(--admin-danger);
   border-color: var(--admin-danger);
+}
+
+.admin-empty-state {
+  background: var(--admin-card-bg);
+  border: 1px dashed var(--admin-border);
+  border-radius: 12px;
+}
+
+.admin-empty-state-icon {
+  margin-bottom: 1rem;
+  font-size: 3rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-empty-state-title {
+  color: var(--admin-text-main);
 }
 
 @media (max-width: 900px) {

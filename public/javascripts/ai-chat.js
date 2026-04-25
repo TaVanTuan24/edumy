@@ -344,13 +344,31 @@
   }
 
   async function deleteChat(id) {
-    if (!window.confirm('Delete this conversation?')) return;
-
+    const chat = state.chats.find(function(entry) {
+      return String(entry && entry._id) === String(id);
+    });
+    const chatTitle = chat && chat.title ? chat.title : 'this conversation';
     try {
-      const res = await fetch('/ai/' + encodeURIComponent(id), { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete chat');
+      const confirmed = await window.showConfirmModal({
+        title: 'Delete Conversation',
+        message: `Delete "${chatTitle}"?`,
+        warning: 'This action cannot be undone.',
+        confirmText: 'Delete Conversation',
+        confirmingText: 'Deleting...',
+        variant: 'danger',
+        onConfirm: async function() {
+          const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+          const res = await fetcher('/ai/' + encodeURIComponent(id), { method: 'DELETE' });
+          if (!res.ok) throw new Error('Failed to delete chat');
+        }
+      });
+      if (!confirmed) return;
+
       if (state.currentChat === String(id)) newChat();
       await loadChats();
+      if (typeof window.showAppToast === 'function') {
+        window.showAppToast('Conversation deleted.', 'success');
+      }
     } catch (error) {
       showError(error.message || 'Failed to delete chat.');
     }
@@ -791,14 +809,27 @@
 
   async function clearProviderKey(provider) {
     if (!provider) return;
-    setSettingsMessage('Removing key...');
     try {
-      const res = await fetch('/ai/settings/' + encodeURIComponent(provider), { method: 'DELETE' });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || 'Could not remove key');
-      updateSettingsStatus(data.status || {});
-      if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
-      setSettingsMessage('Key removed. Available models have been updated.');
+      const providerLabel = String(provider || '').toUpperCase();
+      const confirmed = await window.showConfirmModal({
+        title: 'Remove API Key',
+        message: `Remove the saved ${providerLabel} API key?`,
+        warning: 'You will need to enter the key again before using this provider.',
+        confirmText: 'Remove Key',
+        confirmingText: 'Removing...',
+        variant: 'warning',
+        onConfirm: async function() {
+          setSettingsMessage('Removing key...');
+          const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+          const res = await fetcher('/ai/settings/' + encodeURIComponent(provider), { method: 'DELETE' });
+          const data = await safeJson(res);
+          if (!res.ok) throw new Error(data.error || 'Could not remove key');
+          updateSettingsStatus(data.status || {});
+          if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
+          setSettingsMessage('Key removed. Available models have been updated.');
+        }
+      });
+      if (!confirmed) return;
     } catch (error) {
       setSettingsMessage(error.message || 'Could not remove key.', true);
     }

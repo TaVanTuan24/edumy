@@ -22,6 +22,10 @@ body {
     color: var(--text-main);
 }
 
+body.library-open {
+    overflow: hidden;
+}
+
 .top-bar {
     background: color-mix(in srgb, var(--surface-card) 95%, transparent);
     backdrop-filter: blur(8px);
@@ -668,15 +672,22 @@ body {
     position: fixed;
     right: 22px;
     bottom: 22px;
-    width: 52px;
+    width: auto;
+    min-width: 52px;
     height: 52px;
-    border-radius: 50%;
+    padding: 0 16px;
+    border-radius: 999px;
     border: none;
     background: var(--udemy-purple);
     color: #fff;
-    font-size: 20px;
+    font-size: 16px;
+    font-weight: 700;
     box-shadow: 0 8px 18px rgba(164, 53, 240, 0.35);
     z-index: 999;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
 .library-add-btn:hover {
@@ -684,25 +695,48 @@ body {
     background: var(--udemy-purple-hover);
 }
 
+.library-add-btn span {
+    white-space: nowrap;
+}
+
+.library-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(3px);
+    z-index: 998;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.library-drawer-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .library-popup {
     position: fixed;
-    right: 20px;
-    bottom: 84px;
-    width: 340px;
-    max-height: 460px;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(420px, calc(100vw - 24px));
+    max-height: 100vh;
     background: #fff;
     border: 1px solid var(--border);
-    border-radius: 14px;
-    box-shadow: 0 18px 40px rgba(18, 29, 43, 0.16);
+    border-radius: 20px 0 0 20px;
+    box-shadow: 0 24px 60px rgba(18, 29, 43, 0.22);
     z-index: 1000;
-    display: none;
+    display: flex;
     flex-direction: column;
     overflow: hidden;
+    transform: translateX(100%);
     pointer-events: none;
+    transition: transform 0.22s ease;
 }
 
 .library-popup.show {
-    display: flex;
+    transform: translateX(0);
     pointer-events: auto;
 }
 
@@ -724,7 +758,13 @@ body {
     border: none;
     background: transparent;
     color: #69727d;
-    font-size: 20px;
+    font-size: 18px;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .library-tabs {
@@ -757,6 +797,7 @@ html[data-theme="dark"] .library-tabs button {
 .library-content {
     padding: 10px;
     overflow-y: auto;
+    flex: 1;
 }
 
 .library-item {
@@ -769,6 +810,28 @@ html[data-theme="dark"] .library-tabs button {
     margin-bottom: 8px;
     background: #fbfcfe;
     cursor: grab;
+}
+
+.lib-icon.video {
+    color: #dc3545;
+}
+
+.lib-icon.slide {
+    color: #0d6efd;
+}
+
+.lib-icon.quiz {
+    color: #198754;
+}
+
+.lib-title {
+    min-width: 0;
+    flex: 1;
+    font-weight: 600;
+    color: var(--text-main);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .library-item .delete-btn {
     margin-left: auto;
@@ -934,9 +997,21 @@ body.hit-test-mode .hit-test-active {
     }
 
     .library-popup {
-        right: 12px;
-        left: 12px;
-        width: auto;
+        width: min(100vw, 100%);
+        border-radius: 18px 18px 0 0;
+        top: auto;
+        left: 0;
+        right: 0;
+        max-height: min(72vh, 620px);
+        transform: translateY(100%);
+    }
+
+    .library-popup.show {
+        transform: translateY(0);
+    }
+
+    .library-add-btn span {
+        display: none;
     }
 }
 

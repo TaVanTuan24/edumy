@@ -1,33 +1,33 @@
-<% layout('/layouts/boilerplate')%>
+<% hideFooter = true; layout('/layouts/boilerplate')%>
 
-    <div class="auth-page container d-flex justify-content-center align-items-center py-4">
-        <div class="auth-shell">
-                <div class="card shadow auth-card">
-                    <img src="https://images.unsplash.com/photo-1538388149542-5e24932d11a8?q=80&w=1074&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                        alt="" class="card-img-top" />
-                    <div class="card-body">
-                        <h5 class="card-title">Login</h5>
-                        <form action="/login" method="POST" class="validated-form" novalidate>
-                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                            <div class="mb-3">
-                                <label class="form-label" for="username">Username</label>
-                                <input class="form-control" type="text" id="username" name="username" autofocus
-                                    required>
-                                <div class="valid-feedback">
-                                    Looks good!
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label" for="password">Password</label>
-                                <input class="form-control" type="password" id="password" name="password" required>
-                                <div class="valid-feedback">
-                                    Looks good!
-                                </div>
-                            </div>
-                            <button class="btn btn-success auth-submit">Login</button>
-                        </form>
-                    </div>
+<section class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-card app-card-elevated">
+            <div class="auth-media">
+                <img src="https://images.unsplash.com/photo-1538388149542-5e24932d11a8?q=80&w=1074&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                    alt="Learners using immersive technology" class="card-img-top" />
+            </div>
+            <div class="auth-body">
+                <div class="auth-copy">
+                    <span class="auth-kicker">Welcome back</span>
+                    <h1 class="auth-title">Sign in to Edumy</h1>
+                    <p class="auth-subtitle">Continue your learning progress, AI study sessions, and saved course context.</p>
                 </div>
+                <form action="/login" method="POST" class="validated-form auth-form" novalidate>
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <div class="auth-form-group">
+                        <label class="form-label" for="username">Username</label>
+                        <input class="form-control" type="text" id="username" name="username" autofocus required>
+                    </div>
+
+                    <div class="auth-form-group">
+                        <label class="form-label" for="password">Password</label>
+                        <input class="form-control" type="password" id="password" name="password" required>
+                    </div>
+                    <button class="btn btn-primary auth-submit" type="submit">Login</button>
+                </form>
+                <p class="auth-switch">Need an account? <a href="/register">Create one</a></p>
+            </div>
         </div>
     </div>
+</section>

@@ -1,40 +1,36 @@
-<% layout('/layouts/boilerplate')%>
+<% hideFooter = true; layout('/layouts/boilerplate')%>
 
-    <div class="auth-page container d-flex justify-content-center align-items-center py-4">
-        <div class="auth-shell">
-                <div class="card shadow auth-card">
-                    <img src="https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                        alt="" class="card-img-top" />
-                    <div class="card-body">
-                        <h5 class="card-title">Register</h5>
-                        <form action="/register" method="POST" class="validated-form" novalidate>
-                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                            <div class="mb-3">
-                                <label class="form-label" for="username">Username</label>
-                                <input class="form-control" type="text" id="username" name="username" required
-                                    autofocus>
-                                <div class="valid-feedback">
-                                    Valid!
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label" for="email">Email</label>
-                                <input class="form-control" type="email" id="email" name="email" required>
-                                <div class="valid-feedback">
-                                    Valid!
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label" for="password">Password</label>
-                                <input class="form-control" type="password" id="password" name="password" required>
-                                <div class="valid-feedback">
-                                    Valid!
-                                </div>
-                            </div>
-                            <button class="btn btn-success auth-submit">Register</button>
-                        </form>
-
-                    </div>
+<section class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-card app-card-elevated">
+            <div class="auth-media">
+                <img src="https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                    alt="New learner onboarding" class="card-img-top" />
+            </div>
+            <div class="auth-body">
+                <div class="auth-copy">
+                    <span class="auth-kicker">Create account</span>
+                    <h1 class="auth-title">Join Edumy</h1>
+                    <p class="auth-subtitle">Start structured courses, AI-guided study sessions, and interactive learning progress tracking.</p>
                 </div>
+                <form action="/register" method="POST" class="validated-form auth-form" novalidate>
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <div class="auth-form-group">
+                        <label class="form-label" for="username">Username</label>
+                        <input class="form-control" type="text" id="username" name="username" required autofocus>
+                    </div>
+                    <div class="auth-form-group">
+                        <label class="form-label" for="email">Email</label>
+                        <input class="form-control" type="email" id="email" name="email" required>
+                    </div>
+                    <div class="auth-form-group">
+                        <label class="form-label" for="password">Password</label>
+                        <input class="form-control" type="password" id="password" name="password" required>
+                    </div>
+                    <button class="btn btn-primary auth-submit" type="submit">Register</button>
+                </form>
+                <p class="auth-switch">Already have an account? <a href="/login">Sign in</a></p>
+            </div>
         </div>
     </div>
+</section>

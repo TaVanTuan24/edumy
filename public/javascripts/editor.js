@@ -32,7 +32,8 @@
         console.log('[CourseEditor] initEditor start');
 
         // Get course ID from data attribute
-        const courseElement = document.body.dataset.courseId;
+        const pageRoot = document.querySelector('.course-editor-page[data-course-id]');
+        const courseElement = document.body.dataset.courseId || (pageRoot && pageRoot.dataset ? pageRoot.dataset.courseId : '');
         if (courseElement) {
             courseId = courseElement;
         }
@@ -158,6 +159,7 @@
             preview: String((lesson && lesson.preview) || (lesson && lesson.videoUrl) || (content && content.videoUrl) || ''),
             refId: String((lesson && lesson.refId) || ''),
             content: content,
+            pdf: lesson && lesson.pdf ? lesson.pdf : null,
             quiz: quiz,
             interactiveQuizzes: Array.isArray(lesson && lesson.interactiveQuizzes)
                 ? lesson.interactiveQuizzes
@@ -171,6 +173,40 @@
     function normalizeLessonType(rawType) {
         const value = String(rawType || 'video').toLowerCase();
         return value === 'lecture' ? 'video' : value;
+    }
+
+    function hasSlideLessonSlides(lesson) {
+        const content = lesson && lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+        const slides = Array.isArray(content.slides)
+            ? content.slides
+            : Array.isArray(lesson && lesson.slides)
+                ? lesson.slides
+                : [];
+        return slides.length > 0;
+    }
+
+    function hasSlideLessonPdf(lesson) {
+        const content = lesson && lesson.content && typeof lesson.content === 'object' ? lesson.content : {};
+        const pdf = content.pdf || (lesson && lesson.pdf);
+        if (typeof pdf === 'string') return Boolean(pdf.trim());
+        return Boolean(pdf && typeof pdf === 'object' && String(pdf.url || '').trim());
+    }
+
+    function getSlideLessonContentMode(lesson) {
+        const hasSlides = hasSlideLessonSlides(lesson);
+        const hasPdf = hasSlideLessonPdf(lesson);
+        if (hasSlides && hasPdf) return 'hybrid';
+        if (hasPdf) return 'pdf';
+        if (hasSlides) return 'slides';
+        return 'empty';
+    }
+
+    function getSlideLessonBadgeLabel(lesson) {
+        const mode = getSlideLessonContentMode(lesson);
+        if (mode === 'hybrid') return 'Slides + PDF';
+        if (mode === 'pdf') return 'PDF';
+        if (mode === 'slides') return 'Slides';
+        return 'Empty';
     }
 
     // ==================== SORTABLE ====================
@@ -454,7 +490,7 @@
         }
 
         // Handle library toggle button
-        if (e.target.closest('.library-add-btn') || e.target.closest('.library-popup-header .close-btn')) {
+        if (e.target.closest('.library-add-btn') || e.target.closest('.library-popup-header .close-btn') || e.target.closest('.library-drawer-backdrop')) {
             toggleLibrary();
             return;
         }
@@ -677,20 +713,33 @@
     }
 
     async function deleteSection(sectionId) {
-        if (!confirm('Delete this section?')) return;
-        try {
-            const res = await fetch(`/api/admin/section/${courseId}/${sectionId}`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete section');
+        const section = getSectionState(sectionId);
+        const sectionTitle = getSectionDisplayTitle(section);
+        const lessonCount = Array.isArray(section && section.lessons) ? section.lessons.length : 0;
+        const confirmed = await window.showConfirmModal({
+            title: 'Delete Section',
+            message: `Delete section "${sectionTitle}"? This will remove ${lessonCount} lesson${lessonCount === 1 ? '' : 's'}.`,
+            warning: 'This action cannot be undone.',
+            confirmText: 'Delete Section',
+            confirmingText: 'Deleting...',
+            variant: 'danger',
+            onConfirm: async function() {
+                const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+                const res = await fetcher(`/api/admin/section/${courseId}/${sectionId}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete section');
+            }
+        });
+        if (!confirmed) return;
+        showToast('Section deleted.', 'success');
+        window.setTimeout(function() {
             location.reload();
-        } catch {
-            showToast('Failed to delete section', 'danger');
-        }
+        }, 220);
     }
 
-    async function saveCourseOrder(sections) {
+    async function _saveCourseOrder(sections) {
         try {
             const res = await fetch('/api/admin/section/reorder', {
                 method: 'POST',
@@ -1055,6 +1104,21 @@
         return null;
     }
 
+    function getSectionDisplayTitle(section) {
+        return formatLessonTitle(section && section.title ? section.title : 'Untitled Section') || 'Untitled Section';
+    }
+
+    function getLessonTypeLabel(type) {
+        const normalized = String(type || 'video').toLowerCase();
+        if (normalized === 'quiz') return 'Quiz';
+        if (normalized === 'slide') return 'Slide';
+        return 'Lesson';
+    }
+
+    function getLessonDisplayTitle(lesson) {
+        return formatLessonTitle(lesson && lesson.title ? lesson.title : 'Untitled Lesson') || 'Untitled Lesson';
+    }
+
     function renderSectionItems(sectionIndex, section, sectionCard) {
         const list = sectionCard.querySelector('.lesson-list');
         if (!list) return;
@@ -1069,6 +1133,8 @@
         const type = rawType === 'lecture' ? 'video' : rawType;
         const icon = type === 'video' ? 'fa-play' : type === 'slide' ? 'fa-file-alt' : type === 'quiz' ? 'fa-question' : 'fa-play';
         const itemLabel = type === 'video' ? 'Lecture' : type === 'quiz' ? 'Quiz' : type === 'slide' ? 'Slide' : 'Lecture';
+        const displayTitle = formatLessonTitle(video.title || 'Untitled');
+        const slideBadge = type === 'slide' ? getSlideLessonBadgeLabel(video) : '';
 
         return `
             <div class="lesson-item"
@@ -1086,8 +1152,8 @@
                     <i class="fas ${icon}"></i>
                 </div>
                 <div class="item-info">
-                    <div class="item-title">${escapeHtml(video.title || 'Untitled')}</div>
-                    <div class="item-meta">${itemLabel}</div>
+                    <div class="item-title">${escapeHtml(displayTitle || 'Untitled')}</div>
+                    <div class="item-meta">${itemLabel}${slideBadge ? ' - ' + escapeHtml(slideBadge) : ''}</div>
                 </div>
                 <div class="item-actions">
                     <button class="edit-btn editor-inline-action" type="button" data-id="${escapeAttribute(video._id || '')}" data-type="${type}" data-section-index="${sectionIndex}" data-lesson-index="${lessonIndex}" title="Edit ${itemLabel}">
@@ -1120,6 +1186,13 @@
             .replace(/>/g, '&gt;');
     }
 
+    function formatLessonTitle(value) {
+        if (typeof window.stripLessonFileExtension === 'function') {
+            return window.stripLessonFileExtension(value);
+        }
+        return String(value || '').trim();
+    }
+
     function editItem(type, id, sectionIndex, lessonIndex) {
         if (sectionIndex === undefined || lessonIndex === undefined) {
             showToast('Item not found. Please reload.', 'warning');
@@ -1136,24 +1209,39 @@
     }
 
     async function deleteItem(sectionId, itemId) {
-        if (!confirm('Delete this item?')) return;
-        try {
-            const res = await fetch(`/api/admin/lesson/${courseId}/${sectionId}/${itemId}`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
-            courseData = courseData.map(function(section) {
-                if (String(section._id) !== String(sectionId)) return section;
-                return {
-                    ...section,
-                    lessons: (section.lessons || []).filter(function(lesson) { return String(lesson._id) !== String(itemId); })
-                };
-            });
-            renderSections();
-        } catch {
-            showToast('Delete failed', 'danger');
-        }
+        const section = getSectionState(sectionId);
+        const lesson = Array.isArray(section && section.lessons)
+            ? section.lessons.find(function(entry) { return String(entry && entry._id) === String(itemId); })
+            : null;
+        const itemLabel = getLessonTypeLabel(lesson && lesson.type);
+        const itemTitle = getLessonDisplayTitle(lesson);
+        const confirmed = await window.showConfirmModal({
+            title: 'Delete ' + itemLabel,
+            message: `Delete ${itemLabel.toLowerCase()} "${itemTitle}"?`,
+            warning: 'This action cannot be undone.',
+            confirmText: 'Delete ' + itemLabel,
+            confirmingText: 'Deleting...',
+            variant: 'danger',
+            onConfirm: async function() {
+                const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+                const res = await fetcher(`/api/admin/lesson/${courseId}/${sectionId}/${itemId}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
+            }
+        });
+        if (!confirmed) return;
+
+        courseData = courseData.map(function(sectionEntry) {
+            if (String(sectionEntry._id) !== String(sectionId)) return sectionEntry;
+            return {
+                ...sectionEntry,
+                lessons: (sectionEntry.lessons || []).filter(function(entry) { return String(entry._id) !== String(itemId); })
+            };
+        });
+        renderSections();
+        showToast(itemLabel + ' deleted.', 'success');
     }
 
     // ==================== LESSON EDITOR PANEL ====================
@@ -1174,6 +1262,7 @@
             setupSaveLessonHandler();
         } else if (type === 'slide') {
             editorContent.innerHTML = buildSlideEditorHTML(sectionIndex, lessonIndex, itemId, itemName);
+            fetchSlideData(sectionIndex, lessonIndex);
             setupSaveLessonHandler();
         } else if (type === 'quiz') {
             editorContent.innerHTML = buildQuizEditorHTML(sectionIndex, lessonIndex, itemId, itemName);
@@ -1232,6 +1321,32 @@
                         <label class="form-label">Slide Name</label>
                         <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
                     </div>
+                    <div class="mb-3">
+                        <div class="small text-muted mb-2">Upload a PDF to use it as a lesson document. Learners will view it directly in the course player.</div>
+                        <div class="border rounded-3 p-3" id="slide-pdf-meta-card">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div class="min-w-0">
+                                    <div class="fw-semibold">Lesson document</div>
+                                    <div class="small text-truncate" id="slide-pdf-name">No PDF uploaded</div>
+                                </div>
+                                <span class="badge text-bg-secondary" id="slide-pdf-badge">No PDF</span>
+                            </div>
+                            <div class="small text-muted mt-2" id="slide-pdf-details">Upload a PDF to attach a learner-facing document.</div>
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <button class="btn btn-outline-danger import-pdf-btn" type="button" data-section-index="${sectionIndex}" data-lesson-index="${lessonIndex}">
+                                    <i class="fa-regular fa-file-pdf"></i> Import PDF
+                                </button>
+                                <a class="btn btn-outline-secondary d-none" id="slide-view-pdf-btn" href="#" target="_blank" rel="noopener">
+                                    <i class="fa-regular fa-eye"></i> View PDF
+                                </a>
+                                <button class="btn btn-outline-secondary d-none" id="slide-remove-pdf-btn" type="button" data-section-index="${sectionIndex}" data-lesson-index="${lessonIndex}">
+                                    <i class="fa-regular fa-trash-can"></i> Remove PDF
+                                </button>
+                            </div>
+                            <div class="small mt-2" id="slide-pdf-status" aria-live="polite"></div>
+                        </div>
+                        <input type="file" id="slide-pdf-upload-input" class="d-none" accept="application/pdf,.pdf">
+                    </div>
                     <div class="editor-card-actions">
                         <button class="btn btn-primary save-lesson-btn" type="button">
                             <i class="fas fa-save"></i> Save Changes
@@ -1280,6 +1395,20 @@
         const saveBtn = document.querySelector('.save-lesson-btn');
         if (saveBtn) {
             saveBtn.addEventListener('click', saveLesson);
+        }
+
+        const importPdfBtn = document.querySelector('.import-pdf-btn');
+        const pdfInput = document.getElementById('slide-pdf-upload-input');
+        const removePdfBtn = document.getElementById('slide-remove-pdf-btn');
+        if (importPdfBtn && pdfInput) {
+            importPdfBtn.addEventListener('click', function() {
+                pdfInput.value = '';
+                pdfInput.click();
+            });
+            pdfInput.addEventListener('change', handleSlidePdfSelection);
+        }
+        if (removePdfBtn) {
+            removePdfBtn.addEventListener('click', removeSlidePdf);
         }
 
         const addQuizBtn = document.getElementById('interactiveQuizAddBtn');
@@ -1563,6 +1692,184 @@
         }
     }
 
+    function normalizePdfMeta(pdf) {
+        if (!pdf || typeof pdf !== 'object') return null;
+        const url = String(pdf.url || '').trim();
+        if (!url) return null;
+        return {
+            url: url,
+            filename: String(pdf.filename || '').trim(),
+            originalName: String(pdf.originalName || '').trim(),
+            size: Number(pdf.size) || 0,
+            mimeType: String(pdf.mimeType || '').trim() || 'application/pdf',
+            uploadedAt: pdf.uploadedAt || null
+        };
+    }
+
+    function formatPdfSize(bytes) {
+        const size = Number(bytes) || 0;
+        if (!size) return '';
+        if (size < 1024 * 1024) return Math.round(size / 1024) + ' KB';
+        return (size / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function getCurrentEditorLesson() {
+        const sectionIndex = parseInt(document.getElementById('lesson-section-index')?.value, 10);
+        const lessonIndex = parseInt(document.getElementById('lesson-index')?.value, 10);
+        if (Number.isNaN(sectionIndex) || Number.isNaN(lessonIndex)) return null;
+        return courseData[sectionIndex] && courseData[sectionIndex].lessons
+            ? courseData[sectionIndex].lessons[lessonIndex]
+            : null;
+    }
+
+    function setSlidePdfStatus(message, tone) {
+        const statusEl = document.getElementById('slide-pdf-status');
+        if (!statusEl) return;
+        statusEl.textContent = String(message || '');
+        statusEl.className = 'small mt-2';
+        if (tone === 'error') statusEl.classList.add('text-danger');
+        if (tone === 'success') statusEl.classList.add('text-success');
+        if (tone === 'loading') statusEl.classList.add('text-muted');
+    }
+
+    function renderSlidePdfMeta(pdf) {
+        const normalized = normalizePdfMeta(pdf);
+        const lesson = getCurrentEditorLesson();
+        const mode = lesson && normalizeLessonType(lesson.type) === 'slide' ? getSlideLessonContentMode(lesson) : (normalized ? 'pdf' : 'empty');
+        const nameEl = document.getElementById('slide-pdf-name');
+        const badgeEl = document.getElementById('slide-pdf-badge');
+        const detailsEl = document.getElementById('slide-pdf-details');
+        const viewBtn = document.getElementById('slide-view-pdf-btn');
+        const removeBtn = document.getElementById('slide-remove-pdf-btn');
+        const importBtn = document.querySelector('.import-pdf-btn');
+
+        if (nameEl) nameEl.textContent = normalized ? (normalized.originalName || 'PDF document') : 'No PDF uploaded';
+        if (badgeEl) {
+            badgeEl.textContent = mode === 'hybrid' ? 'Slides + PDF' : normalized ? 'PDF' : 'No PDF';
+            badgeEl.className = normalized ? 'badge text-bg-danger' : 'badge text-bg-secondary';
+        }
+        if (detailsEl) {
+            const parts = [];
+            if (normalized && normalized.mimeType) parts.push(normalized.mimeType);
+            if (normalized && normalized.size) parts.push(formatPdfSize(normalized.size));
+            detailsEl.textContent = normalized
+                ? ((mode === 'hybrid' ? 'Learners can view both Slides and PDF. ' : '') + (parts.join(' - ') || 'PDF attached to this lesson.'))
+                : 'Upload a PDF to attach a learner-facing document.';
+        }
+        if (viewBtn) {
+            viewBtn.classList.toggle('d-none', !normalized);
+            viewBtn.href = normalized ? normalized.url : '#';
+        }
+        if (removeBtn) removeBtn.classList.toggle('d-none', !normalized);
+        if (importBtn) {
+            importBtn.innerHTML = normalized
+                ? '<i class="fa-regular fa-file-pdf"></i> Replace PDF'
+                : '<i class="fa-regular fa-file-pdf"></i> Import PDF';
+        }
+    }
+
+    async function fetchSlideData(sectionIndex, lessonIndex) {
+        try {
+            const res = await fetch(`/admin/course/${courseId}/lesson/${sectionIndex}/${lessonIndex}`);
+            const data = await res.json();
+            const pdf = normalizePdfMeta(data && data.lesson && data.lesson.content ? data.lesson.content.pdf : null);
+            const lesson = courseData[sectionIndex] && courseData[sectionIndex].lessons
+                ? courseData[sectionIndex].lessons[lessonIndex]
+                : null;
+            if (lesson) {
+                lesson.content = lesson.content || {};
+                if (pdf) lesson.content.pdf = pdf;
+                else delete lesson.content.pdf;
+            }
+            renderSlidePdfMeta(pdf);
+            setSlidePdfStatus('', '');
+        } catch {
+            renderSlidePdfMeta(null);
+        }
+    }
+
+    async function handleSlidePdfSelection(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        if (String(file.type || '').toLowerCase() !== 'application/pdf') {
+            setSlidePdfStatus('Only PDF files are allowed.', 'error');
+            return;
+        }
+
+        const sectionIndex = document.getElementById('lesson-section-index')?.value;
+        const lessonIndex = document.getElementById('lesson-index')?.value;
+        const importBtn = document.querySelector('.import-pdf-btn');
+        if (importBtn) importBtn.disabled = true;
+        setSlidePdfStatus('Uploading PDF...', 'loading');
+
+        const formData = new FormData();
+        formData.append('pdf', file);
+
+        try {
+            const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+            const response = await csrfFetch(`/admin/slides/${encodeURIComponent(courseId)}/${encodeURIComponent(sectionIndex)}/${encodeURIComponent(lessonIndex)}/import-pdf`, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success || !data.pdf) {
+                throw new Error(data && data.error ? data.error : 'Failed to import PDF.');
+            }
+
+            const lesson = getCurrentEditorLesson();
+            if (lesson) {
+                lesson.content = lesson.content || {};
+                lesson.content.pdf = normalizePdfMeta(data.pdf);
+            }
+            renderSlidePdfMeta(data.pdf);
+            setSlidePdfStatus('PDF imported successfully. Save Changes keeps the lesson title in sync.', 'success');
+        } catch (error) {
+            setSlidePdfStatus(error.message || 'Failed to import PDF.', 'error');
+        } finally {
+            if (importBtn) importBtn.disabled = false;
+        }
+    }
+
+    async function removeSlidePdf() {
+        const sectionIndex = document.getElementById('lesson-section-index')?.value;
+        const lessonIndex = document.getElementById('lesson-index')?.value;
+        const removeBtn = document.getElementById('slide-remove-pdf-btn');
+        const lesson = getCurrentEditorLesson();
+        if (lesson && !hasSlideLessonSlides(lesson)) {
+            setSlidePdfStatus('Add at least one slide before removing the PDF.', 'error');
+            return;
+        }
+        if (removeBtn) removeBtn.disabled = true;
+        setSlidePdfStatus('Removing PDF...', 'loading');
+
+        try {
+            const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+            const response = await csrfFetch(`/admin/slides/${encodeURIComponent(courseId)}/${encodeURIComponent(sectionIndex)}/${encodeURIComponent(lessonIndex)}/pdf`, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data && data.error ? data.error : 'Failed to remove PDF.');
+            }
+            const lesson = getCurrentEditorLesson();
+            if (lesson && lesson.content) delete lesson.content.pdf;
+            renderSlidePdfMeta(null);
+            setSlidePdfStatus('PDF removed.', 'success');
+        } catch (error) {
+            setSlidePdfStatus(error.message || 'Failed to remove PDF.', 'error');
+        } finally {
+            if (removeBtn) removeBtn.disabled = false;
+        }
+    }
+
     async function saveLesson() {
         const sectionIndex = document.getElementById('lesson-section-index')?.value;
         const lessonIndex = document.getElementById('lesson-index')?.value;
@@ -1570,9 +1877,11 @@
         const url = document.getElementById('lesson-url')?.value;
         
         try {
-            const res = await fetch(`/admin/course/${courseId}/lesson/edit`, {
+            const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+            const res = await csrfFetch(`/admin/course/${courseId}/lesson/edit`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify({
                     sectionIndex: parseInt(sectionIndex),
                     lessonIndex: parseInt(lessonIndex),
@@ -1798,7 +2107,16 @@
     // ==================== LIBRARY FUNCTIONS ====================
     function toggleLibrary() {
         const popup = document.getElementById('libraryPopup');
-        popup.classList.toggle('show');
+        const backdrop = document.getElementById('libraryDrawerBackdrop');
+        const nextOpen = !popup.classList.contains('show');
+        popup.classList.toggle('show', nextOpen);
+        if (backdrop) {
+            backdrop.classList.toggle('show', nextOpen);
+        }
+        document.body.classList.toggle('library-open', nextOpen);
+        if (nextOpen) {
+            loadLibraryItems();
+        }
     }
 
     function switchLibraryTab(type, clickedBtn) {
@@ -1831,17 +2149,16 @@
             }
 
             const icons = { video: 'fa-play-circle', slide: 'fa-file-alt', quiz: 'fa-question-circle' };
-            const colors = { video: '#dc3545', slide: '#0d6efd', quiz: '#198754' };
 
             content.innerHTML = data.items.map(item => `
                 <div class="library-item" 
                      draggable="true" 
                      data-id="${item._id}"
                      data-type="${item.type}">
-                    <div class="lib-icon" style="color: ${colors[item.type]}">
+                    <div class="lib-icon ${item.type}">
                         <i class="fas ${icons[item.type]}"></i>
                     </div>
-                    <span class="lib-title">${item.title}</span>
+                    <span class="lib-title">${escapeHtml(formatLessonTitle(item.title))}</span>
                     <button class="delete-btn" type="button" data-id="${item._id}" aria-label="Delete">
                         Delete
                     </button>
@@ -1886,25 +2203,32 @@
 
     async function deleteLibraryItem(id, itemEl) {
         if (!id) return;
-        if (!confirm('Delete this item?')) return;
-
-        try {
-            const res = await fetch('/library/' + encodeURIComponent(id), {
-                method: 'DELETE'
-            });
-
-            const data = await res.json();
-            if (!data.success) {
-                showToast(data.error || 'Delete failed', 'danger');
-                return;
+        const titleNode = itemEl ? itemEl.querySelector('.lib-title') : null;
+        const itemTitle = titleNode ? titleNode.textContent.trim() : 'this library item';
+        const confirmed = await window.showConfirmModal({
+            title: 'Delete Library Item',
+            message: `Delete "${itemTitle}" from the content library?`,
+            warning: 'This action cannot be undone.',
+            confirmText: 'Delete Item',
+            confirmingText: 'Deleting...',
+            variant: 'danger',
+            onConfirm: async function() {
+                const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+                const res = await fetcher('/library/' + encodeURIComponent(id), {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    throw new Error(data.error || 'Delete failed');
+                }
             }
+        });
+        if (!confirmed) return;
 
-            if (itemEl) {
-                itemEl.remove();
-            }
-        } catch {
-            showToast('Delete failed', 'danger');
+        if (itemEl) {
+            itemEl.remove();
         }
+        showToast('Library item deleted.', 'success');
     }
 
     // ==================== SAVE COURSE ====================
@@ -1965,38 +2289,11 @@
 
     // UI Notification System
     function showToast(msg, type = 'success') {
-        let container = document.getElementById('editor-toast-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'editor-toast-container';
-            Object.assign(container.style, {
-                position: 'fixed',
-                top: '20px',
-                right: '20px',
-                zIndex: '9999',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px'
-            });
-            document.body.appendChild(container);
+        if (typeof window.showAppToast === 'function') {
+            window.showAppToast(msg, type === 'warning' ? 'warning' : type === 'danger' ? 'danger' : 'success');
+            return;
         }
-
-        const toast = document.createElement('div');
-        toast.className = 'alert alert-' + type + ' alert-dismissible fade show shadow-sm';
-        toast.setAttribute('role', 'alert');
-        toast.innerHTML = 
-            '<strong>' + (type === 'danger' ? 'Error: ' : type === 'warning' ? 'Warning: ' : 'Success: ') + '</strong> ' + 
-            escapeHtml(msg) + 
-            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
-        
-        container.appendChild(toast);
-        
-        setTimeout(function() {
-            if (toast.parentNode) {
-                toast.classList.remove('show');
-                setTimeout(function() { if (toast.parentNode) toast.remove(); }, 150);
-            }
-        }, 3500);
+        window.alert(String(msg || ''));
     }
 
 })();

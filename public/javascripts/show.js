@@ -175,7 +175,7 @@ function renderLessonList(sectionIndex) {
     html += '' +
       '<li class="list-group-item lesson-item d-flex justify-content-between align-items-center" data-id="' + escapeHtml(lessonId) + '">' +
         '<div>' +
-          '<span class="lesson-title">' + escapeHtml(item.title) + '</span>' +
+          '<span class="lesson-title">' + escapeHtml(formatLessonTitle(item.title)) + '</span>' +
           '<small class="text-muted ms-2">' + capitalize(item.type) + '</small>' +
           completedBadge +
         '</div>' +
@@ -223,7 +223,7 @@ function renderVideo(lesson) {
 
   const url = lesson.content.videoUrl || lesson.preview || '';
   if (!url) {
-    renderPanel('Lecture', lesson.title, '<p class="text-muted mb-0">No video source found.</p>', false);
+    renderPanel('Lecture', formatLessonTitle(lesson.title), '<p class="text-muted mb-0">No video source found.</p>', false);
     return;
   }
 
@@ -233,8 +233,25 @@ function renderVideo(lesson) {
 
 function renderSlide(lesson) {
   const slides = Array.isArray(lesson.content.slides) ? lesson.content.slides : [];
+  const pdf = lesson && lesson.content && lesson.content.pdf && lesson.content.pdf.url ? lesson.content.pdf : null;
+  if (pdf) {
+    renderPanel(
+      'PDF',
+      formatLessonTitle(lesson.title),
+      '<div class="lesson-pdf-shell">' +
+        '<div class="lesson-pdf-toolbar">' +
+          '<div class="lesson-pdf-meta">' + escapeHtml(pdf.originalName || 'PDF document') + '</div>' +
+          '<a class="btn btn-sm btn-outline-secondary" href="' + escapeHtml(pdf.url) + '" target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>' +
+        '</div>' +
+        '<div class="lesson-pdf-viewer-wrap"><iframe class="lesson-pdf-viewer" src="' + escapeHtml(pdf.url) + '#view=FitH"></iframe></div>' +
+        '<div class="lesson-pdf-fallback">If the document does not load here (including 401/403 errors), use "Open PDF in new tab".</div>' +
+      '</div>',
+      false
+    );
+    return;
+  }
   if (!slides.length) {
-    renderPanel('Slide', lesson.title, '<p class="text-muted mb-0">No slide data.</p>', false);
+    renderPanel('Slide', formatLessonTitle(lesson.title), '<p class="text-muted mb-0">No slide data.</p>', false);
     return;
   }
 
@@ -246,13 +263,13 @@ function renderSlide(lesson) {
       '</div>';
   }).join('');
 
-  renderPanel('Slide', lesson.title, slidesHtml, false);
+  renderPanel('Slide', formatLessonTitle(lesson.title), slidesHtml, false);
 }
 
 function renderQuiz(lesson) {
   const questions = Array.isArray(lesson.content.questions) ? lesson.content.questions : [];
   if (!questions.length) {
-    renderPanel('Quiz', lesson.title, '<p class="text-muted mb-0">No quiz data.</p>', true);
+    renderPanel('Quiz', formatLessonTitle(lesson.title), '<p class="text-muted mb-0">No quiz data.</p>', true);
     return;
   }
 
@@ -270,13 +287,14 @@ function renderQuiz(lesson) {
       '</div>';
   }).join('');
 
-  renderPanel('Quiz', lesson.title, questionsHtml, true);
+  renderPanel('Quiz', formatLessonTitle(lesson.title), questionsHtml, true);
 }
 
 function renderPanel(typeLabel, title, htmlBody, showCompleteButton) {
   const imageContainer = document.getElementById('imageContainer');
   const player = document.getElementById('videoPlayerContainer');
   const iframe = document.getElementById('videoIframe');
+  const displayTitle = formatLessonTitle(title || 'Lesson') || 'Lesson';
 
   if (imageContainer) imageContainer.style.display = 'none';
   if (iframe) iframe.src = '';
@@ -292,7 +310,7 @@ function renderPanel(typeLabel, title, htmlBody, showCompleteButton) {
 
   panel.innerHTML = '' +
     '<div class="card-body">' +
-      '<h5 class="card-title mb-3">' + escapeHtml(typeLabel) + ': ' + escapeHtml(title || 'Lesson') + '</h5>' +
+      '<h5 class="card-title mb-3">' + escapeHtml(typeLabel) + ': ' + escapeHtml(displayTitle) + '</h5>' +
       htmlBody +
       (showCompleteButton ? '<button id="completeCurrentLessonBtn" class="btn btn-sm btn-primary mt-2">Mark as Completed</button>' : '') +
     '</div>';
@@ -443,7 +461,13 @@ window.saveNote = function saveNote(index) {
   })
     .then((res) => res.json())
     .then((data) => {
-      if (!data.success) alert('Lưu ghi chú thất bại');
+      if (!data.success) {
+        if (typeof window.showAppToast === 'function') {
+          window.showAppToast('Lưu ghi chú thất bại', 'danger');
+          return;
+        }
+        alert('Lưu ghi chú thất bại');
+      }
     })
     .catch((err) => console.error('[Lỗi lưu ghi chú]', err));
 };
@@ -481,4 +505,11 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function formatLessonTitle(value) {
+  if (typeof window.stripLessonFileExtension === 'function') {
+    return window.stripLessonFileExtension(value);
+  }
+  return String(value || '').trim();
 }

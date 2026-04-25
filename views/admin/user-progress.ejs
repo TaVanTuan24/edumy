@@ -1,13 +1,13 @@
 <% layout('/layouts/boilerplate')%>
 <link rel="stylesheet" href="/stylesheets/analytics.css">
 
-<div class="analytics-container" style="max-width: 1000px;">
+<div class="analytics-container analytics-container-narrow">
     <div class="dashboard-header mb-4">
         <div>
-            <a href="/admin/courses/<%= course._id %>/analytics" class="detail-btn" style="display:inline-block; margin-bottom: 1rem;">
+            <a href="/admin/courses/<%= course._id %>/analytics" class="detail-btn analytics-back-link">
                 <i class="fa-solid fa-arrow-left"></i> Back to Analytics
             </a>
-            <h2 style="font-weight: 700; color: var(--dark);"><%= progress.user ? (progress.user.username || progress.user.email) : 'Learner' %></h2>
+            <h2 class="analytics-learner-title"><%= progress.user ? (progress.user.username || progress.user.email) : 'Learner' %></h2>
             <p class="text-muted"><%= course.title %> &mdash; Individual Progress Report</p>
         </div>
     </div>
@@ -25,7 +25,7 @@
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Last Active</div>
-            <div class="kpi-value" style="font-size: 1.25rem;"><%= progress.lastAccessed ? new Date(progress.lastAccessed).toLocaleDateString() : 'Never' %></div>
+            <div class="kpi-value analytics-kpi-compact"><%= progress.lastAccessed ? new Date(progress.lastAccessed).toLocaleDateString() : 'Never' %></div>
             <div class="kpi-subtext">Latest interaction timestamp</div>
         </div>
     </div>
@@ -36,8 +36,8 @@
                 <h5>Quiz Results History</h5>
             </div>
             <% if (quizResults && quizResults.length) { %>
-                <div style="overflow-x: auto;">
-                    <table class="learners-table" style="box-shadow: none; border: none;">
+                <div class="analytics-table-wrap">
+                    <table class="learners-table analytics-table-flat">
                         <thead>
                             <tr>
                                 <th>Quiz Name / ID</th>
@@ -50,10 +50,10 @@
                             <% quizResults.forEach(q => { %>
                                 <tr>
                                     <td>
-                                        <div style="font-weight: 500; color: var(--dark)"><%= q.title %></div>
-                                        <div style="font-family: monospace; font-size: 0.75rem; color: var(--gray-500);"><%= q.quizId %></div>
+                                        <div class="analytics-row-name"><%= q.title %></div>
+                                        <div class="analytics-code-meta"><%= q.quizId %></div>
                                     </td>
-                                    <td><span style="font-weight: 600; color: var(--dark);"><%= q.score %></span></td>
+                                    <td><span class="analytics-score-strong"><%= q.score %></span></td>
                                     <td><%= q.total %></td>
                                     <td>
                                         <% let acc = q.total ? Math.round((q.score/q.total)*100) : 0; %>
@@ -67,7 +67,7 @@
                     </table>
                 </div>
             <% } else { %>
-                <div style="padding: 2rem; text-align: center; color: var(--gray-500); background: var(--gray-100); border-radius: 8px;">
+                <div class="analytics-empty-panel">
                     This learner hasn't attempted any quizzes yet.
                 </div>
             <% } %>

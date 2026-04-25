@@ -1,7 +1,7 @@
 <% layout('/layouts/boilerplate')%>
 <link rel="stylesheet" href="/stylesheets/aiQuiz.css">
 
-<div class="ai-quiz-page">
+<div class="ai-quiz-page app-page-shell">
   <header class="ai-quiz-header">
     <div>
       <h2 class="mb-1">AI Quiz Generator</h2>
@@ -10,7 +10,7 @@
     <a class="btn btn-outline-secondary" href="/admin">Back to Course Manager</a>
   </header>
 
-  <section class="ai-quiz-controls">
+  <section class="ai-quiz-controls app-card-elevated">
     <div class="control-row">
       <div class="control-block">
         <label for="quizTitle">Quiz title</label>
@@ -43,7 +43,7 @@
     <div id="aiStatus" class="ai-status">Ready.</div>
   </section>
 
-  <section class="ai-quiz-editor">
+  <section class="ai-quiz-editor app-card-elevated">
     <div class="editor-header">
       <h4 class="mb-0">Quiz Editor</h4>
       <button id="saveQuizBtn" class="btn btn-success">Save to Library</button>

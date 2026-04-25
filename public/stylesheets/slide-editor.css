@@ -76,6 +76,14 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
+}
+
+.se-topbar-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .se-topbar .btn {
@@ -218,6 +226,21 @@
     box-shadow: inset 0 0 0 1px rgba(164, 53, 240, 0.2);
 }
 
+.se-list-empty {
+    border: 1px dashed var(--se-border);
+    border-radius: 10px;
+    padding: 12px;
+    background: var(--app-surface-soft);
+    color: var(--se-muted);
+    font-size: 13px;
+    display: grid;
+    gap: 4px;
+}
+
+.se-list-empty strong {
+    color: var(--se-text);
+}
+
 .se-list-item-meta {
     color: #7f8694;
     font-size: 12px;
@@ -282,6 +305,24 @@
     background: transparent;
     user-select: none;
     touch-action: none;
+}
+
+.se-canvas-empty {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+    background: var(--app-surface-soft);
+    color: var(--se-muted);
+}
+
+.se-canvas-empty strong {
+    color: var(--se-text);
+    font-size: 18px;
 }
 
 .se-guide-line {
@@ -474,24 +515,109 @@
     overflow: hidden;
 }
 
-.se-toast {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    padding: 11px 14px;
-    border-radius: 10px;
-    background: #131824;
-    color: #fff;
-    box-shadow: var(--se-shadow-strong);
-    z-index: 1600;
-    opacity: 0;
-    transform: translateY(6px);
-    transition: all 0.2s ease;
+.se-pdf-helper {
+    color: var(--se-muted);
+    font-size: 13px;
+    line-height: 1.5;
 }
 
-.se-toast.show {
-    opacity: 1;
-    transform: translateY(0);
+.se-pdf-card {
+    border: 1px solid var(--se-border);
+    border-radius: 14px;
+    padding: 14px;
+    background: color-mix(in srgb, var(--se-card) 94%, transparent);
+}
+
+.se-pdf-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.se-pdf-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--se-muted);
+}
+
+.se-pdf-name {
+    font-weight: 700;
+    margin-top: 4px;
+    word-break: break-word;
+}
+
+.se-pdf-badge {
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    background: #f8fafc;
+    white-space: nowrap;
+}
+
+.se-pdf-badge.is-active {
+    color: #991b1b;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.se-pdf-meta {
+    margin-top: 10px;
+    color: var(--se-muted);
+    font-size: 13px;
+}
+
+.se-pdf-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.se-pdf-status {
+    min-height: 20px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--se-muted);
+}
+
+.se-pdf-status[data-tone="success"] {
+    color: #15803d;
+}
+
+.se-pdf-status[data-tone="error"] {
+    color: #dc2626;
+}
+
+.se-pdf-status[data-tone="loading"] {
+    color: #475569;
+}
+
+.se-content-mode-note {
+    margin: 10px 0 14px;
+    border: 1px solid var(--se-border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: var(--app-surface-soft);
+    color: var(--se-muted);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.se-content-mode-note[data-mode="hybrid"] {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1e3a8a;
+}
+
+.se-content-mode-note[data-mode="pdf"] {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #7f1d1d;
 }
 
 @media (max-width: 1200px) {
@@ -540,6 +666,7 @@
         justify-content: space-between;
     }
 
+    .se-topbar-group,
     .se-topbar-actions .btn {
         flex: 1;
     }
@@ -567,4 +694,32 @@ html[data-theme="dark"] .se-image-preview-wrap {
 html[data-theme="dark"] .se-image-placeholder,
 html[data-theme="dark"] .draft-column {
     background: var(--app-surface-soft);
+}
+
+html[data-theme="dark"] .se-pdf-card,
+html[data-theme="dark"] .se-pdf-badge,
+html[data-theme="dark"] .se-content-mode-note,
+html[data-theme="dark"] .se-list-empty,
+html[data-theme="dark"] .se-canvas-empty {
+    background: var(--app-surface-soft);
+    border-color: var(--se-border);
+    color: var(--se-text);
+}
+
+html[data-theme="dark"] .se-pdf-badge.is-active {
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.32);
+    border-color: rgba(239, 68, 68, 0.45);
+}
+
+html[data-theme="dark"] .se-content-mode-note[data-mode="hybrid"] {
+    color: #bfdbfe;
+    background: rgba(30, 64, 175, 0.24);
+    border-color: rgba(96, 165, 250, 0.35);
+}
+
+html[data-theme="dark"] .se-content-mode-note[data-mode="pdf"] {
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.32);
+    border-color: rgba(239, 68, 68, 0.45);
 }

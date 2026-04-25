@@ -1,7 +1,7 @@
 <% layout('/layouts/boilerplate') %>
 <link rel="stylesheet" href="/stylesheets/discussions.css">
 
-<div class="discussion-shell container py-4" data-course-id="<%= course._id %>" data-discussion-id="<%= discussion._id %>">
+<div class="discussion-shell app-page-shell" data-course-id="<%= course._id %>" data-discussion-id="<%= discussion._id %>">
   <header class="discussion-head mb-3">
     <div>
       <h1 class="mb-1"><%= discussion.title %></h1>
@@ -12,9 +12,9 @@
 
   <article class="discussion-item detail mb-3">
     <div class="vote-col">
-      <button class="vote-btn vote-up <%= discussion.userVote === 'up' ? 'is-active' : '' %>" data-vote-target="question" data-vote-type="up" aria-pressed="<%= discussion.userVote === 'up' ? 'true' : 'false' %>">▲</button>
+      <button class="vote-btn vote-up <%= discussion.userVote === 'up' ? 'is-active' : '' %>" data-vote-target="question" data-vote-type="up" aria-pressed="<%= discussion.userVote === 'up' ? 'true' : 'false' %>" aria-label="Upvote question"><i class="fa-solid fa-chevron-up" aria-hidden="true"></i></button>
       <div id="questionScore" class="vote-num"><%= discussion.score %></div>
-      <button class="vote-btn vote-down <%= discussion.userVote === 'down' ? 'is-active' : '' %>" data-vote-target="question" data-vote-type="down" aria-pressed="<%= discussion.userVote === 'down' ? 'true' : 'false' %>">▼</button>
+      <button class="vote-btn vote-down <%= discussion.userVote === 'down' ? 'is-active' : '' %>" data-vote-target="question" data-vote-type="down" aria-pressed="<%= discussion.userVote === 'down' ? 'true' : 'false' %>" aria-label="Downvote question"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>
     </div>
     <div class="content-col">
       <div class="question-body markdown-body" data-markdown><%= discussion.body %></div>
@@ -31,7 +31,7 @@
     </div>
   </article>
 
-  <section class="card card-body mb-3 ai-answer-box">
+  <section class="card card-body app-card mb-3 ai-answer-box">
     <div class="d-flex justify-content-between align-items-center mb-2">
       <h2 class="h5 mb-0">AI Auto Answer</h2>
       <button id="generateAiAnswerBtn" class="btn btn-primary btn-sm" type="button">Generate AI Answer</button>
@@ -46,7 +46,7 @@
     </div>
   </section>
 
-  <section class="card card-body mb-3">
+  <section class="card card-body app-card mb-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2 class="h5 mb-0">Answers</h2>
       <div class="btn-group btn-group-sm" role="group">
@@ -56,15 +56,19 @@
     </div>
 
     <% if (!discussion.answers.length) { %>
-      <p class="text-muted mb-0">No answers yet. Be the first to respond.</p>
+      <div class="app-empty-state">
+        <i class="fa-regular fa-message"></i>
+        <strong>No answers yet</strong>
+        <p>Be the first to respond and help move this discussion forward.</p>
+      </div>
     <% } %>
 
     <% discussion.answers.forEach((answer) => { %>
       <article class="discussion-item answer <%= answer.isAccepted ? 'accepted' : '' %>" id="answer-<%= answer._id %>">
         <div class="vote-col">
-          <button class="vote-btn vote-up <%= answer.userVote === 'up' ? 'is-active' : '' %>" data-vote-target="answer" data-answer-id="<%= answer._id %>" data-vote-type="up" aria-pressed="<%= answer.userVote === 'up' ? 'true' : 'false' %>">▲</button>
+          <button class="vote-btn vote-up <%= answer.userVote === 'up' ? 'is-active' : '' %>" data-vote-target="answer" data-answer-id="<%= answer._id %>" data-vote-type="up" aria-pressed="<%= answer.userVote === 'up' ? 'true' : 'false' %>" aria-label="Upvote answer"><i class="fa-solid fa-chevron-up" aria-hidden="true"></i></button>
           <div class="vote-num" id="answerScore-<%= answer._id %>"><%= answer.score %></div>
-          <button class="vote-btn vote-down <%= answer.userVote === 'down' ? 'is-active' : '' %>" data-vote-target="answer" data-answer-id="<%= answer._id %>" data-vote-type="down" aria-pressed="<%= answer.userVote === 'down' ? 'true' : 'false' %>">▼</button>
+          <button class="vote-btn vote-down <%= answer.userVote === 'down' ? 'is-active' : '' %>" data-vote-target="answer" data-answer-id="<%= answer._id %>" data-vote-type="down" aria-pressed="<%= answer.userVote === 'down' ? 'true' : 'false' %>" aria-label="Downvote answer"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>
         </div>
         <div class="content-col">
           <% if (answer.isAccepted) { %>
@@ -88,7 +92,7 @@
     <% }) %>
   </section>
 
-  <section class="card card-body">
+  <section class="card card-body app-card">
     <h2 class="h5 mb-3">Your Answer</h2>
     <form method="POST" action="/courses/<%= course._id %>/discussions/<%= discussion._id %>/answers">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

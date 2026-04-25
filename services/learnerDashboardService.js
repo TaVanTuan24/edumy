@@ -3,6 +3,8 @@ const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
 const { findLessonContext } = require('../utils/lessonLocator');
+const { stripFileExtension } = require('../utils/formatLessonName');
+const { getLessonContentMode } = require('../utils/lessonContentMode');
 
 function formatRelativeDate(input) {
   if (!input) return 'No activity yet';
@@ -34,10 +36,18 @@ function buildLessonResumeUrl(courseId, progressDoc) {
   return `/courses/${courseId}${query ? `?${query}` : ''}`;
 }
 
-function formatLessonTypeLabel(value) {
+function formatSlideModeLabel(lesson) {
+  const mode = getLessonContentMode(lesson);
+  if (mode === 'hybrid') return 'Slides + PDF lesson';
+  if (mode === 'pdf') return 'PDF lesson';
+  if (mode === 'slides') return 'Slides lesson';
+  return 'Slide lesson';
+}
+
+function formatLessonTypeLabel(value, lesson) {
   const type = String(value || '').trim().toLowerCase();
   if (type === 'video' || type === 'lecture') return 'Video lesson';
-  if (type === 'slide') return 'Slide lesson';
+  if (type === 'slide') return formatSlideModeLabel(lesson);
   if (type === 'quiz') return 'Quiz lesson';
   return 'Lesson';
 }
@@ -50,11 +60,20 @@ function summarizeRecentActivity(progressDoc, courseMap) {
     courseId: String(progressDoc.course),
     courseTitle: course ? course.title : 'Course',
     type: entry.type || 'activity',
-    label: entry.label || 'Learning activity',
-    lessonName: entry.lessonName || progressDoc.lastLessonName || '',
+    label: formatActivityLabel(entry.label, entry.lessonName || progressDoc.lastLessonName || ''),
+    lessonName: stripFileExtension(entry.lessonName || progressDoc.lastLessonName || ''),
     createdAt: entry.createdAt || progressDoc.lastAccessed || progressDoc.updatedAt,
     createdAtLabel: formatRelativeDate(entry.createdAt || progressDoc.lastAccessed || progressDoc.updatedAt)
   }));
+}
+
+function formatActivityLabel(label, lessonName) {
+  const rawLabel = String(label || '').trim();
+  const rawLessonName = String(lessonName || '').trim();
+  if (!rawLabel) return 'Learning activity';
+  if (!rawLessonName) return rawLabel;
+
+  return rawLabel.replace(rawLessonName, stripFileExtension(rawLessonName));
 }
 
 function buildWeakSpots(progressDocs, courseMap) {
@@ -131,9 +150,12 @@ async function buildLearnerDashboard(userId) {
       totalLessons,
       lastAccessed: progressDoc && (progressDoc.lastAccessed || progressDoc.updatedAt),
       lastAccessedLabel: formatRelativeDate(progressDoc && (progressDoc.lastAccessed || progressDoc.updatedAt)),
-      lastLessonName: progressDoc && progressDoc.lastLessonName ? progressDoc.lastLessonName : (lessonContext && lessonContext.lesson ? lessonContext.lesson.title : ''),
+      lastLessonName: stripFileExtension(progressDoc && progressDoc.lastLessonName ? progressDoc.lastLessonName : (lessonContext && lessonContext.lesson ? lessonContext.lesson.title : '')),
       lastLessonType: progressDoc && progressDoc.lastLessonType ? progressDoc.lastLessonType : (lessonContext && lessonContext.lesson ? lessonContext.lesson.type : ''),
-      lastLessonTypeLabel: formatLessonTypeLabel(progressDoc && progressDoc.lastLessonType ? progressDoc.lastLessonType : (lessonContext && lessonContext.lesson ? lessonContext.lesson.type : '')),
+      lastLessonTypeLabel: formatLessonTypeLabel(
+        progressDoc && progressDoc.lastLessonType ? progressDoc.lastLessonType : (lessonContext && lessonContext.lesson ? lessonContext.lesson.type : ''),
+        lessonContext && lessonContext.lesson
+      ),
       continueUrl: buildLessonResumeUrl(String(course._id), progressDoc),
       status,
       statusLabel: status.charAt(0).toUpperCase() + status.slice(1),

@@ -141,7 +141,7 @@ html[data-theme="dark"] .ai-sidebar {
     gap: 9px;
     width: 100%;
     min-height: 42px;
-    border-radius: 10px;
+    border-radius: var(--app-radius-md);
     padding: 10px 12px;
     background: var(--ai-gold);
     color: #1d211c;
@@ -353,7 +353,7 @@ html[data-theme="dark"] .ai-message-action {
 .ai-icon-btn {
     width: 38px;
     height: 38px;
-    border-radius: 10px;
+    border-radius: var(--app-radius-md);
     background: rgba(15, 118, 110, 0.1);
     color: var(--ai-accent-strong);
 }
@@ -365,7 +365,7 @@ html[data-theme="dark"] .ai-message-action {
 
 .ai-secondary-btn {
     min-height: 38px;
-    border-radius: 10px;
+    border-radius: var(--app-radius-md);
     padding: 0 13px;
     background: var(--ai-ink);
     color: #fffaf0;
@@ -380,7 +380,7 @@ html[data-theme="dark"] .ai-message-action {
     align-items: center;
     justify-content: center;
     gap: 7px;
-    border-radius: 10px;
+    border-radius: var(--app-radius-md);
     padding: 0 12px;
     background: var(--ai-accent-soft);
     color: var(--ai-accent-strong);
@@ -975,9 +975,9 @@ html[data-theme="dark"] .ai-message-action {
     width: min(100%, 680px);
     max-height: min(760px, calc(100dvh - 40px));
     overflow: auto;
-    border-radius: 16px;
+    border-radius: var(--app-radius-xl);
     background: #fff;
-    box-shadow: 0 28px 90px rgba(20, 31, 27, 0.28);
+    box-shadow: var(--app-shadow-lg);
 }
 
 .ai-settings-head {

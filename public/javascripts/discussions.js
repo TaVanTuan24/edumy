@@ -240,55 +240,64 @@
 
   function bindDeleteAnswer() {
     document.querySelectorAll('[data-delete-answer]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', async function() {
         const shell = document.querySelector('.discussion-shell');
         if (!shell) return;
 
-        const confirmed = window.confirm('Are you sure you want to delete this answer? This action cannot be undone.');
-        if (!confirmed) return;
-
+        const answerId = btn.dataset.deleteAnswer;
+        const answerCard = document.getElementById('answer-' + answerId);
+        const answerBody = answerCard ? answerCard.querySelector('.question-body') : null;
+        const answerPreview = answerBody
+          ? String(answerBody.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 90)
+          : 'this answer';
         const courseId = shell.dataset.courseId;
         const discussionId = shell.dataset.discussionId;
-        const answerId = btn.dataset.deleteAnswer;
+        const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+        const confirmed = await window.showConfirmModal({
+          title: 'Delete Answer',
+          message: answerPreview && answerPreview !== 'this answer'
+            ? `Delete this answer? "${answerPreview}${answerPreview.length >= 90 ? '...' : ''}"`
+            : 'Delete this answer?',
+          warning: 'This action cannot be undone.',
+          confirmText: 'Delete Answer',
+          confirmingText: 'Deleting...',
+          variant: 'danger',
+          onConfirm: async function() {
+            const res = await fetcher('/courses/' + encodeURIComponent(courseId) + '/discussions/' + encodeURIComponent(discussionId) + '/answers/' + encodeURIComponent(answerId), {
+              method: 'DELETE',
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+
+            const data = await res
+              .json()
+              .catch(function() { return null; });
+
+            if (!res.ok || !data || !data.success) {
+              throw new Error(data && data.error ? data.error : 'Failed to delete answer.');
+            }
+          }
+        });
+        if (!confirmed) return;
 
         btn.disabled = true;
+        try {
+          const item = document.getElementById('answer-' + answerId);
+          if (item) item.remove();
 
-        fetch('/courses/' + encodeURIComponent(courseId) + '/discussions/' + encodeURIComponent(discussionId) + '/answers/' + encodeURIComponent(answerId), {
-          method: 'DELETE',
-          headers: {
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
+          const answersCount = document.getElementById('answersCount');
+          if (answersCount) {
+            const nextCount = Math.max(0, Number(answersCount.textContent || '0') - 1);
+            answersCount.textContent = String(nextCount);
           }
-        })
-          .then(function(res) {
-            return res
-              .json()
-              .catch(function() { return null; })
-              .then(function(data) {
-                if (!res.ok || !data || !data.success) {
-                  const message = data && data.error ? data.error : 'Failed to delete answer.';
-                  throw new Error(message);
-                }
-                return data;
-              });
-          })
-          .then(function() {
-            const item = document.getElementById('answer-' + answerId);
-            if (item) item.remove();
-
-            const answersCount = document.getElementById('answersCount');
-            if (answersCount) {
-              const nextCount = Math.max(0, Number(answersCount.textContent || '0') - 1);
-              answersCount.textContent = String(nextCount);
-            }
-          })
-          .catch(function(err) {
-            console.error('[Delete Answer Error]', err);
-            window.alert(err && err.message ? err.message : 'Failed to delete answer.');
-          })
-          .finally(function() {
-            btn.disabled = false;
-          });
+          if (typeof window.showAppToast === 'function') {
+            window.showAppToast('Answer deleted.', 'success');
+          }
+        } finally {
+          btn.disabled = false;
+        }
       });
     });
   }

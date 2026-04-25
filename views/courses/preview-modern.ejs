@@ -103,7 +103,7 @@
 
         <div class="course-tabs-wrap">
           <div class="tab-content">
-            <div class="tab-pane active" style="display:block; padding-top: 0;">
+            <div class="tab-pane active preview-tab-pane">
               <div class="card show-panel-card mb-4">
                 <div class="card-body">
                   <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -144,7 +144,7 @@
                           </div>
                           <div class="preview-section-meta">
                             <span class="badge rounded-pill text-bg-light"><%= (section.lessons || []).length %> lessons</span>
-                            <span class="preview-section-arrow" aria-hidden="true">⌄</span>
+                            <span class="preview-section-arrow" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
                           </div>
                         </button>
 
@@ -185,8 +185,8 @@
         <div class="learning-sidebar-inner">
           <div class="mb-3">
             <h6 class="mb-2">Thông tin nhanh</h6>
-            <div class="progress" style="height: 8px;">
-              <div class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
+            <div class="progress preview-progress">
+              <div class="progress-bar bg-success preview-progress-bar" role="progressbar"></div>
             </div>
             <div class="small text-muted mt-2">Toàn bộ curriculum preview đã sẵn sàng để xem.</div>
           </div>

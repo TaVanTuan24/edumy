@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const multer = require('multer');
+const http = require('http');
+const https = require('https');
+const path = require('path');
 const { isLoggedIn, isAdmin } = require('../middleware');
 const Course = require('../models/course');
 const User = require('../models/user');
@@ -17,6 +21,20 @@ const {
     syncCourseContent
 } = require('../utils/courseContentAdapter');
 const { prepareLessonForWrite, syncCourseAggregateFields } = require('../utils/courseStats');
+const {
+    cloudinary,
+    pdfFileFilter,
+    getPdfUploadOptions,
+    MAX_PDF_UPLOAD_BYTES
+} = require('../config/cloudinary');
+const {
+    normalizeStoredPdfUrl,
+    isPublicCloudinaryRawUploadUrl,
+    isLikelyRestrictedCloudinaryPdfUrl,
+    getUploadedCloudinaryPdfUrl,
+    buildPdfDeliveryErrorMessage
+} = require('../utils/cloudinaryPdf');
+const { getLessonContentMode, hasCustomSlides } = require('../utils/lessonContentMode');
 
 router.use(isLoggedIn, isAdmin);
 router.use('/courses/:courseId/analytics', adminAnalyticsRoutes);
@@ -25,6 +43,12 @@ router.use((req, res, next) => {
         return adminActionLimiter(req, res, next)
     }
     return next()
+})
+
+const slidePdfUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_PDF_UPLOAD_BYTES },
+    fileFilter: pdfFileFilter
 })
 
 async function recordAdminAudit(req, action, targetType, targetId, metadata) {
@@ -356,6 +380,90 @@ function reindexCanonicalSections(course) {
     })
 }
 
+function sanitizeUploadFilename(name, fallbackBaseName) {
+    const trimmed = String(name || '').trim()
+    const parsed = path.parse(trimmed)
+    const baseName = (parsed.name || fallbackBaseName || 'document')
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 120) || (fallbackBaseName || 'document')
+    return `${baseName}.pdf`
+}
+
+function fetchUrlStatus(url, redirects = 0) {
+    return new Promise((resolve) => {
+        const target = normalizeStoredPdfUrl(url)
+        if (!target) {
+            return resolve({ status: 0, finalUrl: '' })
+        }
+
+        let parsed
+        try {
+            parsed = new URL(target)
+        } catch {
+            return resolve({ status: 0, finalUrl: target })
+        }
+
+        const client = parsed.protocol === 'http:' ? http : https
+        const req = client.request(parsed, {
+            method: 'HEAD',
+            headers: {
+                'User-Agent': 'edumy-pdf-health-check/1.0'
+            }
+        }, (response) => {
+            const status = Number(response && response.statusCode) || 0
+            const location = response && response.headers ? response.headers.location : ''
+
+            if ([301, 302, 303, 307, 308].includes(status) && location && redirects < 3) {
+                response.resume()
+                let nextUrl = ''
+                try {
+                    nextUrl = new URL(location, target).toString()
+                } catch {
+                    nextUrl = ''
+                }
+
+                if (!nextUrl) {
+                    return resolve({ status, finalUrl: target })
+                }
+
+                return fetchUrlStatus(nextUrl, redirects + 1).then(resolve)
+            }
+
+            response.resume()
+            return resolve({ status, finalUrl: target })
+        })
+
+        req.on('error', () => resolve({ status: 0, finalUrl: target }))
+        req.setTimeout(8000, () => req.destroy(new Error('timeout')))
+        req.end()
+    })
+}
+
+function uploadPdfBufferToCloudinary(file, folder) {
+    return new Promise((resolve, reject) => {
+        const publicId = path.parse(String(file && file.originalname || 'document.pdf')).name
+            .replace(/[^a-zA-Z0-9_-]+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 120) || `pdf-${Date.now()}`
+
+        const stream = cloudinary.uploader.upload_stream(
+            getPdfUploadOptions({
+                folder,
+                publicId
+            }),
+            (error, result) => {
+                if (error) return reject(error)
+                return resolve(result)
+            }
+        )
+
+        stream.end(file.buffer)
+    })
+}
+
 function extractYouTubeId(input) {
     const raw = String(input || '').trim();
     if (!raw) return '';
@@ -615,7 +723,8 @@ router.get('/courses/:id/editor', async (req, res) => {
     res.render('admin/courseEditor', {
         course,
         statusBadge: buildCourseStatusBadge(course),
-        readiness: computeCourseReadiness(course)
+        readiness: computeCourseReadiness(course),
+        getLessonContentMode
     })
 
 })
@@ -925,11 +1034,20 @@ router.get('/courses/:id/slide-editor', async (req, res) => {
 
     const slideData = Array.isArray(lesson?.content?.slides)
         ? lesson.content.slides
-        : []
+        : Array.isArray(lesson?.slides)
+            ? lesson.slides
+            : []
+    const rawPdfData = lesson?.content?.pdf || lesson?.pdf
+    const pdfData = rawPdfData && typeof rawPdfData === 'object'
+        ? rawPdfData
+        : typeof rawPdfData === 'string' && rawPdfData.trim()
+            ? { url: rawPdfData.trim(), originalName: 'PDF document', mimeType: 'application/pdf' }
+        : null
 
     res.render('admin/slideEditor', {
         course,
         slideData,
+        pdfData,
         sectionIndex: Number.isNaN(sectionIndex) ? '' : sectionIndex,
         lessonIndex: Number.isNaN(lessonIndex) ? '' : lessonIndex,
         lessonTitle: lesson?.title || ''
@@ -954,8 +1072,18 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
         }
 
         const normalizedSlides = normalizeSlidesPayload(content && content.slides)
+        const pdf = content && content.pdf && typeof content.pdf === 'object'
+            ? {
+                url: normalizeStoredPdfUrl(content.pdf.url),
+                filename: String(content.pdf.filename || '').trim(),
+                originalName: String(content.pdf.originalName || '').trim(),
+                size: Number(content.pdf.size) || 0,
+                mimeType: String(content.pdf.mimeType || '').trim() || 'application/pdf',
+                uploadedAt: content.pdf.uploadedAt ? new Date(content.pdf.uploadedAt) : new Date()
+            }
+            : null
 
-        if (!normalizedSlides.length) {
+        if (!normalizedSlides.length && !(pdf && pdf.url)) {
             return res.status(400).json({ success: false, error: 'Slide content missing' })
         }
 
@@ -971,7 +1099,11 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
 
         lesson.type = 'slide'
         lesson.title = String(title || 'Slide Lesson').trim()
-        lesson.content = { ...(lesson.content || {}), slides: normalizedSlides }
+        lesson.content = {
+            ...(lesson.content || {}),
+            slides: normalizedSlides,
+            ...(pdf && pdf.url ? { pdf } : {})
+        }
         lesson.aiGenerated = false
         await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: false })
         course.markModified('sections')
@@ -993,6 +1125,207 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
         return res.json({ success: true })
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+router.post('/slides/:courseId/:sectionIndex/:lessonIndex/import-pdf', (req, res, next) => {
+    slidePdfUpload.single('pdf')(req, res, function(uploadError) {
+        if (uploadError) {
+            const isSizeError = uploadError && uploadError.code === 'LIMIT_FILE_SIZE'
+            return res.status(400).json({
+                success: false,
+                error: isSizeError
+                    ? 'PDF file is too large. Maximum size is 20MB.'
+                    : (uploadError.message || 'Failed to upload PDF.')
+            })
+        }
+        return next()
+    })
+}, async (req, res) => {
+    try {
+        const course = await loadEditableCourse(req.params.courseId)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found.' })
+        }
+
+        const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
+        const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
+        if (Number.isNaN(parsedSectionIndex) || Number.isNaN(parsedLessonIndex)) {
+            return res.status(400).json({ success: false, error: 'Invalid lesson reference.' })
+        }
+
+        const lesson = getCanonicalLesson(course, parsedSectionIndex, parsedLessonIndex)
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found.' })
+        }
+
+        if (!req.file || !req.file.buffer) {
+            return res.status(400).json({ success: false, error: 'PDF file is required.' })
+        }
+
+        const uploadResult = await uploadPdfBufferToCloudinary(req.file, 'CourseLessonPdfs')
+        const deliveryUrl = getUploadedCloudinaryPdfUrl(uploadResult)
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[SlideEditor] Cloudinary PDF secure_url:', deliveryUrl || '(missing)')
+        }
+
+        if (!deliveryUrl || !isPublicCloudinaryRawUploadUrl(deliveryUrl)) {
+            if (uploadResult && uploadResult.public_id) {
+                try {
+                    await cloudinary.uploader.destroy(String(uploadResult.public_id), {
+                        resource_type: 'raw',
+                        type: 'upload',
+                        invalidate: true
+                    })
+                } catch {
+                    // Non-fatal cleanup failure
+                }
+            }
+
+            return res.status(502).json({
+                success: false,
+                code: 'PDF_URL_INVALID',
+                error: 'Cloudinary did not return a public raw upload secure_url for this PDF.'
+            })
+        }
+
+        const deliveryStatus = await fetchUrlStatus(deliveryUrl)
+        if (deliveryStatus.status !== 200) {
+            if (uploadResult && uploadResult.public_id) {
+                try {
+                    await cloudinary.uploader.destroy(String(uploadResult.public_id), {
+                        resource_type: 'raw',
+                        type: 'upload',
+                        invalidate: true
+                    })
+                } catch {
+                    // Non-fatal cleanup failure
+                }
+            }
+
+            return res.status(502).json({
+                success: false,
+                code: deliveryStatus.status === 401 || deliveryStatus.status === 403 ? 'PDF_NOT_PUBLIC' : 'PDF_DELIVERY_CHECK_FAILED',
+                error: buildPdfDeliveryErrorMessage(deliveryStatus.status),
+                deliveryStatus: deliveryStatus.status
+            })
+        }
+
+        const originalName = sanitizeUploadFilename(req.file.originalname, 'lesson-document')
+        const pdf = {
+            url: deliveryUrl,
+            filename: String(uploadResult && (uploadResult.public_id || uploadResult.asset_id) || '').trim(),
+            originalName,
+            size: Number(req.file.size) || 0,
+            mimeType: 'application/pdf',
+            uploadedAt: new Date()
+        }
+
+        lesson.type = 'slide'
+        lesson.content = {
+            ...(lesson.content || {}),
+            pdf
+        }
+
+        if (!String(lesson.title || '').trim()) {
+            lesson.title = path.parse(originalName).name
+        }
+
+        await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: false })
+        course.markModified('sections')
+        await saveEditableCourse(course)
+        await recordAdminAudit(req, 'lesson_pdf_imported', 'lesson', String(lesson && lesson._id || ''), {
+            courseId: String(course._id),
+            title: lesson.title,
+            originalName,
+            size: pdf.size
+        })
+
+        return res.json({ success: true, pdf })
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to import PDF.'
+        })
+    }
+})
+
+router.get('/slides/:courseId/:sectionIndex/:lessonIndex/pdf-health', async (req, res) => {
+    try {
+        const course = await loadEditableCourse(req.params.courseId)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found.' })
+        }
+
+        const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
+        const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
+        const lesson = getCanonicalLesson(course, parsedSectionIndex, parsedLessonIndex)
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found.' })
+        }
+
+        const pdf = lesson.content && lesson.content.pdf && typeof lesson.content.pdf === 'object'
+            ? lesson.content.pdf
+            : null
+
+        const url = normalizeStoredPdfUrl(pdf && pdf.url)
+        if (!url) {
+            return res.status(404).json({ success: false, error: 'PDF URL not found for this lesson.' })
+        }
+
+        const statusResult = await fetchUrlStatus(url)
+        const status = Number(statusResult.status) || 0
+        const ok = status === 200
+        const likelyRestricted = isLikelyRestrictedCloudinaryPdfUrl(url) || status === 401 || status === 403
+
+        return res.json({
+            success: true,
+            url,
+            status,
+            ok,
+            likelyRestricted
+        })
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message || 'Failed to validate PDF URL.' })
+    }
+})
+
+router.delete('/slides/:courseId/:sectionIndex/:lessonIndex/pdf', async (req, res) => {
+    try {
+        const course = await loadEditableCourse(req.params.courseId)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found.' })
+        }
+
+        const parsedSectionIndex = parseInt(req.params.sectionIndex, 10)
+        const parsedLessonIndex = parseInt(req.params.lessonIndex, 10)
+        const lesson = getCanonicalLesson(course, parsedSectionIndex, parsedLessonIndex)
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found.' })
+        }
+
+        if (!hasCustomSlides(lesson)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Add at least one slide before removing the PDF.'
+            })
+        }
+
+        const nextContent = { ...(lesson.content || {}) }
+        delete nextContent.pdf
+        lesson.content = nextContent
+
+        await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: false })
+        course.markModified('sections')
+        await saveEditableCourse(course)
+        await recordAdminAudit(req, 'lesson_pdf_removed', 'lesson', String(lesson && lesson._id || ''), {
+            courseId: String(course._id),
+            title: lesson.title
+        })
+
+        return res.json({ success: true })
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message || 'Failed to remove PDF.' })
     }
 })
 

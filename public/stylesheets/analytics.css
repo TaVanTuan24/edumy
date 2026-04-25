@@ -243,6 +243,92 @@ html[data-theme="dark"] .analytics-container {
     font-weight: 800;
 }
 
+.analytics-rating-star {
+    font-size: 1rem;
+    color: #f59e0b;
+}
+
+.analytics-scroll-pane,
+.analytics-table-wrap {
+    overflow-x: auto;
+}
+
+.analytics-scroll-pane {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.analytics-row-name,
+.analytics-score-value,
+.analytics-score-strong {
+    font-weight: 600;
+    color: var(--dark);
+}
+
+.analytics-row-email,
+.analytics-progress-meta,
+.analytics-score-meta,
+.analytics-code-meta {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.analytics-progress-meta {
+    margin-top: 0.25rem;
+}
+
+.analytics-progress-value,
+.analytics-no-attempts {
+    font-size: 0.875rem;
+}
+
+.analytics-progress-value {
+    color: var(--gray-700);
+    font-weight: 500;
+}
+
+.analytics-detail-icon {
+    margin-left: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.analytics-empty-cell {
+    padding: 3rem;
+    text-align: center;
+    color: var(--gray-500);
+}
+
+.analytics-container-narrow {
+    max-width: 1000px;
+}
+
+.analytics-back-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.analytics-learner-title {
+    font-weight: 700;
+    color: var(--dark);
+}
+
+.analytics-kpi-compact {
+    font-size: 1.25rem;
+}
+
+.analytics-table-flat {
+    box-shadow: none;
+    border: none;
+}
+
+.analytics-empty-panel {
+    padding: 2rem;
+    text-align: center;
+    color: var(--gray-500);
+    background: var(--gray-100);
+    border-radius: 8px;
+}
+
 .table-card {
     overflow: hidden;
 }

@@ -359,7 +359,7 @@
                                 '<article class="lesson-item" data-id="' + lesson._id + '">' +
                                     '<span class="lesson-icon ' + iconClass + '"><i class="fa-solid ' + icon + '"></i></span>' +
                                     '<div class="lesson-body">' +
-                                        '<div class="lesson-name">' + escapeHtml(lesson.title) + '</div>' +
+                                        '<div class="lesson-name">' + escapeHtml(formatLessonTitle(lesson.title)) + '</div>' +
                                         '<div class="lesson-type">' + capitalize(lesson.type) + '</div>' +
                                     '</div>' +
                                 '</article>';
@@ -428,7 +428,7 @@
         els.progressMeta.textContent = 'Lesson ' + currentNumber + ' / ' + total + ' (' + percent + '%)';
 
         const lesson = getCurrentLesson();
-        els.lessonTitleLive.textContent = lesson ? lesson.title : '';
+        els.lessonTitleLive.textContent = lesson ? formatLessonTitle(lesson.title) : '';
     }
 
     function renderLecture(lesson) {
@@ -436,7 +436,7 @@
         els.contentStage.classList.add('fade-enter');
         els.contentStage.innerHTML = '' +
             '<div class="content-head">' +
-                '<h2>' + escapeHtml(lesson.title) + '</h2>' +
+                '<h2>' + escapeHtml(formatLessonTitle(lesson.title)) + '</h2>' +
                 '<span class="content-tag lecture">Lecture</span>' +
             '</div>' +
             '<div class="content-body">' +
@@ -453,14 +453,38 @@
 
     function renderSlideViewer(lesson) {
         const slides = lesson.content.slides || [];
+        const pdf = lesson && lesson.content && lesson.content.pdf && lesson.content.pdf.url ? lesson.content.pdf : null;
         const slide = slides[state.currentSlideIndex];
 
         els.contentStage.classList.add('fade-enter');
 
+        if (pdf) {
+            els.contentStage.innerHTML = '' +
+                '<div class="content-head">' +
+                    '<h2>' + escapeHtml(formatLessonTitle(lesson.title)) + '</h2>' +
+                    '<span class="content-tag slide">PDF</span>' +
+                '</div>' +
+                '<div class="content-body">' +
+                    '<div class="lesson-pdf-shell">' +
+                        '<div class="lesson-pdf-toolbar">' +
+                            '<div class="lesson-pdf-meta">' + escapeHtml(pdf.originalName || 'PDF document') + '</div>' +
+                            '<a class="btn btn-outline-secondary btn-sm" href="' + escapeHtml(pdf.url) + '" target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>' +
+                        '</div>' +
+                        '<div class="lesson-pdf-viewer-wrap"><iframe class="lesson-pdf-viewer" src="' + escapeHtml(pdf.url) + '#view=FitH"></iframe></div>' +
+                        '<div class="lesson-pdf-fallback">If the document does not load here (including 401/403 errors), use "Open PDF in new tab".</div>' +
+                    '</div>' +
+                    renderLessonNav() +
+                '</div>';
+            window.setTimeout(function() {
+                els.contentStage.classList.remove('fade-enter');
+            }, 260);
+            return;
+        }
+
         if (!slide) {
             els.contentStage.innerHTML = '' +
                 '<div class="content-head">' +
-                    '<h2>' + escapeHtml(lesson.title) + '</h2>' +
+                    '<h2>' + escapeHtml(formatLessonTitle(lesson.title)) + '</h2>' +
                     '<span class="content-tag slide">Slide</span>' +
                 '</div>' +
                 '<div class="content-body">' +
@@ -474,7 +498,7 @@
 
         els.contentStage.innerHTML = '' +
             '<div class="content-head">' +
-                '<h2>' + escapeHtml(lesson.title) + '</h2>' +
+                '<h2>' + escapeHtml(formatLessonTitle(lesson.title)) + '</h2>' +
                 '<span class="content-tag slide">Slide</span>' +
             '</div>' +
             '<div class="content-body">' +
@@ -579,7 +603,7 @@
         if (!questions.length) {
             els.contentStage.innerHTML = '' +
                 '<div class="content-head">' +
-                    '<h2>' + escapeHtml(lesson.title) + '</h2>' +
+                    '<h2>' + escapeHtml(formatLessonTitle(lesson.title)) + '</h2>' +
                     '<span class="content-tag quiz">Quiz</span>' +
                 '</div>' +
                 '<div class="content-body">' +
@@ -593,7 +617,7 @@
             const total = questions.length;
             els.contentStage.innerHTML = '' +
                 '<div class="content-head">' +
-                    '<h2>' + escapeHtml(lesson.title) + '</h2>' +
+                    '<h2>' + escapeHtml(formatLessonTitle(lesson.title)) + '</h2>' +
                     '<span class="content-tag quiz">Quiz</span>' +
                 '</div>' +
                 '<div class="content-body">' +
@@ -615,7 +639,7 @@
 
         els.contentStage.innerHTML = '' +
             '<div class="content-head">' +
-                '<h2>' + escapeHtml(lesson.title) + '</h2>' +
+                '<h2>' + escapeHtml(formatLessonTitle(lesson.title)) + '</h2>' +
                 '<span class="content-tag quiz">Quiz</span>' +
             '</div>' +
             '<div class="content-body">' +
@@ -751,6 +775,13 @@
     function capitalize(value) {
         if (!value) return '';
         return value.charAt(0).toUpperCase() + value.slice(1);
+    }
+
+    function formatLessonTitle(value) {
+        if (typeof window.stripLessonFileExtension === 'function') {
+            return window.stripLessonFileExtension(value);
+        }
+        return String(value || '').trim();
     }
 
     function toNumber(value, fallback) {

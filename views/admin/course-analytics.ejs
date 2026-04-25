@@ -46,7 +46,7 @@
         </div>
         <div class="kpi-card">
             <div class="kpi-label"><i class="fa-solid fa-star"></i> Avg Rating</div>
-            <div class="kpi-value"><%= analytics.overview.avgRating %> <span style="font-size: 1rem; color: #f59e0b">★</span></div>
+            <div class="kpi-value"><%= analytics.overview.avgRating %> <span class="analytics-rating-star">★</span></div>
             <div class="kpi-subtext"><%= analytics.overview.totalReviews %> reviews</div>
         </div>
     </div>
@@ -99,12 +99,12 @@
             <div class="chart-header">
                 <h5>Top Engaging Lessons</h5>
             </div>
-            <div style="flex: 1; overflow-y: auto;">
+            <div class="analytics-scroll-pane">
                 <ul class="custom-list">
                     <% analytics.topLessons.forEach(lesson => { %>
                         <li>
                             <div class="list-title">
-                                <%= lesson.title %>
+                                <%= stripFileExtension(lesson.title) %>
                                 <span class="list-subtitle">Lesson ID: <%= lesson.lessonId.substring(0,8) %>...</span>
                             </div>
                             <div class="list-stat-badge"><%= lesson.views %> views</div>
@@ -127,7 +127,7 @@
                 <input type="text" id="tableSearch" placeholder="Search by name or email...">
             </div>
         </div>
-        <div style="overflow-x: auto;">
+        <div class="analytics-table-wrap">
             <table class="learners-table">
                 <thead>
                     <tr>
@@ -142,22 +142,22 @@
                     <% analytics.studentRows.forEach(row => { %>
                         <tr data-name="<%= row.name %>" data-progress="<%= row.progress %>" data-score="<%= row.quizScoreAvg %>">
                             <td>
-                                <div style="font-weight: 500; color: var(--dark)"><%= row.name %></div>
-                                <div style="font-size: 0.75rem; color: var(--gray-500)"><%= row.email %></div>
+                                <div class="analytics-row-name"><%= row.name %></div>
+                                <div class="analytics-row-email"><%= row.email %></div>
                             </td>
                             <td>
                                 <div class="progress-bar-container">
-                                    <div class="progress-bar-fill" style="width: <%= row.progress %>%"></div>
+                                    <div class="progress-bar-fill" data-progress-width="<%= row.progress %>"></div>
                                 </div>
-                                <span style="font-size: 0.875rem; color: var(--gray-700); font-weight: 500;"><%= row.progress %>%</span>
-                                <div style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem;"><%= row.completedLessonsCount %> / <%= row.totalLessons %> lessons</div>
+                                <span class="analytics-progress-value"><%= row.progress %>%</span>
+                                <div class="analytics-progress-meta"><%= row.completedLessonsCount %> / <%= row.totalLessons %> lessons</div>
                             </td>
                             <td>
                                 <% if (row.quizAttempts > 0) { %>
-                                    <div style="font-weight: 500"><%= row.quizScoreAvg %>%</div>
-                                    <div style="font-size: 0.75rem; color: var(--gray-500)"><%= row.quizAttempts %> attempts</div>
+                                    <div class="analytics-score-value"><%= row.quizScoreAvg %>%</div>
+                                    <div class="analytics-score-meta"><%= row.quizAttempts %> attempts</div>
                                 <% } else { %>
-                                    <span class="text-muted" style="font-size: 0.875rem;">No attempts</span>
+                                    <span class="text-muted analytics-no-attempts">No attempts</span>
                                 <% } %>
                             </td>
                             <td>
@@ -169,13 +169,13 @@
                                 <span class="status-badge <%= badgeClass %>"><%= row.status %></span>
                             </td>
                             <td>
-                                <a href="/admin/courses/<%= course._id %>/analytics/learners/<%= row.id %>" class="detail-btn">View Details <i class="fa-solid fa-chevron-right" style="font-size: 0.75rem; margin-left: 0.25rem;"></i></a>
+                                <a href="/admin/courses/<%= course._id %>/analytics/learners/<%= row.id %>" class="detail-btn">View Details <i class="fa-solid fa-chevron-right analytics-detail-icon" aria-hidden="true"></i></a>
                             </td>
                         </tr>
                     <% }); %>
                     <% if(analytics.studentRows.length === 0) { %>
                         <tr>
-                            <td colspan="5" style="text-align: center; padding: 3rem; color: var(--gray-500);">No enrolled learners found.</td>
+                            <td colspan="5" class="analytics-empty-cell">No enrolled learners found.</td>
                         </tr>
                     <% } %>
                 </tbody>
