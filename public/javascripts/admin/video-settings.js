@@ -27,7 +27,8 @@
     dragStartX: 0,
     dragStartY: 0,
     iconStartX: 0,
-    iconStartY: 0
+    iconStartY: 0,
+    quizSavePending: false
   };
 
   function init() {
@@ -367,6 +368,7 @@
 
         return {
           _id: String((entry && entry._id) || ''),
+          clientId: String((entry && entry.clientId) || (entry && entry._id) || createLocalQuizId(index)),
           triggerTimeSec: parseTimestampToSeconds(entry && entry.triggerTimeSec),
           question: String(entry && entry.question || '').trim(),
           options: options,
@@ -421,6 +423,10 @@
 
     // Keep the FAB fixed and use click only.
     fab.addEventListener('click', function() {
+      const panel = getQuizPanel();
+      if (!panel || !panel.classList.contains('show')) {
+        resetForm();
+      }
       toggleQuizPanel();
     });
 
@@ -675,7 +681,8 @@
   }
 
   function upsertQuizFromForm() {
-    const editIndex = Number(getFormValue('timedQuizEditIndex'));
+    if (state.quizSavePending) return;
+    const editId = String(getFormValue('timedQuizEditId') || '').trim();
     const question = String(getFormValue('timedQuizQuestion') || '').trim();
     const timestamp = parseTimestampToSeconds(getFormValue('timedQuizTimestamp'));
     const explanation = String(getFormValue('timedQuizExplanation') || '').trim();
@@ -708,24 +715,34 @@
       return;
     }
 
-    const previous = editIndex >= 0 ? state.quizzes[editIndex] : null;
+    const previous = editId ? state.quizzes.find(function(quiz) {
+      return getQuizIdentity(quiz) === editId;
+    }) : null;
     const nextQuiz = {
       _id: previous && previous._id ? previous._id : '',
+      clientId: previous && previous.clientId ? previous.clientId : createLocalQuizId(state.quizzes.length),
       triggerTimeSec: timestamp,
       question: question,
       options: options,
       correctOptionIndex: correctOptionIndex,
       explanation: explanation,
       pauseOnShow: pauseOnShow,
-      order: editIndex >= 0 ? editIndex : state.quizzes.length,
+      order: previous ? Number(previous.order || 0) : state.quizzes.length,
       position: {
         xPercent: posX,
         yPercent: posY
       }
     };
 
-    if (editIndex >= 0 && state.quizzes[editIndex]) {
-      state.quizzes[editIndex] = nextQuiz;
+    if (previous) {
+      const targetIndex = state.quizzes.findIndex(function(quiz) {
+        return getQuizIdentity(quiz) === editId;
+      });
+      if (targetIndex >= 0) {
+        state.quizzes[targetIndex] = nextQuiz;
+      } else {
+        state.quizzes.push(nextQuiz);
+      }
     } else {
       state.quizzes.push(nextQuiz);
     }
@@ -734,6 +751,7 @@
   }
 
   function persistQuizzes() {
+    state.quizSavePending = true;
     const sorted = normalizeQuizzes(state.quizzes);
 
     fetch(`/admin/course/${encodeURIComponent(state.courseId)}/lesson/${encodeURIComponent(state.sectionIndex)}/${encodeURIComponent(state.lessonIndex)}/interactive-quizzes`, {
@@ -767,6 +785,9 @@
         console.error('[Timed Quiz Save Error]', err);
         setAiStatus(err && err.message ? err.message : 'Failed to save timed quizzes.', true);
         notify(err && err.message ? err.message : 'Failed to save timed quizzes.', 'danger');
+      })
+      .finally(function() {
+        state.quizSavePending = false;
       });
   }
 
@@ -775,8 +796,11 @@
     if (!button) return;
 
     const action = button.dataset.quizAction;
-    const index = Number(button.dataset.quizIndex);
-    if (!Number.isFinite(index) || !state.quizzes[index]) return;
+    const quizId = String(button.dataset.quizId || '').trim();
+    const index = state.quizzes.findIndex(function(quiz) {
+      return getQuizIdentity(quiz) === quizId;
+    });
+    if (index < 0 || !state.quizzes[index]) return;
 
     if (action === 'edit') {
       loadQuizIntoForm(index);
@@ -812,7 +836,7 @@
     const quiz = state.quizzes[index];
     if (!quiz) return;
 
-    setFormValue('timedQuizEditIndex', String(index));
+    setFormValue('timedQuizEditId', getQuizIdentity(quiz));
     setFormValue('timedQuizTimestamp', formatSeconds(quiz.triggerTimeSec));
     setFormValue('timedQuizQuestion', quiz.question || '');
     setFormValue('timedQuizExplanation', quiz.explanation || '');
@@ -836,7 +860,7 @@
   }
 
   function resetForm() {
-    setFormValue('timedQuizEditIndex', '-1');
+    setFormValue('timedQuizEditId', '');
     setFormValue('timedQuizTimestamp', '');
     setFormValue('timedQuizQuestion', '');
     setFormValue('timedQuizExplanation', '');
@@ -871,18 +895,29 @@
     }
 
     list.innerHTML = state.quizzes.map(function(quiz, index) {
+      const quizId = getQuizIdentity(quiz);
       return '' +
         '<article class="quiz-item">' +
           '<div class="quiz-item-top">' +
             '<span class="quiz-time">' + formatSeconds(quiz.triggerTimeSec) + '</span>' +
             '<div class="quiz-item-actions">' +
-              '<button type="button" class="btn btn-sm btn-outline-primary" data-quiz-action="edit" data-quiz-index="' + index + '">Edit</button>' +
-              '<button type="button" class="btn btn-sm btn-outline-danger" data-quiz-action="delete" data-quiz-index="' + index + '">Delete</button>' +
+              '<button type="button" class="btn btn-sm btn-outline-primary" data-quiz-action="edit" data-quiz-id="' + escapeHtml(quizId) + '">Edit</button>' +
+              '<button type="button" class="btn btn-sm btn-outline-danger" data-quiz-action="delete" data-quiz-id="' + escapeHtml(quizId) + '">Delete</button>' +
             '</div>' +
           '</div>' +
           '<p class="quiz-question-preview">' + escapeHtml(quiz.question || '') + '</p>' +
         '</article>';
     }).join('');
+  }
+
+  function getQuizIdentity(quiz) {
+    if (quiz && quiz._id) return String(quiz._id);
+    if (quiz && quiz.clientId) return String(quiz.clientId);
+    return createLocalQuizId(0);
+  }
+
+  function createLocalQuizId(index) {
+    return 'local-quiz-' + String(index) + '-' + String(Date.now()) + '-' + String(Math.random()).slice(2, 8);
   }
 
   function escapeHtml(value) {

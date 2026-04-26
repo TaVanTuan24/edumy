@@ -381,10 +381,16 @@ body.library-open {
     pointer-events: auto;
 }
 
-.lesson-list.sortable-over {
+.lesson-list.sortable-over,
+.lesson-list.drag-over,
+.lesson-list.is-drag-over {
     border: 2px dashed #6f99f2;
     border-radius: 10px;
     background: #ecf2ff;
+}
+
+.section-card.is-selected-for-library {
+    box-shadow: 0 0 0 2px rgba(111, 153, 242, 0.18);
 }
 
 .lesson-item {
@@ -715,6 +721,15 @@ body.library-open {
     pointer-events: auto;
 }
 
+body.library-dragging .library-drawer-backdrop {
+    pointer-events: none;
+    opacity: 0.18;
+}
+
+body.library-dragging .library-popup {
+    overflow: visible;
+}
+
 .library-popup {
     position: fixed;
     top: 0;
@@ -801,7 +816,8 @@ html[data-theme="dark"] .library-tabs button {
 }
 
 .library-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 28px 28px minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
     padding: 10px;
@@ -809,6 +825,18 @@ html[data-theme="dark"] .library-tabs button {
     border-radius: 10px;
     margin-bottom: 8px;
     background: #fbfcfe;
+    cursor: grab;
+}
+
+.library-item-drag {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #718096;
+    background: #eef2f7;
     cursor: grab;
 }
 
@@ -833,8 +861,33 @@ html[data-theme="dark"] .library-tabs button {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.library-item .delete-btn {
+
+.library-item-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     margin-left: auto;
+}
+
+.library-item .add-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid #d2dae5;
+    background: #ffffff;
+    color: #4f46e5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.library-item .add-btn:hover {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+}
+
+.library-item .delete-btn {
     background: transparent;
     border: none;
     color: #dc3545;
@@ -1045,7 +1098,9 @@ html[data-theme="dark"] .library-popup-header {
 html[data-theme="dark"] .top-bar-meta-pill,
 html[data-theme="dark"] .editor-inline-action,
 html[data-theme="dark"] .add-buttons button,
-html[data-theme="dark"] .library-item {
+html[data-theme="dark"] .library-item,
+html[data-theme="dark"] .library-item .add-btn,
+html[data-theme="dark"] .library-item-drag {
     background: var(--app-surface-soft);
     color: var(--text-main);
     border-color: var(--border);

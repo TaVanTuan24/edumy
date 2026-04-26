@@ -1,4 +1,4 @@
-<% layout('/layouts/boilerplate') %>
+<% hideFooter = true; mainClass = 'app-content-full'; layout('/layouts/boilerplate') %>
 
 <link rel="stylesheet" href="/stylesheets/quizEditor.css">
 
@@ -10,15 +10,24 @@
     data-quiz-index="<%= quizIndex %>"
 >
     <script id="quiz-editor-data" type="application/json"><%- serializeJson(quiz || {}) %></script>
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div>
-            <h3 class="mb-1">Quiz Editor</h3>
-            <p class="text-muted mb-0">Create, edit, reorder, and manage quiz questions.</p>
+    <header class="quiz-editor-toolbar">
+        <div class="quiz-editor-toolbar-copy">
+            <p class="quiz-editor-kicker mb-1">Assessment Builder</p>
+            <h1 class="mb-1">Quiz Editor</h1>
+            <p class="text-muted mb-0">Create, validate, and reorder quiz questions without leaving the course editor.</p>
         </div>
-        <a href="/admin/courses/<%= course._id %>/editor" class="btn btn-outline-secondary">Back to Course Editor</a>
-    </div>
-
-    <div id="quizAlertContainer"></div>
+        <div class="quiz-editor-toolbar-actions">
+            <div id="quizSaveState" class="quiz-save-state" aria-live="polite">Saved</div>
+            <a href="/admin/courses/<%= course._id %>/editor" class="btn btn-outline-secondary">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Course Editor</span>
+            </a>
+            <button id="toolbarSaveBtn" type="button" class="btn btn-primary">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>Save Question</span>
+            </button>
+        </div>
+    </header>
 
     <div class="quiz-shell">
         <div class="quiz-grid">
@@ -27,16 +36,26 @@
                     <label class="form-label fw-semibold">Quiz title</label>
                     <input id="quizTitleInput" type="text" class="form-control quiz-title-input" />
                     <div class="small text-muted mt-2" id="questionCount">0 questions</div>
+                    <div class="small text-muted" id="quizValidationSummary">No validation issues</div>
                 </div>
 
                 <div class="sidebar-card">
-                    <div class="d-flex align-items-center justify-content-between mb-2">
+                    <label class="form-label fw-semibold" for="questionSearchInput">Question search</label>
+                    <input id="questionSearchInput" type="search" class="form-control" placeholder="Filter questions" />
+                </div>
+
+                <div class="sidebar-card">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
                         <h6 class="mb-0">Questions</h6>
+                        <span class="quiz-list-caption">Drag to reorder</span>
                     </div>
                     <ul id="questionList" class="question-list"></ul>
                 </div>
 
-                <button id="addQuestionBtn" type="button" class="btn btn-primary w-100">+ Add Question</button>
+                <button id="addQuestionBtn" type="button" class="btn btn-primary w-100">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add Question</span>
+                </button>
             </aside>
 
             <section class="editor-panel">
@@ -49,10 +68,19 @@
 
                 <div id="editorCard" class="editor-card d-none">
                     <form id="editorForm" class="d-none" novalidate>
+                        <div class="editor-card-head">
+                            <div>
+                                <p class="editor-card-kicker mb-1">Question Editor</p>
+                                <h5 id="editorQuestionHeading" class="mb-1">Question</h5>
+                                <p class="text-muted mb-0">Write a clear prompt, then define answer options and the correct choice.</p>
+                            </div>
+                            <span id="editorQuestionMeta" class="app-badge app-badge-topic">Draft</span>
+                        </div>
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <div class="mb-3">
                             <label for="questionText" class="form-label fw-semibold">Question text</label>
                             <textarea id="questionText" class="form-control" rows="3" placeholder="Enter question text"></textarea>
+                            <div id="questionTextValidation" class="editor-validation-message" hidden>Question text is required.</div>
                         </div>
 
                         <div class="d-flex align-items-center justify-content-between mb-2">
@@ -63,6 +91,7 @@
                         <div id="optionList"></div>
 
                         <button id="addOptionBtn" type="button" class="btn btn-outline-primary mb-3">+ Add Option</button>
+                        <div id="optionValidation" class="editor-validation-message mb-3" hidden>At least 2 valid options are required.</div>
 
                         <div class="d-flex gap-2 justify-content-end">
                             <button id="deleteQuestionBtn" type="button" class="btn btn-danger">Delete Question</button>
@@ -71,8 +100,32 @@
                     </form>
                 </div>
             </section>
+
+            <aside class="quiz-inspector">
+                <div class="inspector-card">
+                    <p class="inspector-kicker mb-1">Inspector</p>
+                    <h6 class="mb-3">Quiz Health</h6>
+                    <div class="inspector-stats">
+                        <div class="inspector-stat">
+                            <span>Questions</span>
+                            <strong id="inspectorQuestionCount">0</strong>
+                        </div>
+                        <div class="inspector-stat">
+                            <span>Needs review</span>
+                            <strong id="inspectorWarningCount">0</strong>
+                        </div>
+                        <div class="inspector-stat">
+                            <span>Est. time</span>
+                            <strong id="inspectorEstimatedTime">0 min</strong>
+                        </div>
+                    </div>
+                    <div id="inspectorWarnings" class="inspector-warnings mt-3">
+                        <div class="text-muted small">No validation warnings.</div>
+                    </div>
+                </div>
+            </aside>
         </div>
     </div>
 </div>
 
-<script src="/javascripts/quizEditor.js"></script>
+<script src="/javascripts/quizEditor.js" defer></script>

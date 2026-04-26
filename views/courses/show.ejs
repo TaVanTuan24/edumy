@@ -233,59 +233,81 @@
         </section>
       <% } %>
 
-      <section class="learner-sidebar-card learner-ai-card">
-        <div class="learner-sidebar-card-head">
-          <div>
-            <h5>AI Tutor</h5>
-            <p>Lesson-aware help without leaving the course.</p>
-          </div>
-          <span class="app-badge app-badge-topic">Lesson aware</span>
-        </div>
-        <div id="aiChatPopup" class="lesson-ai-dock" data-course-id="<%= course._id %>">
-          <div class="lesson-ai-panel">
-            <div class="ai-chat-header lesson-ai-header">
-              <div class="lesson-ai-header-copy">
-                <h6 class="mb-0">AI Tutor</h6>
-              </div>
-              <div class="ai-chat-header-actions lesson-ai-header-actions">
-                <select id="courseAiModel" class="ai-chat-model-select" aria-label="Choose AI model">
-                  <option value="llama3.2">llama3.2</option>
-                  <option value="grok">Grok</option>
-                  <option value="gpt-5.4">GPT-5.4</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="ai-quick-actions lesson-ai-actions">
-              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="summarize">Summarize</button>
-              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="explain">Explain</button>
-              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="practice">Practice</button>
-              <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="flashcards">Flashcards</button>
-            </div>
-
-            <div class="lesson-ai-context">
-              <div class="lesson-ai-context-row">
-                <div id="aiLessonContextSummary" class="lesson-ai-context-summary">Lesson context will appear here.</div>
-                <button id="aiContextToggle" class="lesson-ai-context-toggle" type="button" aria-expanded="false">Show context</button>
-              </div>
-              <div id="aiLessonContextDetails" class="lesson-ai-context-details hidden"></div>
-            </div>
-
-            <div id="chatMessages" class="ai-chat-messages lesson-ai-messages" aria-live="polite">
-              <div id="aiStatus" class="lesson-ai-status">Ready</div>
-              <div id="chatTranscript" class="lesson-ai-transcript"></div>
-              <div id="chatTyping" class="ai-typing lesson-ai-typing hidden">AI is answering...</div>
-            </div>
-
-            <form id="aiChatComposer" class="ai-chat-input lesson-ai-composer">
-              <textarea id="chatInput" class="form-control lesson-ai-input" rows="1" placeholder="Ask about this lesson..." maxlength="800"></textarea>
-              <button id="chatSendBtn" class="btn btn-primary lesson-ai-send-btn" type="submit">Send</button>
-            </form>
-          </div>
-        </div>
-      </section>
     </div>
   </aside>
+  </div>
+</div>
+
+<button
+  id="aiChatToggle"
+  class="lesson-ai-floating-button"
+  type="button"
+  aria-label="Open AI Tutor"
+  aria-controls="aiChatPopup"
+  aria-expanded="false"
+  title="AI Tutor"
+>
+  <span class="lesson-ai-floating-button-icon" aria-hidden="true">
+    <i class="fa-solid fa-robot"></i>
+  </span>
+  <span class="lesson-ai-floating-button-label">AI Tutor</span>
+  <span id="aiChatUnreadIndicator" class="lesson-ai-unread-indicator hidden" aria-hidden="true"></span>
+</button>
+
+<div
+  id="aiChatPopup"
+  class="lesson-ai-widget"
+  data-course-id="<%= course._id %>"
+  role="dialog"
+  aria-modal="false"
+  aria-labelledby="lessonAiWidgetTitle"
+  aria-hidden="true"
+  tabindex="-1"
+  hidden
+>
+  <div class="lesson-ai-widget-shell">
+    <div class="lesson-ai-widget-header ai-chat-header lesson-ai-header">
+      <div class="lesson-ai-header-copy">
+        <h6 id="lessonAiWidgetTitle" class="mb-0">AI Tutor</h6>
+        <p class="lesson-ai-widget-subtitle mb-0">Lesson-aware help without leaving the course.</p>
+      </div>
+      <div class="lesson-ai-widget-header-actions ai-chat-header-actions lesson-ai-header-actions">
+        <select id="courseAiModel" class="ai-chat-model-select" aria-label="Choose AI model">
+          <option value="llama3.2">llama3.2</option>
+          <option value="grok">Grok</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+        </select>
+        <button class="ai-chat-close lesson-ai-widget-close" type="button" data-chat-close aria-label="Close AI Tutor">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="lesson-ai-widget-actions ai-quick-actions lesson-ai-actions">
+      <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="summarize">Summarize</button>
+      <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="explain">Explain</button>
+      <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="practice">Practice</button>
+      <button class="btn btn-sm btn-outline-secondary lesson-ai-action-btn" type="button" data-ai-action="flashcards">Flashcards</button>
+    </div>
+
+    <div class="lesson-ai-widget-context lesson-ai-context">
+      <div class="lesson-ai-context-row">
+        <div id="aiLessonContextSummary" class="lesson-ai-context-summary">Lesson context will appear here.</div>
+        <button id="aiContextToggle" class="lesson-ai-context-toggle" type="button" aria-expanded="false">Show context</button>
+      </div>
+      <div id="aiLessonContextDetails" class="lesson-ai-context-details hidden"></div>
+    </div>
+
+    <div id="chatMessages" class="lesson-ai-widget-messages ai-chat-messages lesson-ai-messages" aria-live="polite">
+      <div id="aiStatus" class="lesson-ai-status">Ready</div>
+      <div id="chatTranscript" class="lesson-ai-transcript"></div>
+      <div id="chatTyping" class="ai-typing lesson-ai-typing hidden">AI is answering...</div>
+    </div>
+
+    <form id="aiChatComposer" class="lesson-ai-widget-composer ai-chat-input lesson-ai-composer">
+      <textarea id="chatInput" class="form-control lesson-ai-input" rows="1" placeholder="Ask about this lesson..." maxlength="800"></textarea>
+      <button id="chatSendBtn" class="btn btn-primary lesson-ai-send-btn" type="submit">Send</button>
+    </form>
   </div>
 </div>
 

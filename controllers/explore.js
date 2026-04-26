@@ -1,11 +1,11 @@
 const Course = require('../models/course');
 const User = require('../models/user');
-const { generateCourseDescription } = require('../utils/courseDescriptionGenerator');
 const { syncCourseContent } = require('../utils/courseContentAdapter');
 const { buildStoredCourseStats } = require('../utils/courseStats');
 const { summarizeCourseReviews } = require('../utils/courseReviews');
 const { isCourseCatalogVisible } = require('../utils/courseLifecycle');
-const { isAdminUser } = require('../middleware');
+const { isAdminUser, userCanManageCourse } = require('../middleware');
+const { generateCourseSummaryWithFallback, isSummaryStale } = require('../services/ai/courseSummaryService');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -48,11 +48,27 @@ module.exports.previewCourse = async (req, res) => {
     syncCourseContent(course);
     const previewStats = buildStoredCourseStats(course);
     const reviewSummary = summarizeCourseReviews(course);
+    const canManageSummary = userCanManageCourse(req.user, course);
 
     const user = await User.findById(req.user._id).select('enrolledCourses enrolledCourseIds');
-    const generatedDescription = await generateCourseDescription(course);
+    const aiSummaryState = await generateCourseSummaryWithFallback(course, {
+        userId: req.user && req.user._id,
+        force: false,
+        persist: true
+    });
+    const generatedDescription = aiSummaryState.summary || String(course.description || '').trim();
     const isEnrolled = !!(user && typeof user.findEnrollment === 'function' && user.findEnrollment(course._id));
-    res.render('courses/preview-modern', { course, generatedDescription, isEnrolled, previewStats, reviewSummary });
+    res.render('courses/preview-modern', {
+        course,
+        generatedDescription,
+        isEnrolled,
+        previewStats,
+        reviewSummary,
+        aiSummaryState,
+        canManageSummary,
+        aiSummaryNeedsRefresh: isSummaryStale(course),
+        aiSummaryDebug: canManageSummary ? aiSummaryState.failedProviders : []
+    });
 };
 
 module.exports.enrollCourse = async (req, res) => {

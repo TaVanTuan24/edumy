@@ -36,6 +36,7 @@ router.post('/:courseId/progress', isLoggedIn, requireCourseAccess, catchAsync(c
 router.post('/:courseId/notes', isLoggedIn, requireCourseAccess, catchAsync(course.saveNote));
 router.post('/:courseId/quiz-results', isLoggedIn, requireCourseAccess, catchAsync(course.saveQuizResult));
 router.post('/:courseId/lessons/ai', isLoggedIn, requireCourseAccess, aiChatLimiter, catchAsync(course.askLessonAi));
+router.post('/:id/ai-summary/regenerate', isLoggedIn, requireCourseManagement, aiChatLimiter, catchAsync(course.regenerateAiSummary));
 router.post('/:id/review', isLoggedIn, requireCourseAccess, catchAsync(course.createReview));
 router.get('/:id/reviews', isLoggedIn, requireCourseAccess, catchAsync(course.getReviews));
 

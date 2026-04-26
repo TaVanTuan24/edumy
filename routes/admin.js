@@ -369,6 +369,19 @@ function buildEditorQuizQuestionResponse(question) {
     }
 }
 
+function findQuizQuestionIndex(questions, questionIndex, questionId) {
+    const source = Array.isArray(questions) ? questions : []
+    const id = String(questionId || '').trim()
+    if (id) {
+        const byId = source.findIndex((question) => String(question && question._id || '') === id)
+        if (byId >= 0) return byId
+    }
+
+    const parsedQuestionIndex = parseInt(questionIndex, 10)
+    if (!Number.isNaN(parsedQuestionIndex)) return parsedQuestionIndex
+    return -1
+}
+
 function reindexCanonicalSections(course) {
     const sections = Array.isArray(course && course.sections) ? course.sections : []
     sections.forEach((section, sectionIndex) => {
@@ -609,6 +622,7 @@ function normalizeInteractiveQuizPayload(quizzes) {
             const parsedCorrect = Number(entry && entry.correctOptionIndex)
 
             const normalized = {
+                clientId: String(entry && entry.clientId || '').trim(),
                 triggerTimeSec,
                 question: String(entry && entry.question || '').trim(),
                 options,
@@ -2092,6 +2106,7 @@ router.put(
                 sectionIndex,
                 quizIndex,
                 questionIndex,
+                questionId,
                 question = "",
                 answers = [],
                 choices = [],
@@ -2112,13 +2127,11 @@ router.put(
 
             const parsedSectionIndex = parseInt(sectionIndex, 10)
             const parsedQuizIndex = parseInt(quizIndex, 10)
-            const parsedQuestionIndex = parseInt(questionIndex, 10)
             const parsedCorrectIndex = parseInt(correctIndex, 10)
 
             if (
                 Number.isNaN(parsedSectionIndex) ||
-                Number.isNaN(parsedQuizIndex) ||
-                Number.isNaN(parsedQuestionIndex)
+                Number.isNaN(parsedQuizIndex)
             ) {
                 return res.status(400).json({ success: false, error: "Invalid indexes" })
             }
@@ -2161,12 +2174,13 @@ router.put(
 
             const quizLesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedQuizIndex]
             const questions = Array.isArray(quizLesson && quizLesson.quiz) ? quizLesson.quiz : []
-            if (!questions[parsedQuestionIndex]) {
+            const resolvedQuestionIndex = findQuizQuestionIndex(questions, questionIndex, questionId)
+            if (resolvedQuestionIndex < 0 || !questions[resolvedQuestionIndex]) {
                 return res.status(400).json({ success: false, error: 'Question index out of range' })
             }
 
-            questions[parsedQuestionIndex] = {
-                ...(questions[parsedQuestionIndex] || {}),
+            questions[resolvedQuestionIndex] = {
+                ...(questions[resolvedQuestionIndex] || {}),
                 ...buildCanonicalQuizQuestion(normalizedQuestion, optionObjects, parsedCorrectIndex)
             }
             quizLesson.quiz = questions
@@ -2175,12 +2189,12 @@ router.put(
             await saveEditableCourse(course)
             console.log('[CourseEditor] quiz payload after backend normalization:', JSON.stringify({
                 mode: 'update',
-                questionIndex: parsedQuestionIndex,
-                question: buildEditorQuizQuestionResponse(questions[parsedQuestionIndex])
+                questionIndex: resolvedQuestionIndex,
+                question: buildEditorQuizQuestionResponse(questions[resolvedQuestionIndex])
             }))
             await recordAdminAudit(req, 'quiz_question_updated', 'lesson', String(quizLesson && quizLesson._id || ''), {
                 courseId: String(course._id),
-                questionIndex: parsedQuestionIndex
+                questionIndex: resolvedQuestionIndex
             })
 
             res.json({ success: true })
@@ -2193,16 +2207,14 @@ router.delete(
     async (req, res) => {
         try {
             const { courseId } = req.params
-            const { sectionIndex, quizIndex, questionIndex } = req.body
+            const { sectionIndex, quizIndex, questionIndex, questionId } = req.body
 
             const parsedSectionIndex = parseInt(sectionIndex, 10)
             const parsedQuizIndex = parseInt(quizIndex, 10)
-            const parsedQuestionIndex = parseInt(questionIndex, 10)
 
             if (
                 Number.isNaN(parsedSectionIndex) ||
-                Number.isNaN(parsedQuizIndex) ||
-                Number.isNaN(parsedQuestionIndex)
+                Number.isNaN(parsedQuizIndex)
             ) {
                 return res.status(400).json({ success: false, error: "Invalid indexes" })
             }
@@ -2214,12 +2226,13 @@ router.delete(
 
             const quizLesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedQuizIndex]
             const questions = Array.isArray(quizLesson && quizLesson.quiz) ? quizLesson.quiz : []
+            const resolvedQuestionIndex = findQuizQuestionIndex(questions, questionIndex, questionId)
 
-            if (parsedQuestionIndex < 0 || parsedQuestionIndex >= questions.length) {
+            if (resolvedQuestionIndex < 0 || resolvedQuestionIndex >= questions.length) {
                 return res.status(400).json({ success: false, error: "Question index out of range" })
             }
 
-            questions.splice(parsedQuestionIndex, 1)
+            questions.splice(resolvedQuestionIndex, 1)
 
             quizLesson.quiz = questions
             quizLesson.content = { ...(quizLesson.content || {}), questions }
@@ -2227,7 +2240,7 @@ router.delete(
             await saveEditableCourse(course)
             await recordAdminAudit(req, 'quiz_question_deleted', 'lesson', String(quizLesson && quizLesson._id || ''), {
                 courseId: String(course._id),
-                questionIndex: parsedQuestionIndex
+                questionIndex: resolvedQuestionIndex
             })
 
             res.json({ success: true })
@@ -2240,7 +2253,7 @@ router.put(
     async (req, res) => {
         try {
             const { courseId } = req.params
-            const { sectionIndex, quizIndex, order } = req.body
+            const { sectionIndex, quizIndex, order, orderedIds } = req.body
 
             const parsedSectionIndex = parseInt(sectionIndex, 10)
             const parsedQuizIndex = parseInt(quizIndex, 10)
@@ -2259,17 +2272,43 @@ router.put(
                     .lessons[parsedQuizIndex]
                     .quiz
 
-            const normalizedOrder = (Array.isArray(order) ? order : []).map(i => parseInt(i, 10))
-            const isValidOrder =
-                normalizedOrder.length === questions.length &&
-                normalizedOrder.every(i => !Number.isNaN(i) && i >= 0 && i < questions.length)
+            const idOrder = Array.isArray(orderedIds)
+                ? orderedIds.map((id) => String(id || '').trim()).filter(Boolean)
+                : []
 
-            if (!isValidOrder) {
-                return res.status(400).json({ success: false, error: "Invalid question order" })
+            if (idOrder.length) {
+                const byId = new Map(questions.map((question) => [String(question && question._id || ''), question]))
+                const seen = new Set()
+                const reorderedById = []
+
+                idOrder.forEach((id) => {
+                    if (!byId.has(id) || seen.has(id)) return
+                    reorderedById.push(byId.get(id))
+                    seen.add(id)
+                })
+
+                questions.forEach((question) => {
+                    const id = String(question && question._id || '')
+                    if (!seen.has(id)) reorderedById.push(question)
+                })
+
+                if (reorderedById.length !== questions.length) {
+                    return res.status(400).json({ success: false, error: "Invalid question order" })
+                }
+
+                questions = reorderedById
+            } else {
+                const normalizedOrder = (Array.isArray(order) ? order : []).map(i => parseInt(i, 10))
+                const isValidOrder =
+                    normalizedOrder.length === questions.length &&
+                    normalizedOrder.every(i => !Number.isNaN(i) && i >= 0 && i < questions.length)
+
+                if (!isValidOrder) {
+                    return res.status(400).json({ success: false, error: "Invalid question order" })
+                }
+
+                questions = normalizedOrder.map(i => questions[i])
             }
-
-            questions =
-                normalizedOrder.map(i => questions[i])
 
             course.sections[parsedSectionIndex]
                 .lessons[parsedQuizIndex]

@@ -17,13 +17,17 @@
     const contextDetails = document.getElementById('aiLessonContextDetails');
     const contextToggle = document.getElementById('aiContextToggle');
     const modelSelect = document.getElementById('courseAiModel');
+    const unreadIndicator = document.getElementById('aiChatUnreadIndicator');
 
     const courseId = popup.dataset.courseId || '';
     if (!input || !sendBtn || !messages || !transcript || !composer || !courseId) return;
 
     const state = {
       contextExpanded: false,
-      loading: false
+      loading: false,
+      isOpen: false,
+      unread: false,
+      lastFocusedElement: null
     };
 
     ensureWelcomeMessage(transcript);
@@ -31,24 +35,25 @@
 
     if (chatToggle) {
       chatToggle.addEventListener('click', function() {
-        toggleChat(popup);
+        toggleChat(popup, chatToggle, state);
         syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
         scrollMessagesToBottom(messages);
+        if (state.isOpen && input) {
+          input.focus();
+        }
       });
-    } else {
-      popup.classList.remove('hidden');
     }
 
     const closeBtn = popup.querySelector('[data-chat-close]');
-    if (closeBtn && chatToggle) {
+    if (closeBtn) {
       closeBtn.addEventListener('click', function() {
-        toggleChat(popup, false);
+        toggleChat(popup, chatToggle, state, false);
       });
     }
 
     composer.addEventListener('submit', function(event) {
       event.preventDefault();
-      sendCustomMessage(courseId, input, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state);
+      sendCustomMessage(courseId, input, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state, popup, unreadIndicator);
     });
 
     input.addEventListener('keydown', function(event) {
@@ -65,7 +70,7 @@
     document.querySelectorAll('[data-ai-action]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const action = btn.dataset.aiAction || 'custom';
-        runLessonAiAction(courseId, action, input.value, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state);
+        runLessonAiAction(courseId, action, input.value, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state, popup, unreadIndicator);
       });
     });
 
@@ -80,10 +85,24 @@
       syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
     });
 
+    document.addEventListener('keydown', function(event) {
+      if (event.key !== 'Escape' || !state.isOpen) return;
+      event.preventDefault();
+      toggleChat(popup, chatToggle, state, false);
+    });
+
+    document.addEventListener('click', function(event) {
+      if (!state.isOpen) return;
+      if (popup.contains(event.target) || (chatToggle && chatToggle.contains(event.target))) return;
+      toggleChat(popup, chatToggle, state, false);
+    });
+
     syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
+    syncUnreadIndicator(unreadIndicator, state);
+    setWidgetOpenState(popup, chatToggle, state, false);
   }
 
-  function sendCustomMessage(courseId, input, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state) {
+  function sendCustomMessage(courseId, input, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state, popup, unreadIndicator) {
     const message = String(input.value || '').trim();
     if (!message || state.loading) return;
 
@@ -91,16 +110,17 @@
     input.value = '';
     resizeComposer(input);
     scrollMessagesToBottom(messages);
-    runLessonAiAction(courseId, 'custom', message, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state);
+    runLessonAiAction(courseId, 'custom', message, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state, popup, unreadIndicator);
   }
 
-  function runLessonAiAction(courseId, action, message, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state) {
+  function runLessonAiAction(courseId, action, message, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state, popup, unreadIndicator) {
     const model = modelSelect && modelSelect.value ? modelSelect.value : 'llama3.2';
     const context = getCurrentContext();
 
     if (!context.lessonId && (context.sectionIndex == null || context.lessonIndex == null)) {
       addMessage(transcript, 'ai', 'Open a lesson first so the AI tutor knows what to explain.', model);
       scrollMessagesToBottom(messages);
+      notifyClosedReply(state, unreadIndicator);
       return;
     }
 
@@ -135,11 +155,13 @@
         addMessage(transcript, 'ai', answer, data && data.model ? data.model : model);
         scrollMessagesToBottom(messages);
         refreshGamificationWidget();
+        notifyClosedReply(state, unreadIndicator);
       })
       .catch(function(err) {
         console.error('[Lesson AI Error]', err);
         addMessage(transcript, 'ai', 'Unable to reach the lesson AI tutor right now.', model);
         scrollMessagesToBottom(messages);
+        notifyClosedReply(state, unreadIndicator);
       })
       .finally(function() {
         setLoading(false, typing, status, sendBtn, state);
@@ -191,10 +213,64 @@
     return escapeHtml(text).replace(/\n/g, '<br>');
   }
 
-  function toggleChat(popup, forceOpen) {
-    const isHidden = popup.classList.contains('hidden');
+  function toggleChat(popup, chatToggle, state, forceOpen) {
+    const isHidden = popup.hidden;
     const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : isHidden;
-    popup.classList.toggle('hidden', !shouldOpen);
+    setWidgetOpenState(popup, chatToggle, state, shouldOpen);
+  }
+
+  function setWidgetOpenState(popup, chatToggle, state, isOpen) {
+    if (!popup) return;
+
+    const toggle = chatToggle || document.getElementById('aiChatToggle');
+    const widgetState = state || {};
+    const activeToggle = toggle instanceof HTMLElement ? toggle : null;
+
+    if (!isOpen && !widgetState.isOpen && popup.hidden) {
+      popup.classList.remove('is-open');
+      popup.setAttribute('aria-hidden', 'true');
+      if (activeToggle) {
+        activeToggle.setAttribute('aria-expanded', 'false');
+      }
+      syncUnreadIndicator(document.getElementById('aiChatUnreadIndicator'), widgetState);
+      return;
+    }
+
+    if (isOpen) {
+      widgetState.lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : activeToggle;
+      popup.hidden = false;
+      popup.classList.add('is-open');
+      popup.setAttribute('aria-hidden', 'false');
+      if (activeToggle) {
+        activeToggle.setAttribute('aria-expanded', 'true');
+      }
+      widgetState.isOpen = true;
+      widgetState.unread = false;
+      syncUnreadIndicator(document.getElementById('aiChatUnreadIndicator'), widgetState);
+      window.requestAnimationFrame(function() {
+        const focusTarget = popup.querySelector('#chatInput') || popup.querySelector('[data-chat-close]') || popup;
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+          focusTarget.focus();
+        }
+      });
+      return;
+    }
+
+    popup.classList.remove('is-open');
+    popup.setAttribute('aria-hidden', 'true');
+    if (activeToggle) {
+      activeToggle.setAttribute('aria-expanded', 'false');
+    }
+    widgetState.isOpen = false;
+    window.setTimeout(function() {
+      popup.hidden = true;
+      const returnFocusTarget = widgetState.lastFocusedElement instanceof HTMLElement
+        ? widgetState.lastFocusedElement
+        : activeToggle;
+      if (returnFocusTarget && typeof returnFocusTarget.focus === 'function') {
+        returnFocusTarget.focus();
+      }
+    }, 160);
   }
 
   function setLoading(isLoading, typing, status, sendBtn, state) {
@@ -256,6 +332,18 @@
   function scrollMessagesToBottom(messages) {
     if (!messages) return;
     messages.scrollTop = messages.scrollHeight;
+  }
+
+  function notifyClosedReply(state, unreadIndicator) {
+    if (!state || state.isOpen) return;
+    state.unread = true;
+    syncUnreadIndicator(unreadIndicator, state);
+  }
+
+  function syncUnreadIndicator(unreadIndicator, state) {
+    if (!unreadIndicator) return;
+    const hasUnread = Boolean(state && state.unread);
+    unreadIndicator.classList.toggle('hidden', !hasUnread);
   }
 
   function buildActionLabel(action) {

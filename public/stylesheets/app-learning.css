@@ -479,35 +479,6 @@
     margin-top: 12px;
 }
 
-.lesson-ai-dock {
-    position: static;
-    width: 100%;
-    height: auto;
-    max-height: none;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    overflow: visible;
-}
-
-.lesson-ai-dock.hidden {
-    display: none;
-}
-
-.learner-ai-card {
-    padding: 0;
-    overflow: hidden;
-}
-
-.learner-ai-card > .learner-sidebar-card-head {
-    padding: 16px 16px 0;
-    margin-bottom: 0;
-}
-
-.learner-ai-card .lesson-ai-panel {
-    max-height: min(720px, calc(100dvh - 180px));
-}
-
 #lessonFallbackPanel.card {
     margin-bottom: 0 !important;
 }
@@ -516,20 +487,105 @@
     padding: 18px;
 }
 
+.lesson-ai-floating-button {
+    position: fixed;
+    right: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    z-index: 11500;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 0 16px 0 12px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
+    color: #0f172a;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(18px);
+}
+
+.lesson-ai-floating-button:hover,
+.lesson-ai-floating-button:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 22px 50px rgba(15, 23, 42, 0.22);
+}
+
+.lesson-ai-floating-button-icon {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    font-size: 16px;
+}
+
+.lesson-ai-floating-button-label {
+    font-size: 0.95rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.lesson-ai-unread-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #ef4444;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.94);
+}
+
+.lesson-ai-unread-indicator.hidden {
+    display: none;
+}
+
+.lesson-ai-widget {
+    position: fixed;
+    right: 20px;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    z-index: 11490;
+    width: min(420px, calc(100vw - 32px));
+    max-height: min(78vh, 760px);
+    pointer-events: none;
+}
+
+.lesson-ai-widget[hidden] {
+    display: none !important;
+}
+
+.lesson-ai-widget.is-open {
+    pointer-events: auto;
+}
+
+.lesson-ai-widget-shell,
 .lesson-ai-panel {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: min(78vh, 760px);
     min-height: 0;
+    border: 1px solid rgba(226, 232, 240, 0.92);
+    border-radius: 28px;
     background:
         linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
+    backdrop-filter: blur(20px);
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.lesson-ai-widget.is-open .lesson-ai-widget-shell {
+    opacity: 1;
+    transform: translateY(0) scale(1);
 }
 
 .ai-chat-header,
 .lesson-ai-header {
-    position: sticky;
-    top: 0;
-    z-index: 2;
+    position: relative;
+    z-index: 1;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -550,6 +606,12 @@
     font-size: 0.95rem;
     font-weight: 800;
     color: #0f172a;
+}
+
+.lesson-ai-widget-subtitle {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #64748b;
 }
 
 .ai-chat-close {
@@ -765,8 +827,6 @@
 .ai-chat-input,
 .lesson-ai-composer {
     flex: 0 0 auto;
-    position: sticky;
-    bottom: 0;
     display: flex;
     align-items: flex-end;
     gap: 10px;
@@ -815,9 +875,29 @@ html[data-theme="dark"] .lesson-ai-panel {
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98));
 }
 
+html[data-theme="dark"] .lesson-ai-widget-shell {
+    border-color: rgba(71, 85, 105, 0.72);
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98));
+}
+
 html[data-theme="dark"] .lesson-ai-header {
     background: rgba(15, 23, 42, 0.94);
     border-bottom-color: rgba(71, 85, 105, 0.65);
+}
+
+html[data-theme="dark"] .lesson-ai-widget-subtitle {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .lesson-ai-floating-button {
+    border-color: rgba(71, 85, 105, 0.68);
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.96));
+    color: #e2e8f0;
+    box-shadow: 0 22px 54px rgba(2, 6, 23, 0.48);
+}
+
+html[data-theme="dark"] .lesson-ai-unread-indicator {
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.96);
 }
 
 html[data-theme="dark"] .lesson-ai-header-copy h6,
@@ -1129,6 +1209,14 @@ html[data-theme="dark"] .lesson-pdf-viewer {
     font-size: 18px;
 }
 
+.video-player-shell,
+.lesson-pdf-viewer-wrap,
+.show-media-panel,
+.learning-sidebar {
+    position: relative;
+    z-index: 1;
+}
+
 @media (max-width: 992px) {
     .learning-layout {
         grid-template-columns: 1fr;
@@ -1149,6 +1237,46 @@ html[data-theme="dark"] .lesson-pdf-viewer {
 }
 
 @media (max-width: 767.98px) {
+    .lesson-ai-floating-button {
+        right: 12px;
+        left: 12px;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        justify-content: center;
+        min-height: 52px;
+    }
+
+    .lesson-ai-widget {
+        left: 12px;
+        right: 12px;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        width: auto;
+        max-height: calc(100dvh - 24px);
+    }
+
+    .lesson-ai-widget-shell {
+        height: min(82dvh, calc(100dvh - 24px));
+        border-radius: 24px;
+    }
+
+    .lesson-ai-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .lesson-ai-widget-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .lesson-ai-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .lesson-ai-action-btn {
+        justify-content: flex-start;
+        text-align: left;
+    }
+
     .lesson-video-shell {
         display: flex;
         justify-content: center;
@@ -1234,7 +1362,4 @@ html[data-theme="dark"] .lesson-pdf-viewer {
         flex: 1 1 100%;
     }
 
-    .learner-ai-card .lesson-ai-panel {
-        max-height: none;
-    }
 }

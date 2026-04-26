@@ -74,6 +74,11 @@ const quizQuestionSchema = new Schema({
 }, { _id: true })
 
 const interactiveVideoQuizSchema = new Schema({
+    clientId: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     triggerTimeSec: {
         type: Number,
         required: true,
@@ -199,6 +204,47 @@ const sectionSchema = new Schema({
     }
 }, { _id: true })
 
+const aiSummaryFailureSchema = new Schema({
+    provider: {
+        type: String,
+        default: '',
+        trim: true
+    },
+    code: {
+        type: String,
+        default: '',
+        trim: true
+    }
+}, { _id: false })
+
+const aiSummarySchema = new Schema({
+    text: {
+        type: String,
+        default: ''
+    },
+    provider: {
+        type: String,
+        default: '',
+        trim: true
+    },
+    generatedAt: {
+        type: Date,
+        default: null
+    },
+    fallbackUsed: {
+        type: Boolean,
+        default: false
+    },
+    sourceUpdatedAt: {
+        type: Date,
+        default: null
+    },
+    failedProviders: {
+        type: [aiSummaryFailureSchema],
+        default: []
+    }
+}, { _id: false })
+
 // ==================== MAIN COURSE SCHEMA ====================
 
 const CourseSchema = new Schema({
@@ -302,7 +348,11 @@ const CourseSchema = new Schema({
     reviews: [{
         type: Schema.Types.ObjectId,
         ref: 'Review'
-    }]
+    }],
+    aiSummary: {
+        type: aiSummarySchema,
+        default: () => ({})
+    }
 }, opts)
 
 function inferLessonType(lesson) {

@@ -7,11 +7,16 @@
 
     // ==================== CONFIGURATION ====================
     let courseId = '';
-    let currentLibraryTab = 'lesson';
+    let currentLibraryTab = 'video';
     let courseData = [];
     const sortableInstances = new Map();
+    let librarySortable = null;
     let sortableScriptLoading = false;
     let sortableInitAttempts = 0;
+    const LIBRARY_GROUP = 'course-content';
+    const DEBUG_DND = false;
+    let selectedSectionId = '';
+    let selectedSectionIndex = -1;
     const HIT_TEST_DEBUG = false;
     let highlightedHitElement = null;
     let addItemModal = null;
@@ -43,7 +48,7 @@
         parseCourseData();
 
         // Initialize sortable lists
-        initSortable();
+        refreshEditorSortables();
 
         // Setup event delegation
         setupEventDelegation();
@@ -64,7 +69,7 @@
         window.addEventListener('resize', refreshExpandedSectionHeights);
 
         // Retry Sortable init once visible DOM settles.
-        window.setTimeout(initSortable, 150);
+        window.setTimeout(refreshEditorSortables, 150);
     }
 
     function initHitTestDebugger() {
@@ -257,7 +262,7 @@
 
             const sortable = new Sortable(list, {
                 group: {
-                    name: 'course-editor-items',
+                    name: LIBRARY_GROUP,
                     pull: true,
                     put: true
                 },
@@ -284,9 +289,31 @@
                 onMove: function(evt) {
                     document.querySelectorAll('.lesson-list.sortable-over').forEach(el => {
                         el.classList.remove('sortable-over');
+                        el.classList.remove('is-drag-over');
                     });
                     if (evt && evt.to) {
+                        expandSectionForLessonList(evt.to);
                         evt.to.classList.add('sortable-over');
+                        evt.to.classList.add('is-drag-over');
+                    }
+                    if (DEBUG_DND) {
+                        console.log('[CourseEditor][DND] move', {
+                            fromSection: evt.from && evt.from.dataset ? evt.from.dataset.sectionIndex : '',
+                            toSection: evt.to && evt.to.dataset ? evt.to.dataset.sectionIndex : '',
+                            fromLibrary: Boolean(evt.dragged && evt.dragged.classList && evt.dragged.classList.contains('library-item'))
+                        });
+                    }
+                },
+                onAdd: function(evt) {
+                    if (evt && evt.item && evt.item.classList.contains('library-item')) {
+                        evt.item.dataset.libraryInsert = '1';
+                        if (DEBUG_DND) {
+                            console.log('[CourseEditor][DND] onAdd from library', {
+                                targetSection: evt.to && evt.to.dataset ? evt.to.dataset.sectionIndex : '',
+                                itemId: evt.item.dataset.id || ''
+                            });
+                        }
+                        handleLibrarySortableAdd(evt);
                     }
                 },
                 onEnd: function(evt) {
@@ -299,7 +326,12 @@
                     });
                     document.querySelectorAll('.lesson-list.sortable-over').forEach(el => {
                         el.classList.remove('sortable-over');
+                        el.classList.remove('is-drag-over');
                     });
+                    if (evt && evt.item && evt.item.dataset.libraryInsert === '1') {
+                        delete evt.item.dataset.libraryInsert;
+                        return;
+                    }
                     persistLessonReorder(evt);
                 }
             });
@@ -320,10 +352,18 @@
         // Section collapse toggle
         document.addEventListener('click', handleSectionToggle);
 
-        // Native drag handlers are only for dragging library items into lessons.
-        document.addEventListener('dragover', handleDragOver, false);
-        document.addEventListener('dragleave', handleDragLeave, false);
-        document.addEventListener('drop', handleDrop, false);
+    }
+
+    function initSectionSortables() {
+        initSortable();
+    }
+
+    function initContentLibrarySortable(container) {
+        initLibrarySortable(container);
+    }
+
+    function refreshEditorSortables() {
+        initSectionSortables();
     }
 
     function bindDragHandleGuards() {
@@ -445,6 +485,10 @@
         const lessonItem = e.target.closest('.lesson-item');
         if (lessonItem) {
             setActiveLesson(lessonItem);
+            setSelectedSection({
+                sectionId: lessonItem.dataset.sectionId || '',
+                sectionIndex: lessonItem.dataset.sectionIndex
+            });
             const sectionIndex = lessonItem.dataset.sectionIndex;
             const lessonIndex = lessonItem.dataset.lessonIndex;
             const type = lessonItem.dataset.type;
@@ -459,6 +503,7 @@
             const sectionCtx = resolveSectionContext(sectionTitle);
             console.log('[CourseEditor] Editing section:', sectionCtx?.sectionCard);
             if (sectionCtx) {
+                setSelectedSection(sectionCtx);
                 startInlineSectionRename(sectionCtx);
             }
             return;
@@ -469,7 +514,10 @@
         if (addVideoBtn) {
             const sectionCtx = resolveSectionContext(addVideoBtn);
             console.log('[CourseEditor] Add video clicked:', { sectionIndex: sectionCtx?.sectionIndex, sectionId: sectionCtx?.sectionId, button: addVideoBtn });
-            if (sectionCtx) addVideo(sectionCtx);
+            if (sectionCtx) {
+                setSelectedSection(sectionCtx);
+                addVideo(sectionCtx);
+            }
             return;
         }
 
@@ -477,7 +525,10 @@
         if (addSlideBtn) {
             const sectionCtx = resolveSectionContext(addSlideBtn);
             console.log('[CourseEditor] Add slide clicked:', { sectionIndex: sectionCtx?.sectionIndex, sectionId: sectionCtx?.sectionId, button: addSlideBtn });
-            if (sectionCtx) addSlide(sectionCtx);
+            if (sectionCtx) {
+                setSelectedSection(sectionCtx);
+                addSlide(sectionCtx);
+            }
             return;
         }
 
@@ -485,7 +536,10 @@
         if (addQuizBtn) {
             const sectionCtx = resolveSectionContext(addQuizBtn);
             console.log('[CourseEditor] Add quiz clicked:', { sectionIndex: sectionCtx?.sectionIndex, sectionId: sectionCtx?.sectionId, button: addQuizBtn });
-            if (sectionCtx) addQuiz(sectionCtx);
+            if (sectionCtx) {
+                setSelectedSection(sectionCtx);
+                addQuiz(sectionCtx);
+            }
             return;
         }
 
@@ -525,6 +579,10 @@
 
         const sectionCard = header.closest('.section-card');
         if (!sectionCard) return;
+        const sectionCtx = resolveSectionContext(header);
+        if (sectionCtx) {
+            setSelectedSection(sectionCtx);
+        }
 
         const content = sectionCard.querySelector('.section-content');
         const icon = sectionCard.querySelector('.section-icon');
@@ -585,6 +643,21 @@
             sectionId: resolvedSectionId,
             sectionIndex
         };
+    }
+
+    function setSelectedSection(sectionCtx) {
+        const sectionId = String(sectionCtx && sectionCtx.sectionId || '').trim();
+        const parsedIndex = parseInt(sectionCtx && sectionCtx.sectionIndex, 10);
+        selectedSectionId = sectionId;
+        selectedSectionIndex = Number.isNaN(parsedIndex) ? -1 : parsedIndex;
+
+        document.querySelectorAll('.section-card.is-selected-for-library').forEach((card) => {
+            card.classList.remove('is-selected-for-library');
+        });
+
+        if (sectionCtx && sectionCtx.sectionCard) {
+            sectionCtx.sectionCard.classList.add('is-selected-for-library');
+        }
     }
 
     // ==================== SECTION FUNCTIONS ====================
@@ -1088,7 +1161,7 @@
             }
         });
 
-        initSortable();
+        refreshEditorSortables();
     }
 
     function getSectionState(sectionId, sectionIndex) {
@@ -1909,6 +1982,7 @@
         if (lessonList && hasLibraryPayload(e)) {
             e.preventDefault();
             lessonList.classList.add('drag-over');
+            lessonList.classList.add('is-drag-over');
         }
     }
 
@@ -1917,6 +1991,7 @@
         const lessonList = e.target.closest('.lesson-list');
         if (lessonList && hasLibraryPayload(e)) {
             lessonList.classList.remove('drag-over');
+            lessonList.classList.remove('is-drag-over');
         }
     }
 
@@ -1927,6 +2002,7 @@
         
         e.preventDefault();
         lessonList.classList.remove('drag-over');
+        lessonList.classList.remove('is-drag-over');
 
         if (!hasLibraryPayload(e)) return;
 
@@ -1948,6 +2024,30 @@
             return;
         }
 
+        await addItemToSection(sectionId, itemType, itemId);
+    }
+
+    async function handleLibrarySortableAdd(evt) {
+        const lessonList = evt && evt.to ? evt.to : null;
+        const libraryItem = evt && evt.item ? evt.item : null;
+        if (!lessonList || !libraryItem) return;
+
+        const sectionId = lessonList.dataset.sectionId;
+        const itemId = libraryItem.dataset.id || libraryItem.dataset.libraryId || '';
+        const itemType = libraryItem.dataset.type || libraryItem.dataset.contentType || '';
+
+        libraryItem.remove();
+        lessonList.classList.remove('sortable-over');
+        lessonList.classList.remove('is-drag-over');
+
+        if (!sectionId || !itemId || !itemType) {
+            showToast('Invalid library item data.', 'danger');
+            return;
+        }
+
+        if (DEBUG_DND) {
+            console.log('[CourseEditor][DND] add to section', { sectionId, itemId, itemType });
+        }
         await addItemToSection(sectionId, itemType, itemId);
     }
 
@@ -1976,7 +2076,22 @@
                 showToast('Failed to add item', 'danger');
                 return;
             }
-            location.reload();
+            const sectionIndex = courseData.findIndex((section) => String(section._id) === String(sectionId));
+            if (sectionIndex >= 0 && data.item) {
+                const section = courseData[sectionIndex];
+                section.lessons = Array.isArray(section.lessons) ? section.lessons : [];
+                section.lessons.push(normalizeEditorLesson(data.item, section.lessons.length));
+                section.lessons.forEach((lesson, index) => {
+                    lesson.order = index;
+                });
+                renderSections();
+                refreshEditorSortables();
+                const sectionCtx = resolveSectionContextById(sectionId);
+                if (sectionCtx) {
+                    setSelectedSection(sectionCtx);
+                }
+            }
+            showToast('Item added.', 'success');
         } catch {
             showToast('Failed to add item', 'danger');
         }
@@ -2119,6 +2234,20 @@
         }
     }
 
+    function expandSectionForLessonList(lessonList) {
+        const sectionCard = lessonList && lessonList.closest('.section-card');
+        if (!sectionCard || !sectionCard.classList.contains('is-collapsed')) return;
+
+        sectionCard.classList.remove('is-collapsed');
+        updateSectionContentHeight(sectionCard, true);
+
+        const icon = sectionCard.querySelector('.section-icon');
+        if (icon) {
+            icon.classList.add('fa-chevron-down');
+            icon.classList.remove('fa-chevron-right');
+        }
+    }
+
     function switchLibraryTab(type, clickedBtn) {
         currentLibraryTab = type;
         
@@ -2152,22 +2281,36 @@
 
             content.innerHTML = data.items.map(item => `
                 <div class="library-item" 
-                     draggable="true" 
                      data-id="${item._id}"
-                     data-type="${item.type}">
+                     data-library-id="${item._id}"
+                     data-type="${item.type}"
+                     data-content-type="${item.type}"
+                     data-title="${escapeAttribute(item.title || '')}"
+                     data-preview="${escapeAttribute(item.preview || '')}">
+                    <div class="library-item-drag" aria-hidden="true" title="Drag into a course section">
+                        <i class="fa-solid fa-grip-lines"></i>
+                    </div>
                     <div class="lib-icon ${item.type}">
                         <i class="fas ${icons[item.type]}"></i>
                     </div>
                     <span class="lib-title">${escapeHtml(formatLessonTitle(item.title))}</span>
-                    <button class="delete-btn" type="button" data-id="${item._id}" aria-label="Delete">
-                        Delete
-                    </button>
+                    <div class="library-item-actions">
+                        <button class="add-btn" type="button" data-library-add="${item._id}" data-library-type="${item.type}" aria-label="Add to selected section" title="Add to selected section">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                        <button class="delete-btn" type="button" data-id="${item._id}" aria-label="Delete">
+                            Delete
+                        </button>
+                    </div>
                 </div>
             `).join('');
 
-            // Attach drag handlers to library items
-            content.querySelectorAll('.library-item').forEach(item => {
-                item.addEventListener('dragstart', handleLibraryDrag);
+            content.querySelectorAll('.add-btn').forEach(btn => {
+                btn.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    addLibraryItemToSelectedSection(btn.dataset.libraryAdd, btn.dataset.libraryType);
+                });
             });
 
             content.querySelectorAll('.delete-btn').forEach(btn => {
@@ -2177,6 +2320,8 @@
                     deleteLibraryItem(btn.dataset.id, btn.closest('.library-item'));
                 });
             });
+
+            initContentLibrarySortable(content);
 
         } catch {
             content.innerHTML = '<div class="library-empty"><p>Error loading</p></div>';
@@ -2199,6 +2344,79 @@
         if (item.type) {
             e.dataTransfer.setData('type', item.type);
         }
+        document.body.classList.add('library-dragging');
+    }
+
+    function handleLibraryDragEnd() {
+        document.body.classList.remove('library-dragging');
+        document.querySelectorAll('.lesson-list.drag-over, .lesson-list.is-drag-over, .lesson-list.sortable-over').forEach((list) => {
+            list.classList.remove('drag-over', 'is-drag-over', 'sortable-over');
+        });
+    }
+
+    function initLibrarySortable(container) {
+        if (!container || typeof Sortable === 'undefined') return;
+
+        if (librarySortable && typeof librarySortable.destroy === 'function') {
+            librarySortable.destroy();
+        }
+
+        librarySortable = Sortable.create(container, {
+            group: {
+                name: LIBRARY_GROUP,
+                pull: 'clone',
+                put: false
+            },
+            sort: false,
+            draggable: '.library-item',
+            handle: '.library-item-drag',
+            animation: 150,
+            fallbackOnBody: true,
+            forceFallback: true,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onStart: function(evt) {
+                document.body.classList.add('library-dragging');
+                if (DEBUG_DND) {
+                    console.log('[CourseEditor][DND] library drag start', {
+                        itemId: evt && evt.item ? evt.item.dataset.id || '' : '',
+                        itemType: evt && evt.item ? evt.item.dataset.type || '' : ''
+                    });
+                }
+            },
+            onEnd: function() {
+                document.body.classList.remove('library-dragging');
+                document.querySelectorAll('.lesson-list.drag-over, .lesson-list.is-drag-over, .lesson-list.sortable-over').forEach((list) => {
+                    list.classList.remove('drag-over', 'is-drag-over', 'sortable-over');
+                });
+            }
+        });
+    }
+
+    async function addLibraryItemToSelectedSection(itemId, itemType) {
+        const sectionId = selectedSectionId || getDefaultSectionId();
+        if (!sectionId) {
+            showToast('Select a section first.', 'warning');
+            return;
+        }
+
+        const sectionCtx = resolveSectionContextById(sectionId);
+        if (sectionCtx) {
+            setSelectedSection(sectionCtx);
+        }
+
+        await addItemToSection(sectionId, itemType, itemId);
+    }
+
+    function getDefaultSectionId() {
+        return courseData[0] && courseData[0]._id ? String(courseData[0]._id) : '';
+    }
+
+    function resolveSectionContextById(sectionId) {
+        const targetCard = document.querySelector(`.section-card[data-section-id="${sectionId}"]`);
+        if (!targetCard) return null;
+        return resolveSectionContext(targetCard.querySelector('.section-header') || targetCard);
     }
 
     async function deleteLibraryItem(id, itemEl) {

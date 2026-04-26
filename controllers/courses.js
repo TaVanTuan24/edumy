@@ -13,6 +13,7 @@ const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
 const { findLessonContext } = require('../utils/lessonLocator');
 const { buildLessonAiContext, buildLessonAiPrompt } = require('../services/lessonAiContextService');
 const { generatePromptReply } = require('../services/ai/chatOrchestrator');
+const { generateCourseSummaryWithFallback } = require('../services/ai/courseSummaryService');
 const { normalizeAiModel } = require('../config/ai');
 const { buildCourseSectionsFromPreview } = require('../services/youtube/youtubeCourseImportService');
 const {
@@ -26,6 +27,17 @@ function countCourseLessons(course) {
     const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
     return total + lessons.length;
   }, 0);
+}
+
+function wantsJson(req) {
+  const acceptHeader = String(req.get('Accept') || '').toLowerCase();
+  const contentType = String(req.get('Content-Type') || '').toLowerCase();
+  return Boolean(
+    req.xhr
+    || acceptHeader.includes('application/json')
+    || contentType.includes('application/json')
+    || req.originalUrl.startsWith('/api/')
+  );
 }
 
 function sanitizeCourseInput(rawCourse) {
@@ -408,6 +420,76 @@ module.exports.updateCourse = async (req, res) => {
   });
   req.flash('success', 'Successfully updated course!');
   res.redirect(`/courses/${course._id}`);
+};
+
+module.exports.regenerateAiSummary = async (req, res) => {
+  const course = await Course.findById(req.params.id);
+  if (!course) {
+    if (wantsJson(req)) {
+      return res.status(404).json({ success: false, error: 'Course not found.' });
+    }
+    req.flash('error', 'Course not found.');
+    return res.redirect('/courses');
+  }
+
+  const summaryState = await generateCourseSummaryWithFallback(course, {
+    userId: req.user && req.user._id,
+    force: true,
+    persist: true
+  });
+
+  const redirectTo = `/explore/${course._id}/preview`;
+  const payload = {
+    success: !summaryState.unavailable,
+    summary: summaryState.summary,
+    providerUsed: summaryState.providerUsed,
+    fallbackUsed: summaryState.fallbackUsed,
+    failedProviders: summaryState.failedProviders,
+    unavailable: summaryState.unavailable,
+    refreshFailed: Boolean(summaryState.refreshFailed)
+  };
+
+  if (wantsJson(req)) {
+    if (summaryState.unavailable) {
+      return res.status(503).json({
+        ...payload,
+        error: 'AI summary is temporarily unavailable.'
+      });
+    }
+
+    if (summaryState.refreshFailed) {
+      return res.status(502).json({
+        ...payload,
+        error: 'AI summary refresh failed. The previous summary is still being shown.'
+      });
+    }
+
+    return res.json(payload);
+  }
+
+  if (summaryState.unavailable) {
+    req.flash('error', 'AI summary is temporarily unavailable.');
+    return res.redirect(redirectTo);
+  }
+
+  if (summaryState.refreshFailed) {
+    req.flash('error', 'AI summary refresh failed. The previous summary is still being shown.');
+    return res.redirect(redirectTo);
+  }
+
+  const providerLabel = summaryState.providerUsed === 'grok-scraper'
+    ? 'Grok'
+    : summaryState.providerUsed === 'gpt5.4'
+      ? 'GPT 5.4'
+      : 'llama3.2';
+
+  req.flash(
+    'success',
+    summaryState.fallbackUsed
+      ? `AI summary regenerated with fallback using ${providerLabel}.`
+      : `AI summary regenerated with ${providerLabel}.`
+  );
+  res.redirect(redirectTo);
 };
 
 module.exports.deleteCourse = async (req, res) => {
