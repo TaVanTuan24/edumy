@@ -82,6 +82,18 @@ class AIAbortError extends AIProviderError {
     }
 }
 
+class AIEndpointUnreachableError extends AIProviderError {
+    constructor(provider, cause) {
+        super('AI provider endpoint could not be reached', {
+            code: 'AI_ENDPOINT_UNREACHABLE',
+            statusCode: 502,
+            provider,
+            publicMessage: 'The AI provider endpoint could not be reached.',
+            cause
+        })
+    }
+}
+
 function normalizeProviderError(error, provider) {
     if (error instanceof AIProviderError) return error
     if (error && (error.name === 'AbortError' || error.code === 'ERR_CANCELED')) {
@@ -89,6 +101,9 @@ function normalizeProviderError(error, provider) {
     }
     if (error && (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')) {
         return new AITimeoutError(provider, error)
+    }
+    if (error && ['ENOTFOUND', 'ECONNREFUSED', 'EHOSTUNREACH', 'ECONNRESET', 'ERR_INVALID_URL', 'ERR_NETWORK'].includes(error.code)) {
+        return new AIEndpointUnreachableError(provider, error)
     }
 
     const status = error && error.response && error.response.status
@@ -134,5 +149,6 @@ module.exports = {
     AIQuotaExceededError,
     AITimeoutError,
     AIAbortError,
+    AIEndpointUnreachableError,
     normalizeProviderError
 }

@@ -3,14 +3,14 @@ const { aiConfig } = require('../../config/ai')
 const { normalizeMessages, normalizeFinalResponse, createStreamEvent } = require('./normalize')
 const { createRequestController, readSseStream } = require('./streamAdapters')
 const { normalizeProviderError } = require('./errors')
+const { getDefaultProviderBaseUrl, joinProviderUrl } = require('./providerBaseUrls')
 
 const PROVIDER = 'gemini'
-const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 
 async function generate(request) {
     try {
         const response = await axios.post(
-            `${BASE_URL}/${modelPath(request.model)}:generateContent`,
+            getGenerateUrl(request),
             buildPayload(request),
             buildAxiosConfig(request)
         )
@@ -25,7 +25,7 @@ async function generate(request) {
             finishReason: candidate && candidate.finishReason
         })
     } catch (error) {
-        throw normalizeProviderError(error, PROVIDER)
+        throw applyCustomBaseUrlHint(normalizeProviderError(error, PROVIDER), request)
     }
 }
 
@@ -42,7 +42,7 @@ async function stream(request, onEvent) {
     try {
         if (onEvent) onEvent(createStreamEvent('start', { provider: PROVIDER, model: request.model }))
         const response = await axios.post(
-            `${BASE_URL}/${modelPath(request.model)}:streamGenerateContent?alt=sse`,
+            getStreamUrl(request),
             buildPayload(request),
             buildAxiosConfig({ ...request, signal: controller.signal, responseType: 'stream' })
         )
@@ -64,7 +64,7 @@ async function stream(request, onEvent) {
         return final
     } catch (error) {
         controller.throwIfTimedOut(error)
-        const normalized = normalizeProviderError(error, PROVIDER)
+        const normalized = applyCustomBaseUrlHint(normalizeProviderError(error, PROVIDER), request)
         if (onEvent) onEvent(createStreamEvent('error', { provider: PROVIDER, model: request.model, error: toStreamError(normalized) }))
         throw normalized
     } finally {
@@ -98,7 +98,8 @@ function buildAxiosConfig(request) {
         },
         timeout: request.timeoutMs || aiConfig.providers.gemini.timeoutMs,
         signal: request.signal,
-        responseType: request.responseType
+        responseType: request.responseType,
+        maxRedirects: 3
     }
 }
 
@@ -121,11 +122,33 @@ function modelPath(model) {
     return `models/${encodeURIComponent(value)}`
 }
 
+function getGenerateUrl(request) {
+    return joinProviderUrl(
+        String(request.baseUrl || getDefaultProviderBaseUrl(PROVIDER)).replace(/\/+$/, ''),
+        `${modelPath(request.model)}:generateContent`
+    )
+}
+
+function getStreamUrl(request) {
+    return joinProviderUrl(
+        String(request.baseUrl || getDefaultProviderBaseUrl(PROVIDER)).replace(/\/+$/, ''),
+        `${modelPath(request.model)}:streamGenerateContent?alt=sse`
+    )
+}
+
 function toStreamError(error) {
     return {
         code: error.code || 'AI_PROVIDER_ERROR',
         message: error.publicMessage || 'AI service error'
     }
+}
+
+function applyCustomBaseUrlHint(error, request) {
+    if (!request || !request.baseUrlConfigured) return error
+    if (error && ['AI_PROVIDER_ERROR', 'AI_MODEL_NOT_AVAILABLE', 'AI_ENDPOINT_UNREACHABLE'].includes(error.code)) {
+        error.publicMessage = 'The custom API endpoint could not complete the request. Check your Base URL, API key, and model name.'
+    }
+    return error
 }
 
 module.exports = {

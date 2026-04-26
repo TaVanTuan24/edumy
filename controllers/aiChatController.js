@@ -6,6 +6,7 @@ const { awardGamification } = require('../utils/gamification')
 const { encryptKey, decryptKey } = require('../utils/apiKeyCrypto')
 const { validateApiKey, buildKeyStatus } = require('../utils/apiKeySecurity')
 const { logAuditEvent } = require('../utils/auditLogger')
+const { normalizeBaseUrl, getSafeBaseUrlHost } = require('../utils/validateAiBaseUrl')
 const {
     generateChatReply,
     generateChatReplyStream,
@@ -15,6 +16,22 @@ const {
     aiConfig
 } = require('../services/ai/chatOrchestrator')
 const { getModelConfig } = require('../config/ai')
+const { getProvider } = require('../services/ai/providerRegistry')
+const { BASE_URL_FIELDS } = require('../services/ai/providerBaseUrls')
+
+const PROVIDER_KEY_FIELDS = {
+    openai: 'openaiKey',
+    xai: 'xaiKey',
+    claude: 'claudeKey',
+    gemini: 'geminiKey'
+}
+
+const TEST_MODELS = {
+    openai: 'gpt-5.4',
+    xai: 'grok-api',
+    claude: 'claude-3-5-sonnet',
+    gemini: 'gemini-pro'
+}
 
 async function renderChat(req, res) {
     const aiModels = await getUserModelOptions(req.user._id)
@@ -425,28 +442,20 @@ async function listModels(req, res) {
 }
 
 async function getSettings(req, res) {
-    const status = await getUserKeyStatus(req.user._id)
-    res.json({ status, models: await getUserModelOptions(req.user._id) })
+    const snapshot = await getUserSettingsSnapshot(req.user._id)
+    res.json({ ...snapshot, models: await getUserModelOptions(req.user._id) })
 }
 
 async function saveSettings(req, res) {
     const payload = req.body || {}
-    const fields = ['openaiKey', 'xaiKey', 'claudeKey', 'geminiKey']
-    const providerByField = {
-        openaiKey: 'openai',
-        xaiKey: 'xai',
-        claudeKey: 'claude',
-        geminiKey: 'gemini'
-    }
     const update = {}
     const changedProviders = []
 
-    for (const field of fields) {
+    for (const [provider, field] of Object.entries(PROVIDER_KEY_FIELDS)) {
         if (Object.prototype.hasOwnProperty.call(payload, field)) {
             const value = String(payload[field] || '').trim()
             if (!value) continue
 
-            const provider = providerByField[field]
             const validation = validateApiKey(provider, value)
             if (!validation.ok) {
                 return res.status(400).json({ error: validation.error })
@@ -460,10 +469,32 @@ async function saveSettings(req, res) {
         }
     }
 
+    for (const [provider, field] of Object.entries(BASE_URL_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(payload, field)) {
+            const value = String(payload[field] || '').trim()
+            if (!value) continue
+
+            let normalized
+            try {
+                normalized = normalizeBaseUrl(value, provider)
+            } catch (error) {
+                return res.status(400).json({ error: error.message || 'Invalid base URL.' })
+            }
+
+            update[field] = normalized || ''
+            changedProviders.push({
+                provider,
+                baseUrlConfigured: Boolean(normalized),
+                baseUrlHost: getSafeBaseUrlHost(normalized)
+            })
+        }
+    }
+
     if (!Object.keys(update).length) {
+        const snapshot = await getUserSettingsSnapshot(req.user._id)
         return res.json({
             success: true,
-            status: await getUserKeyStatus(req.user._id),
+            ...snapshot,
             models: await getUserModelOptions(req.user._id)
         })
     }
@@ -476,7 +507,7 @@ async function saveSettings(req, res) {
 
     await logAuditEvent({
         req,
-        action: 'ai_key_saved',
+        action: 'ai_settings_saved',
         targetType: 'ai-settings',
         targetId: String(req.user._id),
         metadata: {
@@ -484,17 +515,13 @@ async function saveSettings(req, res) {
         }
     })
 
-    res.json({ success: true, status: await getUserKeyStatus(req.user._id), models: await getUserModelOptions(req.user._id) })
+    const snapshot = await getUserSettingsSnapshot(req.user._id)
+    res.json({ success: true, ...snapshot, models: await getUserModelOptions(req.user._id) })
 }
 
 async function clearSetting(req, res) {
-    const fieldMap = {
-        openai: 'openaiKey',
-        xai: 'xaiKey',
-        claude: 'claudeKey',
-        gemini: 'geminiKey'
-    }
-    const field = fieldMap[String(req.params.provider || '').toLowerCase()]
+    const provider = String(req.params.provider || '').toLowerCase()
+    const field = PROVIDER_KEY_FIELDS[provider]
     if (!field) {
         return res.status(400).json({ error: 'Unknown provider' })
     }
@@ -511,11 +538,116 @@ async function clearSetting(req, res) {
         targetType: 'ai-settings',
         targetId: String(req.user._id),
         metadata: {
-            provider: String(req.params.provider || '').toLowerCase()
+            provider
         }
     })
 
-    res.json({ success: true, status: await getUserKeyStatus(req.user._id), models: await getUserModelOptions(req.user._id) })
+    const snapshot = await getUserSettingsSnapshot(req.user._id)
+    res.json({ success: true, ...snapshot, models: await getUserModelOptions(req.user._id) })
+}
+
+async function resetBaseUrl(req, res) {
+    const provider = String(req.params.provider || '').toLowerCase()
+    const field = BASE_URL_FIELDS[provider]
+    if (!field) {
+        return res.status(400).json({ error: 'Unknown provider' })
+    }
+
+    await UserAISettings.findOneAndUpdate(
+        { user: req.user._id },
+        { $set: { [field]: '' }, $setOnInsert: { user: req.user._id } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    )
+
+    await logAuditEvent({
+        req,
+        action: 'ai_base_url_reset',
+        targetType: 'ai-settings',
+        targetId: String(req.user._id),
+        metadata: {
+            provider
+        }
+    })
+
+    const snapshot = await getUserSettingsSnapshot(req.user._id)
+    res.json({ success: true, ...snapshot, models: await getUserModelOptions(req.user._id) })
+}
+
+async function testProviderConnection(req, res) {
+    const provider = String(req.params.provider || '').toLowerCase()
+    const keyField = PROVIDER_KEY_FIELDS[provider]
+    const baseField = BASE_URL_FIELDS[provider]
+    const providerService = getProvider(provider)
+
+    if (!keyField || !baseField || !providerService || typeof providerService.generate !== 'function') {
+        return res.status(400).json({ error: 'Unknown provider' })
+    }
+
+    const settings = await UserAISettings.findOne({ user: req.user._id }).lean()
+    const apiKey = decryptKey(settings && settings[keyField])
+    const baseUrl = getStoredBaseUrl(provider, settings && settings[baseField])
+    const status = buildProviderStatus(provider, apiKey, baseUrl)
+
+    if (!apiKey) {
+        return res.status(400).json({
+            success: false,
+            ...status,
+            code: 'API_KEY_MISSING',
+            error: 'Save an API key before testing this provider.'
+        })
+    }
+
+    const testModel = getModelConfig(TEST_MODELS[provider])
+
+    try {
+        await providerService.generate({
+            apiKey,
+            baseUrl: baseUrl || undefined,
+            baseUrlConfigured: Boolean(baseUrl),
+            model: testModel.apiModel,
+            prompt: 'Reply with "ok".',
+            messages: [{ role: 'user', content: 'Reply with "ok".' }],
+            maxTokens: 16,
+            timeoutMs: Math.min(aiConfig.providers[provider].timeoutMs, 15000)
+        })
+
+        await logAuditEvent({
+            req,
+            action: 'ai_provider_tested',
+            targetType: 'ai-settings',
+            targetId: String(req.user._id),
+            metadata: {
+                provider,
+                success: true,
+                baseUrlConfigured: status.baseUrlConfigured,
+                baseUrlHost: status.baseUrlHost
+            }
+        })
+
+        return res.json({
+            success: true,
+            ...status,
+            message: 'Connection successful.'
+        })
+    } catch (error) {
+        const failure = mapProviderTestFailure(provider, status, error)
+
+        await logAuditEvent({
+            req,
+            action: 'ai_provider_tested',
+            targetType: 'ai-settings',
+            targetId: String(req.user._id),
+            metadata: {
+                provider,
+                success: false,
+                code: failure.body.code,
+                baseUrlConfigured: status.baseUrlConfigured,
+                baseUrlHost: status.baseUrlHost
+            }
+        })
+
+        return res.status(failure.statusCode).json(failure.body)
+    }
 }
 
 async function getChat(req, res) {
@@ -620,12 +752,97 @@ function getLastMessageModel(chat) {
 }
 
 async function getUserKeyStatus(userId) {
+    const snapshot = await getUserSettingsSnapshot(userId)
+    return snapshot.status
+}
+
+async function getUserSettingsSnapshot(userId) {
     const settings = await UserAISettings.findOne({ user: userId }).lean()
+    return buildSettingsSnapshot(settings)
+}
+
+function buildSettingsSnapshot(settings) {
     return {
-        openai: buildKeyStatus(decryptKey(settings && settings.openaiKey)),
-        xai: buildKeyStatus(decryptKey(settings && settings.xaiKey)),
-        claude: buildKeyStatus(decryptKey(settings && settings.claudeKey)),
-        gemini: buildKeyStatus(decryptKey(settings && settings.geminiKey))
+        status: {
+            openai: buildProviderStatus('openai', decryptKey(settings && settings.openaiKey), settings && settings.openaiBaseUrl),
+            xai: buildProviderStatus('xai', decryptKey(settings && settings.xaiKey), settings && settings.xaiBaseUrl),
+            claude: buildProviderStatus('claude', decryptKey(settings && settings.claudeKey), settings && settings.claudeBaseUrl),
+            gemini: buildProviderStatus('gemini', decryptKey(settings && settings.geminiKey), settings && settings.geminiBaseUrl)
+        },
+        baseUrls: {
+            openai: getStoredBaseUrl('openai', settings && settings.openaiBaseUrl),
+            xai: getStoredBaseUrl('xai', settings && settings.xaiBaseUrl),
+            claude: getStoredBaseUrl('claude', settings && settings.claudeBaseUrl),
+            gemini: getStoredBaseUrl('gemini', settings && settings.geminiBaseUrl)
+        }
+    }
+}
+
+function buildProviderStatus(provider, apiKey, baseUrl) {
+    const keyStatus = buildKeyStatus(apiKey)
+    const normalizedBaseUrl = getStoredBaseUrl(provider, baseUrl)
+    return {
+        provider,
+        connected: keyStatus.connected,
+        masked: keyStatus.masked,
+        baseUrlConfigured: Boolean(normalizedBaseUrl),
+        baseUrlHost: getSafeBaseUrlHost(normalizedBaseUrl)
+    }
+}
+
+function mapProviderTestFailure(provider, status, error) {
+    const code = String(error && error.code || 'AI_PROVIDER_ERROR')
+    const payload = {
+        success: false,
+        ...status,
+        code,
+        error: 'Connection test failed.'
+    }
+
+    if (code === 'AI_AUTH_FAILED') {
+        payload.error = 'Invalid API key.'
+        return { statusCode: 401, body: payload }
+    }
+
+    if (code === 'AI_RATE_LIMITED') {
+        payload.error = 'Rate limited.'
+        return { statusCode: 429, body: payload }
+    }
+
+    if (code === 'AI_MODEL_NOT_AVAILABLE') {
+        payload.error = 'Model unavailable for this provider.'
+        return { statusCode: 404, body: payload }
+    }
+
+    if (code === 'AI_TIMEOUT' || code === 'AI_ENDPOINT_UNREACHABLE') {
+        payload.error = 'The configured endpoint could not be reached.'
+        return { statusCode: code === 'AI_TIMEOUT' ? 504 : 502, body: payload }
+    }
+
+    if (code === 'API_KEY_MISSING') {
+        payload.error = 'Save an API key before testing this provider.'
+        return { statusCode: 400, body: payload }
+    }
+
+    if (status.baseUrlConfigured) {
+        payload.error = 'The custom API endpoint could not complete the request. Check your Base URL, API key, and model name.'
+    } else {
+        payload.error = 'The provider could not complete the request.'
+    }
+
+    return {
+        statusCode: error && error.statusCode ? error.statusCode : 503,
+        body: payload
+    }
+}
+
+function getStoredBaseUrl(provider, value) {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+    try {
+        return normalizeBaseUrl(raw, provider) || ''
+    } catch {
+        return ''
     }
 }
 
@@ -683,6 +900,8 @@ module.exports = {
     getSettings,
     saveSettings,
     clearSetting,
+    resetBaseUrl,
+    testProviderConnection,
     getChat,
     deleteChat
 }

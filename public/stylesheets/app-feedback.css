@@ -220,6 +220,10 @@ body.app-confirm-open {
     border-color: rgba(245, 158, 11, 0.24);
 }
 
+.app-toast.is-info {
+    border-color: rgba(14, 116, 144, 0.24);
+}
+
 .app-toast-copy {
     flex: 1 1 auto;
     min-width: 0;

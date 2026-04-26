@@ -41,6 +41,10 @@ router.post("/settings", aiSettingsLimiter, aiChatController.saveSettings)
 
 router.delete("/settings/:provider", aiSettingsLimiter, aiChatController.clearSetting)
 
+router.delete("/settings/:provider/base-url", aiSettingsLimiter, aiChatController.resetBaseUrl)
+
+router.post("/settings/:provider/test", aiSettingsLimiter, aiChatController.testProviderConnection)
+
 // Stream message - creates new chat or appends to existing conversation
 router.post("/chat/stream", aiStreamLimiter, aiChatController.streamMessage)
 

@@ -12,7 +12,15 @@ const userAISettingsSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    openaiBaseUrl: {
+        type: String,
+        default: ''
+    },
     xaiKey: {
+        type: String,
+        default: ''
+    },
+    xaiBaseUrl: {
         type: String,
         default: ''
     },
@@ -20,7 +28,15 @@ const userAISettingsSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    claudeBaseUrl: {
+        type: String,
+        default: ''
+    },
     geminiKey: {
+        type: String,
+        default: ''
+    },
+    geminiBaseUrl: {
         type: String,
         default: ''
     },

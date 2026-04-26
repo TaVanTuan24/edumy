@@ -9,6 +9,8 @@
     isLoading: false,
     chats: [],
     models: [],
+    providerStatus: {},
+    savedBaseUrls: {},
     shouldAutoScroll: true
   };
 
@@ -25,11 +27,11 @@
     modelSelect: document.getElementById('modelSelect'),
     modelLabel: document.getElementById('conversationModelLabel'),
     headerModelLabel: document.getElementById('headerModelLabel'),
+    modelEndpointHint: document.getElementById('modelEndpointHint'),
     settingsBtn: document.getElementById('aiSettingsBtn'),
     settingsModal: document.getElementById('aiSettingsModal'),
     settingsCloseBtn: document.getElementById('aiSettingsCloseBtn'),
     settingsForm: document.getElementById('aiSettingsForm'),
-    settingsMessage: document.getElementById('aiSettingsMessage'),
     errorBanner: document.getElementById('errorBanner'),
     emptyState: document.getElementById('emptyState'),
     messages: document.getElementById('messages'),
@@ -47,6 +49,7 @@
     showEmptyState();
     loadChats();
     loadModels();
+    refreshSettingsSnapshot({ silent: true, updateForm: false, updateModels: false });
     els.input.focus();
 
     els.form.addEventListener('submit', function(event) {
@@ -81,6 +84,16 @@
       els.settingsForm.querySelectorAll('[data-clear-key]').forEach(function(button) {
         button.addEventListener('click', function() {
           clearProviderKey(button.dataset.clearKey);
+        });
+      });
+      els.settingsForm.querySelectorAll('[data-reset-base-url]').forEach(function(button) {
+        button.addEventListener('click', function() {
+          resetProviderBaseUrl(button.dataset.resetBaseUrl);
+        });
+      });
+      els.settingsForm.querySelectorAll('[data-test-provider]').forEach(function(button) {
+        button.addEventListener('click', function() {
+          testProviderConnection(button.dataset.testProvider);
         });
       });
     }
@@ -662,6 +675,7 @@
     if (els.headerModelLabel) {
       els.headerModelLabel.textContent = label;
     }
+    updateModelEndpointHint();
   }
 
   function modelLabel(model) {
@@ -678,6 +692,13 @@
     return item && item.provider ? item.provider : '';
   }
 
+  function providerKey(model) {
+    const item = state.models.find(function(entry) {
+      return entry.id === model;
+    });
+    return item && item.providerKey ? item.providerKey : '';
+  }
+
   function modelBadgeLabel(model) {
     const provider = providerLabel(model);
     const label = modelLabel(model);
@@ -689,7 +710,8 @@
       return {
         id: option.value,
         label: option.textContent.replace(/\s+\((disabled|Requires API key)\)$/i, '').trim(),
-        provider: '',
+        provider: option.dataset.provider || '',
+        providerKey: option.dataset.providerKey || '',
         enabled: !option.disabled,
         disabledReason: option.disabled ? 'Requires API key' : ''
       };
@@ -714,6 +736,7 @@
         id: String(model.id || ''),
         label: String(model.label || model.id || ''),
         provider: String(model.provider || ''),
+        providerKey: String(model.providerKey || ''),
         enabled: model.enabled !== false,
         disabledReason: String(model.disabledReason || '')
       };
@@ -733,6 +756,8 @@
       const option = document.createElement('option');
       option.value = model.id;
       option.disabled = !model.enabled;
+      option.dataset.provider = model.provider || '';
+      option.dataset.providerKey = model.providerKey || '';
       option.textContent = model.label + (model.provider ? ' - ' + model.provider : '') +
         (model.enabled ? '' : ' (' + (model.disabledReason || 'Unavailable') + ')');
       els.modelSelect.appendChild(option);
@@ -745,31 +770,81 @@
     renderChatList();
   }
 
+  function updateModelEndpointHint() {
+    if (!els.modelEndpointHint) return;
+    const provider = providerKey(selectedModel());
+    const entry = provider && state.providerStatus ? state.providerStatus[provider] : null;
+    if (entry && entry.baseUrlConfigured) {
+      els.modelEndpointHint.hidden = false;
+      els.modelEndpointHint.textContent = 'Using custom ' + providerDisplayName(provider) + ' base URL';
+      return;
+    }
+    els.modelEndpointHint.hidden = true;
+    els.modelEndpointHint.textContent = '';
+  }
+
+  function populateBaseUrlFields(baseUrls) {
+    if (!els.settingsForm) return;
+    ['openai', 'xai', 'claude', 'gemini'].forEach(function(provider) {
+      const field = els.settingsForm.querySelector('[name="' + provider + 'BaseUrl"]');
+      if (field) field.value = baseUrls && baseUrls[provider] ? String(baseUrls[provider]) : '';
+    });
+  }
+
+  function hasUnsavedProviderChanges(provider) {
+    if (!els.settingsForm || !provider) return false;
+    const keyField = els.settingsForm.querySelector('[name="' + provider + 'Key"]');
+    const baseUrlField = els.settingsForm.querySelector('[name="' + provider + 'BaseUrl"]');
+    const savedBaseUrl = state.savedBaseUrls && state.savedBaseUrls[provider]
+      ? String(state.savedBaseUrls[provider]).trim()
+      : '';
+    const pendingKey = keyField ? String(keyField.value || '').trim() : '';
+    const pendingBaseUrl = baseUrlField ? String(baseUrlField.value || '').trim() : '';
+    return Boolean(pendingKey) || pendingBaseUrl !== savedBaseUrl;
+  }
+
+  function providerDisplayName(provider) {
+    const labels = {
+      openai: 'OpenAI',
+      xai: 'xAI',
+      claude: 'Claude',
+      gemini: 'Gemini'
+    };
+    return labels[String(provider || '').toLowerCase()] || 'Provider';
+  }
+
   async function openSettings() {
     if (!els.settingsModal) return;
     els.settingsModal.hidden = false;
-    setSettingsMessage('Checking provider status...');
-    await loadSettings();
-    const firstInput = els.settingsForm && els.settingsForm.querySelector('input');
+    await refreshSettingsSnapshot({ silent: false, updateForm: true, updateModels: true });
+    const firstInput = els.settingsForm && els.settingsForm.querySelector('input[type="password"], input[type="url"]');
     if (firstInput) firstInput.focus();
   }
 
   function closeSettings() {
     if (!els.settingsModal) return;
     els.settingsModal.hidden = true;
-    setSettingsMessage('');
   }
 
-  async function loadSettings() {
+  async function refreshSettingsSnapshot(options) {
+    const settings = options || {};
     try {
       const res = await fetch('/ai/settings');
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || 'Could not load AI settings');
+      state.providerStatus = data.status || {};
+      state.savedBaseUrls = data.baseUrls || {};
       updateSettingsStatus(data.status || {});
-      if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
-      setSettingsMessage('Keys are stored encrypted. Saved values are not shown again.');
+      if (settings.updateForm !== false) populateBaseUrlFields(data.baseUrls || {});
+      if (settings.updateModels !== false && Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
     } catch (error) {
-      setSettingsMessage(error.message || 'Could not load AI settings.', true);
+      if (!settings.silent) {
+        showSettingsToast({
+          type: 'error',
+          title: 'AI Settings',
+          message: error.message || 'Could not load AI settings.'
+        });
+      }
     }
   }
 
@@ -783,13 +858,21 @@
       const value = String(formData.get(field) || '').trim();
       if (value) payload[field] = value;
     });
+    ['openaiBaseUrl', 'xaiBaseUrl', 'claudeBaseUrl', 'geminiBaseUrl'].forEach(function(field) {
+      const value = String(formData.get(field) || '').trim();
+      if (value) payload[field] = value;
+    });
+    const changedProviders = changedProvidersFromPayload(payload);
 
     if (!Object.keys(payload).length) {
-      setSettingsMessage('Enter at least one new key to save.');
+      showSettingsToast({
+        type: 'warning',
+        title: 'Nothing to save',
+        message: 'Enter a new API key or Base URL first.'
+      });
       return;
     }
 
-    setSettingsMessage('Saving keys...');
     try {
       const res = await fetch('/ai/settings', {
         method: 'POST',
@@ -799,18 +882,33 @@
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || 'Could not save AI settings');
       els.settingsForm.reset();
+      state.providerStatus = data.status || {};
+      state.savedBaseUrls = data.baseUrls || {};
+      populateBaseUrlFields(data.baseUrls || {});
       updateSettingsStatus(data.status || {});
       if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
-      setSettingsMessage('Saved. Available models have been updated.');
+      showSettingsToast({
+        type: 'success',
+        provider: changedProviders.length === 1 ? changedProviders[0] : '',
+        title: changedProviders.length === 1 ? 'Saved' : 'Settings saved',
+        message: changedProviders.length === 1
+          ? 'Provider settings updated.'
+          : 'Selected provider settings were updated.'
+      });
     } catch (error) {
-      setSettingsMessage(error.message || 'Could not save AI settings.', true);
+      showSettingsToast({
+        type: isLikelyValidationMessage(error && error.message) ? 'warning' : 'error',
+        provider: changedProviders.length === 1 ? changedProviders[0] : '',
+        title: 'Save failed',
+        message: error.message || 'Could not save AI settings.'
+      });
     }
   }
 
   async function clearProviderKey(provider) {
     if (!provider) return;
     try {
-      const providerLabel = String(provider || '').toUpperCase();
+      const providerLabel = providerDisplayName(provider);
       const confirmed = await window.showConfirmModal({
         title: 'Remove API Key',
         message: `Remove the saved ${providerLabel} API key?`,
@@ -819,24 +917,133 @@
         confirmingText: 'Removing...',
         variant: 'warning',
         onConfirm: async function() {
-          setSettingsMessage('Removing key...');
-          const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
-          const res = await fetcher('/ai/settings/' + encodeURIComponent(provider), { method: 'DELETE' });
-          const data = await safeJson(res);
-          if (!res.ok) throw new Error(data.error || 'Could not remove key');
-          updateSettingsStatus(data.status || {});
-          if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
-          setSettingsMessage('Key removed. Available models have been updated.');
+          try {
+            const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+            const res = await fetcher('/ai/settings/' + encodeURIComponent(provider), { method: 'DELETE' });
+            const data = await safeJson(res);
+            if (!res.ok) throw new Error(data.error || 'Could not remove key');
+            state.providerStatus = data.status || {};
+            state.savedBaseUrls = data.baseUrls || {};
+            populateBaseUrlFields(data.baseUrls || {});
+            updateSettingsStatus(data.status || {});
+            if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
+            showSettingsToast({
+              type: 'success',
+              provider: provider,
+              title: 'Key removed',
+              message: 'The saved API key was removed.'
+            });
+          } catch (error) {
+            showSettingsToast({
+              type: 'error',
+              provider: provider,
+              title: 'Remove failed',
+              message: error.message || 'Could not remove key.'
+            });
+            throw error;
+          }
         }
       });
       if (!confirmed) return;
     } catch (error) {
-      setSettingsMessage(error.message || 'Could not remove key.', true);
+      if (!error || !error.message) {
+        showSettingsToast({
+          type: 'error',
+          provider: provider,
+          title: 'Remove failed',
+          message: 'Could not remove key.'
+        });
+      }
+    }
+  }
+
+  async function resetProviderBaseUrl(provider) {
+    if (!provider) return;
+    try {
+      const confirmed = await window.showConfirmModal({
+        title: 'Reset Base URL',
+        message: `Reset the saved ${providerDisplayName(provider)} Base URL to the default endpoint?`,
+        warning: 'Your API key will stay saved.',
+        confirmText: 'Reset Base URL',
+        confirmingText: 'Resetting...',
+        variant: 'warning',
+        onConfirm: async function() {
+          try {
+            const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+            const res = await fetcher('/ai/settings/' + encodeURIComponent(provider) + '/base-url', { method: 'DELETE' });
+            const data = await safeJson(res);
+            if (!res.ok) throw new Error(data.error || 'Could not reset Base URL');
+            state.providerStatus = data.status || {};
+            state.savedBaseUrls = data.baseUrls || {};
+            populateBaseUrlFields(data.baseUrls || {});
+            updateSettingsStatus(data.status || {});
+            if (Array.isArray(data.models)) renderModelOptions(data.models, selectedModel());
+            showSettingsToast({
+              type: 'success',
+              provider: provider,
+              title: 'Base URL reset',
+              message: 'The default endpoint is active again.'
+            });
+          } catch (error) {
+            showSettingsToast({
+              type: 'error',
+              provider: provider,
+              title: 'Reset failed',
+              message: error.message || 'Could not reset Base URL.'
+            });
+            throw error;
+          }
+        }
+      });
+      if (!confirmed) return;
+    } catch (error) {
+      if (!error || !error.message) {
+        showSettingsToast({
+          type: 'error',
+          provider: provider,
+          title: 'Reset failed',
+          message: 'Could not reset Base URL.'
+        });
+      }
+    }
+  }
+
+  async function testProviderConnection(provider) {
+    if (!provider) return;
+    if (hasUnsavedProviderChanges(provider)) {
+      showSettingsToast({
+        type: 'warning',
+        provider: provider,
+        title: 'Save required',
+        message: 'Save your changes before testing this provider.'
+      });
+      return;
+    }
+
+    try {
+      const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+      const res = await fetcher('/ai/settings/' + encodeURIComponent(provider) + '/test', { method: 'POST' });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || 'Connection test failed.');
+      showSettingsToast({
+        type: 'success',
+        provider: provider,
+        title: 'Connection successful',
+        message: 'The saved endpoint responded successfully.'
+      });
+    } catch (error) {
+      showSettingsToast({
+        type: 'error',
+        provider: provider,
+        title: 'Connection failed',
+        message: error.message || 'Connection test failed.'
+      });
     }
   }
 
   function updateSettingsStatus(status) {
     if (!els.settingsForm) return;
+    state.providerStatus = status || {};
     els.settingsForm.querySelectorAll('[data-key-status]').forEach(function(node) {
       const provider = node.dataset.keyStatus;
       const entry = status && status[provider] ? status[provider] : {};
@@ -845,12 +1052,57 @@
       node.textContent = connected ? 'Connected' + masked : 'Not connected';
       node.classList.toggle('is-connected', connected);
     });
+    els.settingsForm.querySelectorAll('[data-base-url-status]').forEach(function(node) {
+      const provider = node.dataset.baseUrlStatus;
+      const entry = status && status[provider] ? status[provider] : {};
+      node.textContent = entry && entry.baseUrlConfigured && entry.baseUrlHost
+        ? 'Base URL: ' + entry.baseUrlHost
+        : 'Default endpoint';
+      node.classList.toggle('is-custom', Boolean(entry && entry.baseUrlConfigured));
+    });
+    updateModelEndpointHint();
   }
 
-  function setSettingsMessage(message, isError) {
-    if (!els.settingsMessage) return;
-    els.settingsMessage.textContent = message || '';
-    els.settingsMessage.classList.toggle('is-error', Boolean(isError));
+  function showSettingsToast(config) {
+    const options = config || {};
+    const provider = options.provider ? providerDisplayName(options.provider) : '';
+    const title = provider && options.title
+      ? provider + ': ' + options.title
+      : (options.title || 'Notice');
+
+    if (typeof window.showToast === 'function') {
+      window.showToast({
+        type: options.type || 'info',
+        title: title,
+        message: options.message || '',
+        duration: options.duration
+      });
+      return;
+    }
+
+    if (typeof window.showAppToast === 'function') {
+      const variant = options.type === 'error' ? 'danger' : (options.type || 'info');
+      window.showAppToast(options.message || '', variant, {
+        title: title,
+        duration: options.duration
+      });
+    }
+  }
+
+  function changedProvidersFromPayload(payload) {
+    const providers = [];
+    ['openai', 'xai', 'claude', 'gemini'].forEach(function(provider) {
+      const hasKey = Object.prototype.hasOwnProperty.call(payload || {}, provider + 'Key');
+      const hasBaseUrl = Object.prototype.hasOwnProperty.call(payload || {}, provider + 'BaseUrl');
+      if (hasKey || hasBaseUrl) {
+        providers.push(provider);
+      }
+    });
+    return providers;
+  }
+
+  function isLikelyValidationMessage(message) {
+    return /(required|invalid|must|cannot|too short|too long|enter|save your changes)/i.test(String(message || ''));
   }
 
   function autoResize(textarea) {

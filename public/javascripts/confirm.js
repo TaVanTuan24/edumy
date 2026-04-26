@@ -265,19 +265,19 @@
   function showAppToast(message, variant, options) {
     if (!els || !els.toastStack) return;
 
-    const config = options && typeof options === 'object' ? options : {};
-    const tone = ['success', 'danger', 'warning', 'normal'].includes(String(variant || '').trim())
-      ? String(variant).trim()
-      : 'normal';
+    const normalized = normalizeToastInput(message, variant, options);
+    const tone = normalized.tone;
     const toast = document.createElement('div');
-    const duration = Number.isFinite(Number(config.duration)) ? Math.max(1200, Number(config.duration)) : 3200;
+    const duration = Number.isFinite(Number(normalized.duration)) ? Math.max(1200, Number(normalized.duration)) : 3200;
 
     toast.className = 'app-toast is-' + tone;
-    toast.setAttribute('role', 'status');
+    toast.setAttribute('role', tone === 'danger' ? 'alert' : 'status');
+    toast.setAttribute('aria-live', tone === 'danger' ? 'assertive' : 'polite');
+    toast.setAttribute('aria-atomic', 'true');
     toast.innerHTML =
       '<div class="app-toast-copy">' +
-        '<strong class="app-toast-title">' + escapeHtml(config.title || toastTitleForVariant(tone)) + '</strong>' +
-        '<div class="app-toast-message">' + escapeHtml(message || '') + '</div>' +
+        '<strong class="app-toast-title">' + escapeHtml(normalized.title || toastTitleForVariant(tone)) + '</strong>' +
+        '<div class="app-toast-message">' + escapeHtml(normalized.message || '') + '</div>' +
       '</div>' +
       '<button type="button" class="app-toast-close" aria-label="Dismiss notification">' +
         '<i class="fa-solid fa-xmark" aria-hidden="true"></i>' +
@@ -302,11 +302,43 @@
     window.setTimeout(remove, duration);
   }
 
+  function showToast(config) {
+    const options = config && typeof config === 'object' ? config : {};
+    return showAppToast(options.message || '', options.type || 'info', options);
+  }
+
+  function normalizeToastInput(message, variant, options) {
+    if (message && typeof message === 'object' && !Array.isArray(message)) {
+      const config = message;
+      return {
+        message: String(config.message || '').trim(),
+        tone: normalizeToastTone(config.type || config.variant),
+        title: String(config.title || '').trim(),
+        duration: config.duration
+      };
+    }
+
+    const config = options && typeof options === 'object' ? options : {};
+    return {
+      message: String(message || '').trim(),
+      tone: normalizeToastTone(variant),
+      title: String(config.title || '').trim(),
+      duration: config.duration
+    };
+  }
+
+  function normalizeToastTone(variant) {
+    const value = String(variant || '').trim().toLowerCase();
+    if (value === 'error') return 'danger';
+    if (value === 'normal') return 'info';
+    return ['success', 'danger', 'warning', 'info'].includes(value) ? value : 'info';
+  }
+
   function toastTitleForVariant(variant) {
-    if (variant === 'success') return 'Done';
+    if (variant === 'success') return 'Success';
     if (variant === 'danger') return 'Error';
     if (variant === 'warning') return 'Warning';
-    return 'Notice';
+    return 'Info';
   }
 
   function escapeHtml(value) {
@@ -320,6 +352,7 @@
 
   window.showConfirmModal = showConfirmModal;
   window.showAppToast = showAppToast;
+  window.showToast = showToast;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

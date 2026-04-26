@@ -55,6 +55,8 @@
                         <% (aiModels || []).forEach((model) => { %>
                             <option
                                 value="<%= model.id %>"
+                                data-provider="<%= model.provider || '' %>"
+                                data-provider-key="<%= model.providerKey || '' %>"
                                 <%= model.id === defaultAiModel ? 'selected' : '' %>
                                 <%= model.enabled ? '' : 'disabled' %>
                             >
@@ -62,6 +64,7 @@
                             </option>
                         <% }) %>
                     </select>
+                    <small class="ai-model-endpoint-hint" id="modelEndpointHint" hidden></small>
                 </label>
                 <button class="btn btn-secondary ai-settings-btn" id="aiSettingsBtn" type="button">
                     <i class="fa-solid fa-gear"></i>
@@ -137,7 +140,7 @@
             <div>
                 <p class="ai-eyebrow">BYOK</p>
                 <h2 id="aiSettingsTitle">AI Settings</h2>
-                <span>Add your own API keys. Keys are encrypted and never shown again after saving.</span>
+                <span>Add your own API keys and optional Base URLs. Keys are encrypted and never shown again after saving.</span>
             </div>
             <button class="btn btn-ghost ai-icon-btn" id="aiSettingsCloseBtn" type="button" aria-label="Close AI settings">
                 <i class="fa-solid fa-xmark"></i>
@@ -146,32 +149,122 @@
 
         <form class="ai-settings-form app-modal-body" id="aiSettingsForm">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <label>
-                <span>OpenAI-Compatible API Key <small data-key-status="openai">Checking...</small></span>
-                <input type="password" name="openaiKey" autocomplete="off" placeholder="Third-party gateway key" />
-                <button type="button" data-clear-key="openai">Clear</button>
-            </label>
-            <label>
-                <span>xAI API Key <small data-key-status="xai">Checking...</small></span>
-                <input type="password" name="xaiKey" autocomplete="off" placeholder="xai-..." />
-                <button type="button" data-clear-key="xai">Clear</button>
-            </label>
-            <label>
-                <span>Claude API Key <small data-key-status="claude">Checking...</small></span>
-                <input type="password" name="claudeKey" autocomplete="off" placeholder="sk-ant-..." />
-                <button type="button" data-clear-key="claude">Clear</button>
-            </label>
-            <label>
-                <span>Gemini API Key <small data-key-status="gemini">Checking...</small></span>
-                <input type="password" name="geminiKey" autocomplete="off" placeholder="AIza..." />
-                <button type="button" data-clear-key="gemini">Clear</button>
-            </label>
+            <div class="ai-settings-warning">
+                Advanced: Custom Base URL sends your API key and prompts to the configured provider. Only use trusted providers.
+            </div>
 
-            <div class="ai-settings-message" id="aiSettingsMessage"></div>
+            <section class="ai-settings-provider" data-provider-card="openai">
+                <div class="ai-settings-provider-head">
+                    <div>
+                        <h3>OpenAI</h3>
+                        <p>Example: https://api.openai.com/v1 or an OpenAI-compatible gateway.</p>
+                    </div>
+                    <div class="ai-settings-provider-status">
+                        <small data-key-status="openai">Checking...</small>
+                        <small data-base-url-status="openai">Default endpoint</small>
+                    </div>
+                </div>
+                <label class="ai-settings-field">
+                    <span>API Key</span>
+                    <input type="password" name="openaiKey" autocomplete="off" placeholder="sk-..." />
+                </label>
+                <label class="ai-settings-field">
+                    <span>Base URL</span>
+                    <input type="url" name="openaiBaseUrl" autocomplete="off" inputmode="url" placeholder="https://api.openai.com/v1" />
+                    <small>Optional. Use this for OpenAI-compatible third-party providers. Leave blank to use official OpenAI API.</small>
+                </label>
+                <div class="ai-settings-provider-actions">
+                    <button type="button" data-clear-key="openai">Clear key</button>
+                    <button type="button" data-reset-base-url="openai">Reset to default</button>
+                    <button type="button" data-test-provider="openai">Test connection</button>
+                </div>
+            </section>
+
+            <section class="ai-settings-provider" data-provider-card="xai">
+                <div class="ai-settings-provider-head">
+                    <div>
+                        <h3>xAI / Grok API</h3>
+                        <p>Leave blank for official xAI.</p>
+                    </div>
+                    <div class="ai-settings-provider-status">
+                        <small data-key-status="xai">Checking...</small>
+                        <small data-base-url-status="xai">Default endpoint</small>
+                    </div>
+                </div>
+                <label class="ai-settings-field">
+                    <span>API Key</span>
+                    <input type="password" name="xaiKey" autocomplete="off" placeholder="xai-..." />
+                </label>
+                <label class="ai-settings-field">
+                    <span>Base URL</span>
+                    <input type="url" name="xaiBaseUrl" autocomplete="off" inputmode="url" placeholder="https://api.x.ai/v1" />
+                    <small>Optional. Leave blank to use official xAI API.</small>
+                </label>
+                <div class="ai-settings-provider-actions">
+                    <button type="button" data-clear-key="xai">Clear key</button>
+                    <button type="button" data-reset-base-url="xai">Reset to default</button>
+                    <button type="button" data-test-provider="xai">Test connection</button>
+                </div>
+            </section>
+
+            <section class="ai-settings-provider" data-provider-card="claude">
+                <div class="ai-settings-provider-head">
+                    <div>
+                        <h3>Claude</h3>
+                        <p>Anthropic-compatible configuration.</p>
+                    </div>
+                    <div class="ai-settings-provider-status">
+                        <small data-key-status="claude">Checking...</small>
+                        <small data-base-url-status="claude">Default endpoint</small>
+                    </div>
+                </div>
+                <label class="ai-settings-field">
+                    <span>API Key</span>
+                    <input type="password" name="claudeKey" autocomplete="off" placeholder="sk-ant-..." />
+                </label>
+                <label class="ai-settings-field">
+                    <span>Base URL</span>
+                    <input type="url" name="claudeBaseUrl" autocomplete="off" inputmode="url" placeholder="https://api.anthropic.com/v1" />
+                    <small>Optional. Only use if your provider supports Anthropic-compatible APIs.</small>
+                </label>
+                <div class="ai-settings-provider-actions">
+                    <button type="button" data-clear-key="claude">Clear key</button>
+                    <button type="button" data-reset-base-url="claude">Reset to default</button>
+                    <button type="button" data-test-provider="claude">Test connection</button>
+                </div>
+            </section>
+
+            <section class="ai-settings-provider" data-provider-card="gemini">
+                <div class="ai-settings-provider-head">
+                    <div>
+                        <h3>Gemini</h3>
+                        <p>Google-compatible configuration.</p>
+                    </div>
+                    <div class="ai-settings-provider-status">
+                        <small data-key-status="gemini">Checking...</small>
+                        <small data-base-url-status="gemini">Default endpoint</small>
+                    </div>
+                </div>
+                <label class="ai-settings-field">
+                    <span>API Key</span>
+                    <input type="password" name="geminiKey" autocomplete="off" placeholder="AIza..." />
+                </label>
+                <label class="ai-settings-field">
+                    <span>Base URL</span>
+                    <input type="url" name="geminiBaseUrl" autocomplete="off" inputmode="url" placeholder="https://generativelanguage.googleapis.com/v1beta" />
+                    <small>Optional. Only use if your provider supports Gemini-compatible APIs.</small>
+                </label>
+                <div class="ai-settings-provider-actions">
+                    <button type="button" data-clear-key="gemini">Clear key</button>
+                    <button type="button" data-reset-base-url="gemini">Reset to default</button>
+                    <button type="button" data-test-provider="gemini">Test connection</button>
+                </div>
+            </section>
+
             <div class="ai-settings-actions">
                 <button class="btn btn-primary ai-secondary-btn" type="submit">
                     <i class="fa-solid fa-floppy-disk"></i>
-                    Save keys
+                    Save settings
                 </button>
             </div>
         </form>

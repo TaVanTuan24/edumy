@@ -211,6 +211,14 @@ html[data-theme="dark"] {
 }
 
 /* Course Cards Grid */
+.course-card-column {
+  position: relative;
+}
+
+.course-card-column.course-card-column-active {
+  z-index: 40;
+}
+
 .course-card.card {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius);
@@ -220,6 +228,13 @@ html[data-theme="dark"] {
   display: flex;
   flex-direction: column;
   background: var(--admin-card-bg);
+  position: relative;
+  overflow: visible;
+  z-index: 0;
+}
+
+.course-card.card.course-card-active {
+  z-index: 2;
 }
 
 .course-card.card:hover {
@@ -297,6 +312,8 @@ html[data-theme="dark"] {
   padding: 0 1.25rem 1.25rem;
   display: flex;
   gap: 0.5rem;
+  position: relative;
+  overflow: visible;
 }
 
 .course-card-footer {
@@ -313,9 +330,15 @@ html[data-theme="dark"] {
   padding: 0;
 }
 
+.course-card-actions {
+  position: relative;
+  flex: 0 0 auto;
+}
+
 .course-card-menu {
   min-width: 220px;
   padding: 0.4rem;
+  z-index: 1080;
 }
 
 .course-card-menu form {

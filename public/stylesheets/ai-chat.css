@@ -275,6 +275,23 @@ html[data-theme="dark"] .ai-model-picker select {
     background: var(--ai-panel-soft);
 }
 
+html[data-theme="dark"] .ai-model-endpoint-hint,
+html[data-theme="dark"] .ai-settings-provider-head p,
+html[data-theme="dark"] .ai-settings-field small,
+html[data-theme="dark"] .ai-settings-warning {
+    color: rgba(226, 232, 240, 0.78);
+}
+
+html[data-theme="dark"] .ai-settings-provider {
+    background: rgba(15, 23, 42, 0.56);
+    border-color: var(--ai-line);
+}
+
+html[data-theme="dark"] .ai-settings-warning {
+    background: rgba(120, 53, 15, 0.22);
+    border-color: rgba(251, 191, 36, 0.22);
+}
+
 html[data-theme="dark"] .ai-message.is-assistant .ai-message-bubble,
 html[data-theme="dark"] .ai-empty-state,
 html[data-theme="dark"] .ai-composer,
@@ -284,6 +301,12 @@ html[data-theme="dark"] .ai-history-item {
 
 html[data-theme="dark"] .ai-settings-form [data-clear-key] {
     background: rgba(180, 35, 24, 0.14);
+}
+
+html[data-theme="dark"] .ai-settings-form [data-reset-base-url],
+html[data-theme="dark"] .ai-settings-form [data-test-provider] {
+    background: rgba(148, 163, 184, 0.1);
+    color: #e2e8f0;
 }
 
 html[data-theme="dark"] .ai-message-action {
@@ -1003,29 +1026,72 @@ html[data-theme="dark"] .ai-message-action {
     padding: 20px;
 }
 
-.ai-settings-form label {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    align-items: end;
+.ai-settings-warning {
+    padding: 12px 14px;
+    border: 1px solid rgba(180, 83, 9, 0.18);
+    border-radius: 14px;
+    background: rgba(255, 247, 237, 0.88);
+    color: #9a3412;
+    font-size: 0.92rem;
+    line-height: 1.45;
 }
 
-.ai-settings-form label > span {
-    grid-column: 1 / -1;
+.ai-settings-provider {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--ai-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.ai-settings-provider-head {
     display: flex;
     justify-content: space-between;
-    gap: 10px;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.ai-settings-provider-head h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.ai-settings-provider-head p {
+    margin: 6px 0 0;
+    color: var(--ai-muted);
+    font-size: 0.92rem;
+}
+
+.ai-settings-provider-status {
+    display: grid;
+    gap: 4px;
+    justify-items: end;
+    text-align: right;
+}
+
+.ai-settings-field {
+    display: grid;
+    gap: 8px;
+}
+
+.ai-settings-field > span {
     color: var(--ai-ink);
     font-weight: 800;
 }
 
-.ai-settings-form small {
+.ai-settings-provider-status small,
+.ai-settings-field small {
     color: var(--ai-muted);
     font-weight: 700;
 }
 
-.ai-settings-form small.is-connected {
+.ai-settings-provider-status small.is-connected {
     color: #166534;
+}
+
+.ai-settings-provider-status small.is-custom {
+    color: #0f766e;
 }
 
 .ai-settings-form input {
@@ -1051,14 +1117,32 @@ html[data-theme="dark"] .ai-message-action {
     font-weight: 800;
 }
 
-.ai-settings-message {
-    min-height: 20px;
-    color: var(--ai-muted);
-    font-size: 0.9rem;
+.ai-settings-form [data-reset-base-url],
+.ai-settings-form [data-test-provider] {
+    min-height: 42px;
+    border: 1px solid var(--ai-line);
+    border-radius: 10px;
+    background: rgba(240, 249, 255, 0.8);
+    color: var(--ai-ink);
+    font-weight: 800;
 }
 
-.ai-settings-message.is-error {
-    color: #b42318;
+.ai-settings-provider-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ai-settings-provider-actions button {
+    flex: 0 0 auto;
+}
+
+.ai-model-endpoint-hint {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--ai-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
 }
 
 .ai-settings-actions {
@@ -1258,8 +1342,21 @@ html[data-theme="dark"] .ai-message-action {
         padding: 9px 12px 12px;
     }
 
-    .ai-settings-form label {
-        grid-template-columns: 1fr;
+    .ai-settings-provider-actions {
+        flex-direction: column;
+    }
+
+    .ai-settings-provider-actions button {
+        width: 100%;
+    }
+
+    .ai-settings-provider-head {
+        flex-direction: column;
+    }
+
+    .ai-settings-provider-status {
+        justify-items: start;
+        text-align: left;
     }
 
     .ai-status-row {

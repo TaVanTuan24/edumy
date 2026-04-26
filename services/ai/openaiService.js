@@ -4,14 +4,14 @@ const { aiConfig } = require('../../config/ai')
 const { normalizeMessages, normalizeFinalResponse, createStreamEvent } = require('./normalize')
 const { createRequestController, readSseStream } = require('./streamAdapters')
 const { normalizeProviderError } = require('./errors')
+const { getDefaultProviderBaseUrl, joinProviderUrl } = require('./providerBaseUrls')
 
 const PROVIDER = 'openai'
-const DEFAULT_BASE_URL = 'https://api.krouter.net/v1'
 
 async function generate(request) {
     try {
         const response = await axios.post(
-            getResponsesUrl(),
+            getResponsesUrl(request),
             buildPayload(request, false),
             buildAxiosConfig(request)
         )
@@ -25,7 +25,7 @@ async function generate(request) {
             finishReason: extractFinishReason(response.data)
         })
     } catch (error) {
-        throw await normalizeOpenAiError(error)
+        throw applyCustomBaseUrlHint(await normalizeOpenAiError(error), request)
     }
 }
 
@@ -43,7 +43,7 @@ async function stream(request, onEvent) {
     try {
         if (onEvent) onEvent(createStreamEvent('start', { provider: PROVIDER, model: request.model }))
         const response = await axios.post(
-            getResponsesUrl(),
+            getResponsesUrl(request),
             buildPayload(request, true),
             buildAxiosConfig({ ...request, signal: controller.signal, responseType: 'stream' })
         )
@@ -95,7 +95,7 @@ async function stream(request, onEvent) {
         return final
     } catch (error) {
         controller.throwIfTimedOut(error)
-        const normalized = await normalizeOpenAiError(error)
+        const normalized = applyCustomBaseUrlHint(await normalizeOpenAiError(error), request)
         if (onEvent) onEvent(createStreamEvent('error', { provider: PROVIDER, model: request.model, error: toStreamError(normalized) }))
         throw normalized
     } finally {
@@ -131,7 +131,8 @@ function buildAxiosConfig(request) {
         },
         timeout: request.timeoutMs || aiConfig.providers.openai.timeoutMs,
         signal: request.signal,
-        responseType: request.responseType
+        responseType: request.responseType,
+        maxRedirects: 3
     }
 }
 
@@ -143,12 +144,12 @@ function toResponsesInput(message) {
     }
 }
 
-function getResponsesUrl() {
-    return `${getBaseUrl()}/responses`
+function getResponsesUrl(request) {
+    return joinProviderUrl(getBaseUrl(request), 'responses')
 }
 
-function getBaseUrl() {
-    return String(process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, '')
+function getBaseUrl(request) {
+    return String(request.baseUrl || getDefaultProviderBaseUrl(PROVIDER)).replace(/\/+$/, '')
 }
 
 function getReasoningEffort(request) {
@@ -262,6 +263,14 @@ function toStreamError(error) {
         code: error.code || 'AI_PROVIDER_ERROR',
         message: error.publicMessage || 'AI service error'
     }
+}
+
+function applyCustomBaseUrlHint(error, request) {
+    if (!request || !request.baseUrlConfigured) return error
+    if (error && ['AI_PROVIDER_ERROR', 'AI_MODEL_NOT_AVAILABLE', 'AI_ENDPOINT_UNREACHABLE'].includes(error.code)) {
+        error.publicMessage = 'The custom API endpoint could not complete the request. Check your Base URL, API key, and model name.'
+    }
+    return error
 }
 
 module.exports = {

@@ -122,7 +122,7 @@
                     avgRating = (sum / reviewCount).toFixed(1);
                 }
             %>
-                <div class="col-sm-6 col-lg-4 col-xl-3">
+                <div class="col-sm-6 col-lg-4 col-xl-3 course-card-column">
                     <div class="card course-card app-card-elevated border-0">
                         <!-- Thumbnail -->
                         <img 
@@ -171,11 +171,27 @@
                             <a href="/admin/courses/<%= course._id %>/editor" class="btn btn-primary flex-grow-1 course-card-primary-btn">
                                 <i class="fa-solid fa-pen-to-square"></i> Edit
                             </a>
-                            <div class="dropdown">
-                                <button class="btn btn-outline-secondary course-card-menu-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open course actions">
+                            <div class="dropdown course-card-actions" data-course-card-dropdown>
+                                <button
+                                    id="course-actions-toggle-<%= course._id %>"
+                                    class="btn btn-outline-secondary course-card-menu-btn"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-boundary="viewport"
+                                    data-bs-offset="0,8"
+                                    data-course-card-menu-toggle
+                                    aria-expanded="false"
+                                    aria-haspopup="menu"
+                                    aria-controls="course-actions-menu-<%= course._id %>"
+                                    aria-label="Open course actions"
+                                >
                                     <i class="fa-solid fa-ellipsis"></i>
                                 </button>
-                                <div class="dropdown-menu dropdown-menu-end course-card-menu">
+                                <div
+                                    id="course-actions-menu-<%= course._id %>"
+                                    class="dropdown-menu dropdown-menu-end course-card-menu"
+                                    aria-labelledby="course-actions-toggle-<%= course._id %>"
+                                >
                                     <a href="/admin/courses/<%= course._id %>/analytics" class="dropdown-item">
                                         <i class="fa-solid fa-chart-line"></i>
                                         <span>View analytics</span>
@@ -245,3 +261,4 @@
 </div>
 
 <script src="/javascripts/admin/grok-setup.js" defer></script>
+<script src="/javascripts/admin/course-card-dropdowns.js" defer></script>

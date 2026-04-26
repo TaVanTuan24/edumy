@@ -6,6 +6,7 @@ const { normalizeMessages, createStreamEvent, normalizeFinalResponse } = require
 const { AIKeyMissingError, AIProviderError } = require('./errors')
 const ollamaService = require('./ollamaService')
 const grokService = require('./grokService')
+const { getProviderBaseUrlInfo } = require('./providerBaseUrls')
 
 async function generate({ userId, model, prompt, messages, options = {} }) {
     const result = await generateNormalized({ userId, model, prompt, messages, options })
@@ -36,7 +37,7 @@ async function generateNormalized({ userId, model, prompt, messages, options = {
         })
     }
 
-    const apiKey = await getUserApiKey(userId, config.requiresKey)
+    const providerRequestConfig = await getUserProviderRequestConfig(userId, config)
     const provider = getProvider(config.providerKey)
     if (!provider || typeof provider.generate !== 'function') {
         throw new AIProviderError(`Unsupported AI provider: ${config.providerKey}`, {
@@ -46,7 +47,9 @@ async function generateNormalized({ userId, model, prompt, messages, options = {
     }
 
     return provider.generate({
-        apiKey,
+        apiKey: providerRequestConfig.apiKey,
+        baseUrl: providerRequestConfig.baseUrl,
+        baseUrlConfigured: providerRequestConfig.baseUrlConfigured,
         model: config.apiModel,
         prompt,
         messages: normalizeMessages(messages, prompt),
@@ -90,7 +93,7 @@ async function generateStreamNormalized({ userId, model, prompt, messages, optio
         return final
     }
 
-    const apiKey = await getUserApiKey(userId, config.requiresKey)
+    const providerRequestConfig = await getUserProviderRequestConfig(userId, config)
     const provider = getProvider(config.providerKey)
     if (!provider || typeof provider.stream !== 'function') {
         throw new AIProviderError(`Unsupported AI provider: ${config.providerKey}`, {
@@ -100,7 +103,9 @@ async function generateStreamNormalized({ userId, model, prompt, messages, optio
     }
 
     return provider.stream({
-        apiKey,
+        apiKey: providerRequestConfig.apiKey,
+        baseUrl: providerRequestConfig.baseUrl,
+        baseUrlConfigured: providerRequestConfig.baseUrlConfigured,
         model: config.apiModel,
         prompt,
         messages: normalizeMessages(messages, prompt),
@@ -115,15 +120,28 @@ async function generateStreamNormalized({ userId, model, prompt, messages, optio
     })
 }
 
-async function getUserApiKey(userId, keyField) {
-    if (!keyField) return ''
+async function getUserProviderRequestConfig(userId, modelConfig) {
+    if (!modelConfig || !modelConfig.requiresKey) {
+        return {
+            apiKey: '',
+            baseUrl: '',
+            baseUrlConfigured: false
+        }
+    }
+
     const settings = await UserAISettings.findOne({ user: userId }).lean()
-    const encrypted = settings && settings[keyField]
+    const encrypted = settings && settings[modelConfig.requiresKey]
     const apiKey = decryptKey(encrypted)
     if (!apiKey) {
-        throw new AIKeyMissingError(keyField.replace(/Key$/, ''))
+        throw new AIKeyMissingError(modelConfig.requiresKey.replace(/Key$/, ''))
     }
-    return apiKey
+
+    const baseUrlInfo = getProviderBaseUrlInfo(modelConfig.providerKey, settings)
+    return {
+        apiKey,
+        baseUrl: baseUrlInfo.baseUrl,
+        baseUrlConfigured: baseUrlInfo.baseUrlConfigured
+    }
 }
 
 async function simulateStream(text, onToken) {
