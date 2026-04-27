@@ -4,7 +4,7 @@
 
 <section
     class="ai-chat-page"
-    data-default-model="<%= defaultAiModel || 'llama3.2' %>"
+    data-default-model="<%= defaultAiModel || 'gpt-5.5' %>"
 >
     <aside class="ai-sidebar" id="aiSidebar">
         <div class="ai-sidebar-brand">
@@ -42,7 +42,7 @@
                 <div>
                     <h2 id="currentChatTitle">New conversation</h2>
                     <span class="ai-chat-subtitle">
-                        <span id="headerModelLabel">llama3.2</span>
+                        <span id="headerModelLabel"><%= defaultAiModel || 'gpt-5.5' %></span>
                         <span>Ask, refine, and keep the thread moving.</span>
                     </span>
                 </div>
@@ -110,7 +110,7 @@
 
         <footer class="ai-composer-wrap">
             <div class="ai-status-row">
-                <span id="conversationModelLabel">Ready - llama3.2</span>
+                <span id="conversationModelLabel">Ready - <%= defaultAiModel || 'gpt-5.5' %></span>
                 <button class="btn btn-ghost ai-link-btn" id="regenerateBtn" type="button" disabled>
                     <i class="fa-solid fa-rotate-right"></i>
                     Regenerate last reply

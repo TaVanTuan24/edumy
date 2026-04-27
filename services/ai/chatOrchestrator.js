@@ -52,9 +52,9 @@ function getAiErrorResponse(error, model) {
 
     if (error && error.code === 'ECONNREFUSED') {
         return {
-            code: 'OLLAMA_UNAVAILABLE',
+            code: 'AI_ENDPOINT_UNREACHABLE',
             statusCode: 503,
-            message: 'AI service unavailable. Is Ollama running?'
+            message: 'AI service unavailable. Please check the configured AI provider.'
         }
     }
 
@@ -70,7 +70,7 @@ function getAiErrorResponse(error, model) {
         code: 'AI_CHAT_FAILED',
         statusCode: 500,
         message: model === 'grok'
-            ? 'Grok could not process your request. Please try again or switch to llama3.2.'
+            ? 'Grok could not process your request. Please try again or switch to another configured model.'
             : 'Failed to process your request. Please try again.'
     }
 }

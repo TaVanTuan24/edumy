@@ -13,7 +13,11 @@ const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
 const { findLessonContext } = require('../utils/lessonLocator');
 const { buildLessonAiContext, buildLessonAiPrompt } = require('../services/lessonAiContextService');
 const { generatePromptReply } = require('../services/ai/chatOrchestrator');
-const { generateCourseSummaryWithFallback } = require('../services/ai/courseSummaryService');
+const {
+  applyGeneratedCourseSummary,
+  clearGeneratedCourseSummary,
+  generateCourseSummary
+} = require('../services/ai/courseSummaryService');
 const { normalizeAiModel } = require('../config/ai');
 const { buildCourseSectionsFromPreview } = require('../services/youtube/youtubeCourseImportService');
 const {
@@ -290,6 +294,22 @@ module.exports.createCourse = async (req, res) => {
   }
 
   await course.save();
+
+  let aiSummaryFailed = false;
+  try {
+    const summaryResult = await generateCourseSummary(course, {
+      userId: req.user && req.user._id
+    });
+    applyGeneratedCourseSummary(course, summaryResult);
+    await course.save();
+    console.log('[course-summary] generated once for course:', String(course._id));
+  } catch (err) {
+    aiSummaryFailed = true;
+    clearGeneratedCourseSummary(course);
+    await course.save();
+    console.error('[course-summary] failed to generate AI summary:', err.message);
+  }
+
   await logAuditEvent({
     req,
     action: 'course_created',
@@ -302,7 +322,9 @@ module.exports.createCourse = async (req, res) => {
       importSource
     }
   });
-  req.flash('success', 'Successfully made a new course!');
+  req.flash('success', aiSummaryFailed
+    ? 'Successfully made a new course. AI summary could not be generated yet.'
+    : 'Successfully made a new course!');
   res.redirect(`/courses/${course._id}`);
 };
 
@@ -432,64 +454,40 @@ module.exports.regenerateAiSummary = async (req, res) => {
     return res.redirect('/courses');
   }
 
-  const summaryState = await generateCourseSummaryWithFallback(course, {
-    userId: req.user && req.user._id,
-    force: true,
-    persist: true
-  });
-
   const redirectTo = `/explore/${course._id}/preview`;
-  const payload = {
-    success: !summaryState.unavailable,
-    summary: summaryState.summary,
-    providerUsed: summaryState.providerUsed,
-    fallbackUsed: summaryState.fallbackUsed,
-    failedProviders: summaryState.failedProviders,
-    unavailable: summaryState.unavailable,
-    refreshFailed: Boolean(summaryState.refreshFailed)
-  };
 
-  if (wantsJson(req)) {
-    if (summaryState.unavailable) {
+  try {
+    const summaryResult = await generateCourseSummary(course, {
+      userId: req.user && req.user._id
+    });
+    applyGeneratedCourseSummary(course, summaryResult);
+    await course.save();
+    console.log('[course-summary] generated once for course:', String(course._id));
+
+    if (wantsJson(req)) {
+      return res.json({
+        success: true,
+        summary: summaryResult.summary,
+        aiSummaryGeneratedAt: summaryResult.generatedAt,
+        aiSummaryModel: summaryResult.model
+      });
+    }
+
+    req.flash('success', `AI summary regenerated with ${summaryResult.model}.`);
+    return res.redirect(redirectTo);
+  } catch (err) {
+    console.error('[course-summary] failed to generate AI summary:', err.message);
+
+    if (wantsJson(req)) {
       return res.status(503).json({
-        ...payload,
+        success: false,
         error: 'AI summary is temporarily unavailable.'
       });
     }
 
-    if (summaryState.refreshFailed) {
-      return res.status(502).json({
-        ...payload,
-        error: 'AI summary refresh failed. The previous summary is still being shown.'
-      });
-    }
-
-    return res.json(payload);
-  }
-
-  if (summaryState.unavailable) {
     req.flash('error', 'AI summary is temporarily unavailable.');
     return res.redirect(redirectTo);
   }
-
-  if (summaryState.refreshFailed) {
-    req.flash('error', 'AI summary refresh failed. The previous summary is still being shown.');
-    return res.redirect(redirectTo);
-  }
-
-  const providerLabel = summaryState.providerUsed === 'grok-scraper'
-    ? 'Grok'
-    : summaryState.providerUsed === 'gpt5.4'
-      ? 'GPT 5.4'
-      : 'llama3.2';
-
-  req.flash(
-    'success',
-    summaryState.fallbackUsed
-      ? `AI summary regenerated with fallback using ${providerLabel}.`
-      : `AI summary regenerated with ${providerLabel}.`
-  );
-  res.redirect(redirectTo);
 };
 
 module.exports.deleteCourse = async (req, res) => {
@@ -820,7 +818,7 @@ module.exports.askLessonAi = async (req, res) => {
       return res.status(err.statusCode || 503).json({ success: false, error: err.publicMessage });
     }
     if (err.code === 'ECONNREFUSED') {
-      return res.status(503).json({ success: false, error: 'AI service unavailable. Is Ollama running?' });
+      return res.status(503).json({ success: false, error: 'AI service unavailable. Please check the configured AI provider.' });
     }
     return res.status(500).json({ success: false, error: 'Failed to generate AI tutor response.' });
   }

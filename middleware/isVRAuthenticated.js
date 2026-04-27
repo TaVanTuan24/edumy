@@ -14,7 +14,7 @@ function getBearerToken(req) {
 }
 
 function getJwtSecret() {
-  return process.env.JWT_SECRET || process.env.SESSION_SECRET || 'mysceret';
+  return process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
 }
 
 function isStreamApiRequest(req) {

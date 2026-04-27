@@ -117,7 +117,7 @@ async function groupVideosIntoSections(videos, options = {}) {
   if (!safeVideos.length) return { sections: [], strategy: 'none', model: '' };
 
   const prompt = buildGroupingPrompt(String(options.playlistTitle || ''), safeVideos, options);
-  const attempts = ['gpt-5.4', 'grok', 'llama3.2'];
+  const attempts = ['gpt-5.5', 'gpt-5.4', 'grok-api'];
 
   for (const model of attempts) {
     try {

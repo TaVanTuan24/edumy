@@ -4,7 +4,10 @@ require('dotenv').config();
 
 async function runMigration() {
     console.log("Connecting to MongoDB...");
-    await mongoose.connect(process.env.MONGODB_URL || 'mongodb://localhost:27017/edumy');
+    if (!process.env.MONGO_URI) {
+        throw new Error('MONGO_URI is required.');
+    }
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("Connected.");
     
     // Find all users missing the createdAt field or that have it empty

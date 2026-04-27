@@ -2,7 +2,37 @@ const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const { cloudinary } = require('../config/cloudinary');
 const { buildGamificationViewModel, awardGamification } = require('../utils/gamification');
-const { isAdminUser } = require('../middleware');
+const { isAdminUser, sanitizeReturnTo } = require('../middleware');
+const { isGoogleAuthConfigured } = require('../services/googleAuthService');
+
+const AUTH_RETURN_TO_EXCLUDES = new Set([
+    '/login',
+    '/register',
+    '/auth/google',
+    '/auth/google/callback'
+]);
+
+function getSafeAuthReturnTo(input, req) {
+    const safePath = sanitizeReturnTo(input, req);
+    if (!safePath) return null;
+
+    const [pathname] = safePath.split('?');
+    if (AUTH_RETURN_TO_EXCLUDES.has(pathname)) {
+        return null;
+    }
+
+    return safePath;
+}
+
+function getPostAuthRedirect(req, fallbackPath = '/courses') {
+    const sessionReturnTo = getSafeAuthReturnTo(req.session && req.session.returnTo, req);
+
+    if (req.session) {
+        delete req.session.returnTo;
+    }
+
+    return sessionReturnTo || fallbackPath;
+}
 
 async function getLeaderboardSnapshot(limit, currentUserId) {
     const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
@@ -103,7 +133,7 @@ module.exports.register = async (req, res) => {
         });
 
         req.flash('success', 'Welcome to Edumy!');
-        res.redirect('/courses');
+        res.redirect(getPostAuthRedirect(req));
     } catch (e) {
         req.flash('error', e.message);
         res.redirect('/register');
@@ -114,10 +144,30 @@ module.exports.renderLogin = (req, res) => {
     res.render('users/login');
 };
 
+module.exports.ensureGoogleAuthConfigured = (req, res, next) => {
+    if (isGoogleAuthConfigured()) {
+        return next();
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.warn('[google-auth] Attempted to use Google OAuth without full configuration.');
+    }
+
+    req.flash('error', 'Google login is not configured right now. Please use email and password.');
+    return res.redirect('/login');
+};
+
+module.exports.prepareGoogleAuth = (req, res, next) => {
+    if (req.session) {
+        req.session.googleAuthIntent = req.user && req.user._id ? 'link' : 'login';
+    }
+
+    next();
+};
+
 module.exports.login = (req, res) => {
     req.flash('success', 'Welcome back!');
-    const redirectUrl = res.locals.returnTo || '/courses';
-    res.redirect(redirectUrl);
+    res.redirect(getPostAuthRedirect(req));
 };
 
 module.exports.redirectLogout = (req, res) => {
@@ -141,6 +191,17 @@ module.exports.logout = (req, res, next) => {
         req.flash('success', 'Goodbye!');
         res.redirect('/');
     });
+};
+
+module.exports.googleAuthSuccess = (req, res) => {
+    const intent = req.session && req.session.googleAuthIntent === 'link' ? 'link' : 'login';
+
+    if (req.session) {
+        delete req.session.googleAuthIntent;
+    }
+
+    req.flash('success', intent === 'link' ? 'Google account linked successfully.' : 'Welcome back!');
+    res.redirect(getPostAuthRedirect(req));
 };
 
 module.exports.renderProfile = async (req, res) => {

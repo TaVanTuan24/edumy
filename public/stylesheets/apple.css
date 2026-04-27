@@ -702,6 +702,54 @@ input::placeholder {
     margin-top: 0.3rem;
 }
 
+.auth-divider {
+    position: relative;
+    display: grid;
+    place-items: center;
+    color: var(--apple-text-muted);
+    font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.auth-divider::before {
+    content: "";
+    position: absolute;
+    inset: 50% 0 auto;
+    border-top: 1px solid color-mix(in srgb, var(--apple-border) 72%, transparent);
+}
+
+.auth-divider span {
+    position: relative;
+    padding: 0 0.9rem;
+    background: linear-gradient(180deg, var(--apple-surface-strong), var(--apple-surface));
+}
+
+.auth-google-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    border-radius: 16px;
+    border-color: color-mix(in srgb, var(--apple-border) 78%, transparent);
+    padding: 0.85rem 1rem;
+    font-weight: 700;
+    color: var(--apple-text);
+    background: color-mix(in srgb, var(--apple-surface-elevated) 88%, transparent);
+}
+
+.auth-google-btn:hover,
+.auth-google-btn:focus {
+    color: var(--apple-text);
+    background: color-mix(in srgb, var(--apple-surface-elevated) 72%, var(--apple-accent-soft));
+    border-color: color-mix(in srgb, var(--apple-accent) 28%, var(--apple-border));
+}
+
+.auth-google-btn i {
+    font-size: 1rem;
+}
+
 .auth-benefits {
     display: grid;
     gap: 0.65rem;

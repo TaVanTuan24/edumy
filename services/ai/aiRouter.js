@@ -4,7 +4,6 @@ const { getModelConfig, normalizeAiModel } = require('../../config/ai')
 const { getProvider } = require('./providerRegistry')
 const { normalizeMessages, createStreamEvent, normalizeFinalResponse } = require('./normalize')
 const { AIKeyMissingError, AIProviderError } = require('./errors')
-const ollamaService = require('./ollamaService')
 const grokService = require('./grokService')
 const { getProviderBaseUrlInfo } = require('./providerBaseUrls')
 
@@ -21,16 +20,6 @@ async function generateNormalized({ userId, model, prompt, messages, options = {
         const content = await grokService.generate(prompt)
         return normalizeFinalResponse({
             provider: 'grokScraper',
-            model: selectedModel,
-            content,
-            finishReason: 'stop'
-        })
-    }
-
-    if (config.providerKey === 'ollama') {
-        const content = await ollamaService.generate(prompt, options)
-        return normalizeFinalResponse({
-            provider: 'ollama',
             model: selectedModel,
             content,
             finishReason: 'stop'
@@ -82,17 +71,6 @@ async function generateStreamNormalized({ userId, model, prompt, messages, optio
         return final
     }
 
-    if (config.providerKey === 'ollama') {
-        if (onEvent) onEvent(createStreamEvent('start', { provider: 'ollama', model: selectedModel }))
-        const reply = await ollamaService.generateStream(prompt, options, (token) => {
-            if (onToken) onToken(token)
-            if (onEvent) onEvent(createStreamEvent('delta', { provider: 'ollama', model: selectedModel, delta: token }))
-        })
-        const final = normalizeFinalResponse({ provider: 'ollama', model: selectedModel, content: reply, finishReason: 'stop' })
-        if (onEvent) onEvent(createStreamEvent('complete', final))
-        return final
-    }
-
     const providerRequestConfig = await getUserProviderRequestConfig(userId, config)
     const provider = getProvider(config.providerKey)
     if (!provider || typeof provider.stream !== 'function') {
@@ -129,18 +107,41 @@ async function getUserProviderRequestConfig(userId, modelConfig) {
         }
     }
 
-    const settings = await UserAISettings.findOne({ user: userId }).lean()
+    const settings = userId ? await UserAISettings.findOne({ user: userId }).lean() : null
     const encrypted = settings && settings[modelConfig.requiresKey]
     const apiKey = decryptKey(encrypted)
-    if (!apiKey) {
-        throw new AIKeyMissingError(modelConfig.requiresKey.replace(/Key$/, ''))
+    if (apiKey) {
+        const baseUrlInfo = getProviderBaseUrlInfo(modelConfig.providerKey, settings)
+        return {
+            apiKey,
+            baseUrl: baseUrlInfo.baseUrl,
+            baseUrlConfigured: baseUrlInfo.baseUrlConfigured
+        }
     }
 
-    const baseUrlInfo = getProviderBaseUrlInfo(modelConfig.providerKey, settings)
+    const globalConfig = getGlobalProviderRequestConfig(modelConfig.providerKey)
+    if (globalConfig) {
+        return globalConfig
+    }
+
+    throw new AIKeyMissingError(modelConfig.requiresKey.replace(/Key$/, ''))
+}
+
+function getGlobalProviderRequestConfig(providerKey) {
+    if (String(providerKey || '').toLowerCase() !== 'openai') {
+        return null
+    }
+
+    const apiKey = String(process.env.AI_API_KEY || '').trim()
+    const baseUrl = String(process.env.AI_BASE_URL || '').trim()
+    if (!apiKey || !baseUrl) {
+        return null
+    }
+
     return {
         apiKey,
-        baseUrl: baseUrlInfo.baseUrl,
-        baseUrlConfigured: baseUrlInfo.baseUrlConfigured
+        baseUrl,
+        baseUrlConfigured: true
     }
 }
 

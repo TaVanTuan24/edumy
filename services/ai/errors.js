@@ -17,7 +17,7 @@ class AIKeyMissingError extends AIProviderError {
             code: 'API_KEY_MISSING',
             statusCode: 400,
             provider,
-            publicMessage: 'API key not configured for this provider. Open AI Settings and add a key.'
+            publicMessage: 'AI provider is not configured. Add a key in AI Settings or set AI_BASE_URL and AI_API_KEY on the server.'
         })
     }
 }

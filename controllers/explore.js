@@ -5,7 +5,7 @@ const { buildStoredCourseStats } = require('../utils/courseStats');
 const { summarizeCourseReviews } = require('../utils/courseReviews');
 const { isCourseCatalogVisible } = require('../utils/courseLifecycle');
 const { isAdminUser, userCanManageCourse } = require('../middleware');
-const { generateCourseSummaryWithFallback, isSummaryStale } = require('../services/ai/courseSummaryService');
+const { isCourseSummaryStale, readStoredCourseSummary } = require('../services/ai/courseSummaryService');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -51,23 +51,16 @@ module.exports.previewCourse = async (req, res) => {
     const canManageSummary = userCanManageCourse(req.user, course);
 
     const user = await User.findById(req.user._id).select('enrolledCourses enrolledCourseIds');
-    const aiSummaryState = await generateCourseSummaryWithFallback(course, {
-        userId: req.user && req.user._id,
-        force: false,
-        persist: true
-    });
-    const generatedDescription = aiSummaryState.summary || String(course.description || '').trim();
+    const aiSummaryState = readStoredCourseSummary(course);
     const isEnrolled = !!(user && typeof user.findEnrollment === 'function' && user.findEnrollment(course._id));
     res.render('courses/preview-modern', {
         course,
-        generatedDescription,
         isEnrolled,
         previewStats,
         reviewSummary,
         aiSummaryState,
         canManageSummary,
-        aiSummaryNeedsRefresh: isSummaryStale(course),
-        aiSummaryDebug: canManageSummary ? aiSummaryState.failedProviders : []
+        aiSummaryNeedsRefresh: canManageSummary ? isCourseSummaryStale(course) : false
     });
 };
 

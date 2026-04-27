@@ -52,7 +52,7 @@ async function runGrok(prompt) {
         throw new GrokServiceError('Grok timed out.', {
             code: 'GROK_TIMEOUT',
             statusCode: 504,
-            publicMessage: 'Grok took too long to respond. Please try again, or switch back to llama3.2.',
+            publicMessage: 'Grok took too long to respond. Please try again, or switch to another configured model.',
             stdout: result.stdout,
             stderr: result.stderr
         })

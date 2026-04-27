@@ -4,7 +4,6 @@ const Course = require("../models/course")
 const User = require("../models/user")
 const Video = require("../models/video")
 const Transcript = require("../models/Transcript")
-const ollama = require("../config/ollama")
 const aiChatController = require("../controllers/aiChatController")
 const { generatePromptReply, normalizeAiModel } = require("../services/ai/chatOrchestrator")
 const { aiConfig } = require("../config/ai")
@@ -90,7 +89,7 @@ router.post("/chat", aiChatLimiter, async (req, res, next) => {
             return res.status(err.statusCode || 503).json({ error: err.publicMessage })
         }
         if (err.code === "ECONNREFUSED") {
-            return res.status(503).json({ error: "AI service unavailable. Is Ollama running?" })
+            return res.status(503).json({ error: "AI service unavailable. Please check the configured AI provider." })
         }
         return res.status(500).json({ error: "Failed to process your request. Please try again." })
     }
@@ -111,22 +110,14 @@ router.post("/generate-quiz", async (req, res) => {
 
         const prompt = `You are a quiz generator.\n\nGenerate EXACTLY ${count} multiple choice questions.\nEach question MUST have EXACTLY 4 answers.\nDifficulty: ${safeDifficulty}.\n\nRULES:\n- Only ONE correct answer\n- Other 3 answers must be plausible but incorrect\n- DO NOT return less than 4 answers\n- DO NOT return explanations\n\nTopic: ${trimmedPrompt}\n\nReturn JSON format ONLY:\n[\n  {\n    "question": "string",\n    "answers": [\n      {"text": "A", "correct": false},\n      {"text": "B", "correct": false},\n      {"text": "C", "correct": true},\n      {"text": "D", "correct": false}\n    ]\n  }\n]\n`;
 
-        const ai = await ollama.post(
-            "/api/generate",
-            {
-                model: aiConfig.ollama.model,
-                prompt: prompt,
-                stream: false,
-                options: {
-                    temperature: 0.3,
-                    top_p: 0.9,
-                    max_tokens: 1600
-                }
-            },
-            { timeout: aiConfig.ollama.timeoutMs }
-        );
-
-        const raw = ai.data && ai.data.response ? String(ai.data.response) : '';
+        const raw = await callConfiguredAi({
+            prompt,
+            model: aiConfig.chatModel,
+            userId: req.user && req.user._id,
+            temperature: 0.3,
+            topP: 0.9,
+            maxTokens: 1600
+        });
         const parsed = parseQuizJson(raw);
 
         if (!parsed.length) {
@@ -141,8 +132,11 @@ router.post("/generate-quiz", async (req, res) => {
         res.json({ success: true, questions: parsed });
     } catch (err) {
         console.error('AI Quiz Error:', err.message);
+        if (err.publicMessage) {
+            return res.status(err.statusCode || 503).json({ error: err.publicMessage });
+        }
         if (err.code === 'ECONNREFUSED') {
-            return res.status(503).json({ error: 'AI service unavailable. Is Ollama running?' });
+            return res.status(503).json({ error: 'AI service unavailable. Please check the configured AI provider.' });
         }
         res.status(500).json({ error: 'Failed to generate quiz' });
     }
@@ -425,7 +419,13 @@ function parseSlideJson(raw, options) {
 async function generateWithRetry(prompt, retries, options) {
     for (let attempt = 0; attempt < retries; attempt += 1) {
         try {
-            const raw = await callOllama(prompt)
+            const raw = await callConfiguredAi({
+                prompt,
+                model: aiConfig.chatModel,
+                temperature: 0.3,
+                topP: 0.9,
+                maxTokens: 2200
+            })
             const result = parseSlideJson(raw, options)
             if (Array.isArray(result.slides) && result.slides.length) {
                 return result
@@ -442,18 +442,18 @@ async function generateWithRetry(prompt, retries, options) {
     }
 }
 
-async function callOllama(prompt) {
-    const ai = await ollama.post(
-        "/api/generate",
-        {
-            model: aiConfig.ollama.model,
-            prompt: prompt,
-            stream: false
-        },
-        { timeout: Math.min(aiConfig.ollama.timeoutMs, 20000) }
-    )
-
-    return ai.data && ai.data.response ? String(ai.data.response) : ''
+async function callConfiguredAi({ prompt, model, userId, temperature, topP, maxTokens }) {
+    return generatePromptReply({
+        userId,
+        model,
+        prompt,
+        options: {
+            temperature: temperature === undefined ? 0.3 : temperature,
+            topP: topP === undefined ? 0.9 : topP,
+            maxTokens: maxTokens || 1200,
+            timeoutMs: Math.min(aiConfig.providers.openai.timeoutMs, 20000)
+        }
+    })
 }
 
 function buildLessonDocs(course) {

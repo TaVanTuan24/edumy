@@ -658,7 +658,7 @@
   }
 
   function selectedModel() {
-    return els.modelSelect.value || root.dataset.defaultModel || 'llama3.2';
+    return els.modelSelect.value || root.dataset.defaultModel || 'gpt-5.5';
   }
 
   function setModel(model) {
@@ -682,7 +682,7 @@
     const item = state.models.find(function(entry) {
       return entry.id === model;
     });
-    return item ? item.label : (model || 'llama3.2');
+    return item ? item.label : (model || 'gpt-5.5');
   }
 
   function providerLabel(model) {

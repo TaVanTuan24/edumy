@@ -8,6 +8,7 @@ const BASE_URL = process.env.UI_SMOKE_BASE_URL || 'http://localhost:3000';
 const ADMIN_USERNAME = process.env.UI_SMOKE_ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.UI_SMOKE_ADMIN_PASSWORD || '123';
 const OUTPUT_DIR = path.join(process.cwd(), 'qa-shots', 'admin');
+const MONGO_URI = String(process.env.MONGO_URI || '').trim();
 
 async function findAdminBrowser() {
   const candidates = [
@@ -21,7 +22,11 @@ async function findAdminBrowser() {
 }
 
 async function getCourseTargets() {
-  await mongoose.connect(process.env.MONGODB_URL || 'mongodb://localhost:27017/edumy');
+  if (!MONGO_URI) {
+    throw new Error('MONGO_URI is required for admin visual QA.');
+  }
+
+  await mongoose.connect(MONGO_URI);
   const course = await Course.findOne({}).lean();
   if (!course) {
     await mongoose.disconnect();

@@ -1,162 +1,85 @@
-# Mini LMS (Learning Management System)
+# Edumy
 
-Mini LMS là một nền tảng học tập trực tuyến đơn giản, dễ triển khai và mở rộng, được phát triển bằng Node.js, Express và MongoDB. Hệ thống cho phép người dùng đăng ký khóa học, theo dõi tiến độ học, ghi chú từng buổi học, đánh giá và khám phá nhiều chủ đề khác nhau.
-![image](https://github.com/user-attachments/assets/ac4c4037-a8d2-46ce-a204-cf0151ede33e)
+Edumy is a Node.js, Express, MongoDB, and EJS learning platform with authentication, course management, learner progress, AI-assisted tools, discussions, and admin workflows.
 
-## Tính năng chính
+## Run locally
 
--  Khám phá và đăng ký khóa học theo chủ đề
--  Xem video bài giảng từ Google Drive theo từng section
--  Đánh dấu đã học video (progress tracking)
--  Ghi chú cá nhân theo từng section
--  Đánh giá khóa học bằng sao và bình luận
--  Xác thực người dùng với Passport.js
--  Giao diện đơn giản, responsive, dễ sử dụng
+1. Install dependencies:
 
-##  Kiến trúc hệ thống
-
-Hệ thống được xây dựng theo mô hình MVC:
-
-- **Model**: Sử dụng Mongoose định nghĩa `User`, `Course`, `Section`, `Note`, `Review`, `Progress`
-- **View**: Sử dụng EJS template + Bootstrap để render giao diện
-- **Controller**: Điều phối logic giữa route, model và view
-
-##  Công nghệ sử dụng
-
-- **Backend**: Node.js, Express.js
-- **Database**: MongoDB, Mongoose ODM
-- **Authentication**: Passport.js (local strategy)
-- **Validation**: Joi + express-validator
-- **Security**: Helmet, Content Security Policy, mongo-sanitize
-- **View Engine**: EJS
-- **Google Drive API**: Quét thư mục khóa học từ Drive
-
-##  Cài đặt & chạy dự án
-
-### 1. Clone dự án
-```bash
-git clone https://github.com/your-username/mini-lms.git
-cd mini-lms
-```
-
-### 2. Cài đặt các package
 ```bash
 npm install
 ```
 
-### 3. Tạo file `.env`
-```env
-DB_URL=mongodb://localhost:27017/lms
-SESSION_SECRET=your-secret-key
-```
+2. Create `.env` from `.env.example` and fill in the required values.
 
-### 4. Chạy ứng dụng
-```bash
-node server.js
-```
-Truy cập tại: [http://localhost:3000](http://localhost:3000)
-
-##  Một số chức năng nổi bật
-
-- Tự động quét Google Drive Folder khi tạo khóa học
-- Ghi chú được lưu riêng theo từng section và user
-- Tính toán tiến độ hoàn thành khóa học theo %
-- Trang Explore hiển thị theo chủ đề, ẩn các khóa học đã đăng ký
-
-##  Cấu trúc thư mục
-```
-├── models/             # Mongoose Models
-├── routes/             # Express Routes
-├── controllers/        # Controller Functions
-├── views/              # EJS Templates
-├── public/             # Static Assets (CSS, JS)
-├── utils/              # Drive API utils, middleware
-├── server.js           # Main entry point
-└── .env                # Config file (not committed)
-```
-
-##  Giấy phép
-Dự án mang tính học thuật và mở mã nguồn. Bạn có thể fork, cải tiến và sử dụng tự do với ghi nhận tác giả ban đầu.
-
-## AI Chat: llama3.2 and Grok setup
-
-The `/ai` chat page supports two selectable models:
-
-- `llama3.2`: local Ollama, called through `OLLAMA_URL` with the Ollama generate API.
-- `grok`: local browser automation through the bundled `grok-scraper` folder. This is not an official API; it drives a Playwright browser session for `x.com/i/grok`.
-
-### Environment variables
-
-Add these values to `.env` as needed:
-
-```env
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-OLLAMA_TIMEOUT_MS=120000
-
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-5.4
-OPENAI_REASONING_EFFORT=high
-OPENAI_TIMEOUT_MS=120000
-
-XAI_BASE_URL=https://api.x.ai/v1
-CLAUDE_BASE_URL=https://api.anthropic.com/v1
-GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
-
-ALLOW_AI_CUSTOM_BASE_URLS=true
-ALLOW_AI_LOCAL_BASE_URLS=false
-
-AI_DEFAULT_MODEL=llama3.2
-GROK_ENABLED=false
-GROK_SCRAPER_PATH=./grok-scraper
-GROK_TIMEOUT_MS=300000
-```
-
-For `gpt-5.4`, the web app uses the OpenAI `Responses API` endpoint at `${OPENAI_BASE_URL}/responses`. Users can now override the base URL per provider inside `/ai` for trusted OpenAI-compatible or provider-compatible gateways.
-
-`ALLOW_AI_CUSTOM_BASE_URLS=true` enables the advanced per-user Base URL fields. `ALLOW_AI_LOCAL_BASE_URLS=false` blocks localhost and private-network targets unless you explicitly allow them, which is recommended for production.
-
-Set `GROK_ENABLED=true` only on a local desktop or remote desktop with a real browser environment. Keep it `false` on headless servers or CI.
-
-### Ollama llama3.2
-
-1. Install and start Ollama.
-2. Pull the model: `ollama pull llama3.2`.
-3. Start this app with `npm run dev` or `npm start`.
-4. Open `/ai`, choose `llama3.2`, and send a message.
-
-### Grok scraper
-
-1. Install scraper dependencies:
+3. Start the app:
 
 ```bash
-cd grok-scraper/scripts
-npm install
-npx playwright install chromium
+npm start
 ```
 
-2. Create a browser login session:
+For local development:
 
 ```bash
-cd grok-scraper/scripts
-npm run login
+npm run dev
 ```
 
-3. In the browser that opens, sign in to `x.com` with an account that can use Grok. Return to the terminal and press Enter to save the session.
-4. Enable Grok for the app:
+The app listens on `PORT` or `3000`.
+
+## Required environment variables
 
 ```env
-GROK_ENABLED=true
-GROK_SCRAPER_PATH=./grok-scraper
+NODE_ENV=development
+PORT=3000
+
+MONGO_URI=
+SESSION_SECRET=
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+
+AI_PROVIDER=openai-compatible
+AI_BASE_URL=
+AI_API_KEY=
+AI_CHAT_MODEL=gpt-5.5
+AI_SUMMARY_MODEL=gpt-5.5
+
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_KEY=
+CLOUDINARY_SECRET=
 ```
 
-5. Restart the Node server, open `/ai`, choose `Grok`, and send a message.
+## AI provider notes
 
-The scraper writes results to `grok-scraper/output/latest.md`. If the x.com session expires, the app returns a clear login-required message; repeat `npm run login` from `grok-scraper/scripts`.
+- The app no longer depends on a local Ollama runtime.
+- Server-managed AI uses `AI_BASE_URL` plus `AI_API_KEY` with an OpenAI-compatible API.
+- The default chat model is `AI_CHAT_MODEL`.
+- Course summaries use `AI_SUMMARY_MODEL`.
+- Optional BYOK settings for OpenAI, xAI, Claude, and Gemini are still available in the `/ai` UI.
+- Grok scraper remains optional for local desktop use and should stay disabled on headless production servers unless you explicitly support it.
 
-### Known Grok limitations
+## Google OAuth
 
-- Grok uses browser automation, so requests are slower than Ollama and are serialized by the server to protect the shared browser profile.
-- It requires a real desktop browser session and will not work reliably in headless CI or a VPS without a GUI.
-- x.com UI changes can break DOM scraping. Check `grok-scraper/output/run.log`, screenshots, and the scraper docs if Grok suddenly stops returning responses.
-- This integration is for local use. Do not expose it as a public multi-user Grok API without considering account/session safety and x.com terms.
+Set these values:
+
+```env
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+```
+
+Production example:
+
+```env
+GOOGLE_CALLBACK_URL=https://your-render-app-name.onrender.com/auth/google/callback
+```
+
+## Render deployment
+
+- Build command: `npm install`
+- Start command: `npm start`
+- Health check path: `/health`
+- Runtime: Node
+
+Set `MONGO_URI` to your MongoDB Atlas connection string and configure the rest of the required environment variables in Render.

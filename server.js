@@ -17,6 +17,7 @@ const cors = require('cors');
 const csrf = require('csurf');
 const rateLimit = require('express-rate-limit');
 const mongoStore = require('connect-mongo');
+const mongoose = require('mongoose');
 const { connectDB, closeDB } = require('./config/database');
 const passport = require('./config/passport');
 const { isAdminUser, sanitizeReturnTo } = require('./middleware');
@@ -42,13 +43,24 @@ const vrAuthRoutes = require('./routes/vrAuth');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionSecret = String(process.env.SESSION_SECRET || '').trim() || 'dev-session-secret-change-me';
+const mongoUri = String(process.env.MONGO_URI || '').trim();
 
 if (isProduction && sessionSecret === 'dev-session-secret-change-me') {
   throw new Error('SESSION_SECRET must be set in production');
 }
 
+if (!isProduction && sessionSecret === 'dev-session-secret-change-me') {
+  console.warn('[session] SESSION_SECRET is not set. Using the development fallback secret.');
+}
+
+if (!mongoUri) {
+  throw new Error('MONGO_URI is required. Please set it in .env or Render environment variables.');
+}
+
 const app = express();
 const csrfProtection = csrf();
+
+app.set('trust proxy', 1);
 
 function requestWantsJson(req) {
   const acceptHeader = String(req.get('Accept') || '').toLowerCase();
@@ -114,12 +126,12 @@ const limiter = rateLimit({
 app.use(limiter);
 
 const store = mongoStore.create({
-  mongoUrl: process.env.MONGODB_URL || 'mongodb://localhost:27017/edumy',
+  mongoUrl: mongoUri,
   secret: sessionSecret,
   touchAfter: 24 * 3600
 });
 store.on("error", function (e) {
-  console.log("SESSION STORE ERROR", e);
+  console.error('[session] store error:', e && e.message ? e.message : e);
 });
 
 const sessionConfig = {
@@ -315,6 +327,13 @@ app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'images', 'picture.png'));
 });
 
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    mongoConnected: mongoose.connection.readyState === 1
+  });
+});
+
 app.get('/', catchAsync(homeController.renderHome));
 
 // Catch-all 404 handler
@@ -416,18 +435,18 @@ async function startServer() {
   await connectDB();
 
   server = app.listen(PORT, HOST, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`[server] Listening on port ${PORT}`);
 
-    const lanAddresses = getLanAddresses();
-    if (lanAddresses.length > 0) {
-      lanAddresses.forEach((ip) => {
-        console.log(`LAN URL: http://${ip}:${PORT}`);
-      });
-    } else {
-      console.log('LAN URL: Unable to detect LAN IP automatically.');
+    if (!isProduction) {
+      const lanAddresses = getLanAddresses();
+      if (lanAddresses.length > 0) {
+        lanAddresses.forEach((ip) => {
+          console.log(`[server] LAN URL: http://${ip}:${PORT}`);
+        });
+      } else {
+        console.log('[server] LAN URL: Unable to detect LAN IP automatically.');
+      }
     }
-
-    console.log('You can now access Edumy from phone, Unity VR, or other devices on the same network.');
   });
 }
 

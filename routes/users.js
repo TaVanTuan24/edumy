@@ -5,7 +5,7 @@ const multer = require('multer');
 const catchAsync = require('../utils/catchAsync');
 const users = require('../controllers/users');
 const { storage, imageFileFilter, MAX_IMAGE_UPLOAD_BYTES } = require('../config/cloudinary');
-const { storeReturnTo, isLoggedIn } = require('../middleware');
+const { isLoggedIn } = require('../middleware');
 const { authLoginLimiter, authRegisterLimiter, uploadLimiter } = require('../utils/rateLimiters');
 
 const upload = multer({
@@ -25,10 +25,23 @@ router.route('/login')
     .get(users.renderLogin)
     .post(
         authLoginLimiter,
-        storeReturnTo,
         passport.authenticate('local', { failureFlash: true, failureRedirect: '/login' }),
         users.login
     );
+
+router.get(
+    '/auth/google',
+    users.ensureGoogleAuthConfigured,
+    users.prepareGoogleAuth,
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+router.get(
+    '/auth/google/callback',
+    users.ensureGoogleAuthConfigured,
+    passport.authenticate('google', { failureRedirect: '/login', failureFlash: true }),
+    users.googleAuthSuccess
+);
 
 router.get('/logout', users.redirectLogout);
 router.post('/logout', users.logout);

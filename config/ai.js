@@ -4,6 +4,7 @@ const { DEFAULT_MODEL, getCatalogModels, getCatalogModel } = require('../service
 const MODEL_OPTIONS = getCatalogModels()
 const SUPPORTED_MODELS = MODEL_OPTIONS.map((model) => model.id)
 const LEGACY_OPENAI_MODELS = new Set(['gpt-4o', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4'])
+const LEGACY_LOCAL_MODELS = new Set(['llama3', 'llama3.1', 'llama3.2'])
 const OPENAI_UPGRADE_MODEL = 'gpt-5.4'
 
 function readBoolean(value, fallback) {
@@ -25,11 +26,10 @@ const requestedDefaultModel = SUPPORTED_MODELS.includes(envDefaultModel)
         : DEFAULT_MODEL
 
 const aiConfig = {
+    provider: String(process.env.AI_PROVIDER || 'openai-compatible').trim().toLowerCase() || 'openai-compatible',
     defaultModel: requestedDefaultModel === 'grok' && !grokEnabled ? DEFAULT_MODEL : requestedDefaultModel,
-    ollama: {
-        model: process.env.OLLAMA_MODEL || DEFAULT_MODEL,
-        timeoutMs: readNumber(process.env.OLLAMA_TIMEOUT_MS, 120000)
-    },
+    chatModel: String(process.env.AI_CHAT_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL,
+    summaryModel: String(process.env.AI_SUMMARY_MODEL || 'gpt-5.5').trim() || 'gpt-5.5',
     grok: {
         enabled: grokEnabled,
         scraperPath: path.resolve(process.env.GROK_SCRAPER_PATH || path.join(__dirname, '..', 'grok-scraper')),
@@ -54,6 +54,7 @@ const aiConfig = {
 function normalizeAiModel(model) {
     const value = String(model || aiConfig.defaultModel || DEFAULT_MODEL).trim()
     if (LEGACY_OPENAI_MODELS.has(value)) return OPENAI_UPGRADE_MODEL
+    if (LEGACY_LOCAL_MODELS.has(value)) return aiConfig.chatModel
     return SUPPORTED_MODELS.includes(value) ? value : aiConfig.defaultModel
 }
 

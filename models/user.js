@@ -10,6 +10,12 @@ const UserSchema = new Schema({
         trim: true,
         lowercase: true
     },
+    googleId: {
+        type: String,
+        unique: true,
+        sparse: true,
+        trim: true
+    },
     avatar: {
         url: {
             type: String,

@@ -6,13 +6,17 @@ const mongoose = require('mongoose');
 const Course = require('../models/course');
 const { buildStoredCourseStats, rebuildCourseDurationData } = require('../utils/courseStats');
 
-const MONGO_URL = process.env.MONGODB_URL || process.env.DB_URL || 'mongodb://localhost:27017/edumy';
+const MONGO_URI = String(process.env.MONGO_URI || '').trim();
 const APPLY = process.argv.includes('--apply');
 const VERBOSE = process.argv.includes('--verbose');
 
 async function run() {
-  await mongoose.connect(MONGO_URL);
-  console.log(`[backfill:drive-durations] connected: ${MONGO_URL}`);
+  if (!MONGO_URI) {
+    throw new Error('MONGO_URI is required.');
+  }
+
+  await mongoose.connect(MONGO_URI);
+  console.log('[backfill:drive-durations] connected');
   console.log(`[backfill:drive-durations] mode: ${APPLY ? 'APPLY' : 'DRY-RUN'}`);
 
   const courses = await Course.find({});

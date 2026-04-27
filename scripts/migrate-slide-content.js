@@ -5,7 +5,7 @@ if (process.env.NODE_ENV !== 'production') {
 const mongoose = require('mongoose');
 const Course = require('../models/course');
 
-const MONGO_URL = process.env.DB_URL || 'mongodb://localhost:27017/edumy';
+const MONGO_URI = String(process.env.MONGO_URI || '').trim();
 const APPLY = process.argv.includes('--apply');
 const VERBOSE = process.argv.includes('--verbose');
 
@@ -59,8 +59,12 @@ function migrateLesson(lesson) {
 }
 
 async function run() {
-  await mongoose.connect(MONGO_URL);
-  console.log(`[migration] connected: ${MONGO_URL}`);
+  if (!MONGO_URI) {
+    throw new Error('MONGO_URI is required.');
+  }
+
+  await mongoose.connect(MONGO_URI);
+  console.log('[migration] connected');
   console.log(`[migration] mode: ${APPLY ? 'APPLY' : 'DRY-RUN'}`);
 
   const courses = await Course.find({});

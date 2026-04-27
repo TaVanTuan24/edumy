@@ -27,7 +27,7 @@ const PROVIDER_KEY_FIELDS = {
 }
 
 const TEST_MODELS = {
-    openai: 'gpt-5.4',
+    openai: 'gpt-5.5',
     xai: 'grok-api',
     claude: 'claude-3-5-sonnet',
     gemini: 'gemini-pro'
@@ -779,8 +779,11 @@ function buildSettingsSnapshot(settings) {
 }
 
 function buildProviderStatus(provider, apiKey, baseUrl) {
-    const keyStatus = buildKeyStatus(apiKey)
-    const normalizedBaseUrl = getStoredBaseUrl(provider, baseUrl)
+    const globalProvider = getGlobalProviderStatus(provider)
+    const keyStatus = globalProvider || buildKeyStatus(apiKey)
+    const normalizedBaseUrl = globalProvider && globalProvider.baseUrl
+        ? globalProvider.baseUrl
+        : getStoredBaseUrl(provider, baseUrl)
     return {
         provider,
         connected: keyStatus.connected,
@@ -866,6 +869,25 @@ async function getUserModelOptions(userId) {
             disabledReason
         }
     })
+}
+
+function getGlobalProviderStatus(provider) {
+    const providerKey = String(provider || '').toLowerCase()
+    if (providerKey !== 'openai') {
+        return null
+    }
+
+    const apiKey = String(process.env.AI_API_KEY || '').trim()
+    const baseUrl = getStoredBaseUrl(providerKey, process.env.AI_BASE_URL || '')
+    if (!apiKey || !baseUrl) {
+        return null
+    }
+
+    return {
+        connected: true,
+        masked: 'Managed by server',
+        baseUrl
+    }
 }
 
 function prepareStream(res) {

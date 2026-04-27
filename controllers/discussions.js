@@ -1,6 +1,7 @@
 const Discussion = require('../models/discussion');
 const Course = require('../models/course');
-const ollama = require('../config/ollama');
+const { aiConfig } = require('../config/ai');
+const { generatePromptReply } = require('../services/ai/chatOrchestrator');
 const { getCanonicalSections, syncCourseContent } = require('../utils/courseContentAdapter');
 
 function normalizeTags(input) {
@@ -120,7 +121,7 @@ function getRelevantContext(docs, question, lessonId) {
   return scored;
 }
 
-async function generateContextualAnswer(course, discussion, lessonId) {
+async function generateContextualAnswer(course, discussion, lessonId, userId) {
   const docs = getLessonDocs(course);
   const relevant = getRelevantContext(docs, discussion.title + ' ' + discussion.body, lessonId);
 
@@ -142,18 +143,17 @@ async function generateContextualAnswer(course, discussion, lessonId) {
     'Return answer in markdown format.'
   ].join('\n');
 
-  const response = await ollama.post('/api/generate', {
-    model: 'llama3.2',
+  return generatePromptReply({
+    userId,
+    model: aiConfig.chatModel,
     prompt,
-    stream: false,
     options: {
       temperature: 0.2,
-      top_p: 0.9,
-      max_tokens: 1400
+      topP: 0.9,
+      maxTokens: 1400,
+      timeoutMs: aiConfig.providers.openai.timeoutMs
     }
   });
-
-  return String(response && response.data && response.data.response || '').trim();
 }
 
 module.exports.listQuestions = async (req, res) => {
@@ -470,7 +470,7 @@ module.exports.generateAiAnswer = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Course not found' });
     }
 
-    const aiAnswer = await generateContextualAnswer(course, discussion, discussion.lessonId);
+    const aiAnswer = await generateContextualAnswer(course, discussion, discussion.lessonId, req.user && req.user._id);
 
     res.json({
       success: true,
@@ -478,6 +478,12 @@ module.exports.generateAiAnswer = async (req, res) => {
     });
   } catch (error) {
     console.error('[Discussion AI Answer Error]', error.message);
+    if (error.publicMessage) {
+      return res.status(error.statusCode || 503).json({
+        success: false,
+        error: error.publicMessage
+      });
+    }
     res.status(500).json({
       success: false,
       error: 'Failed to generate AI answer'

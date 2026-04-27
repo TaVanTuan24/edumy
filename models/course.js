@@ -204,47 +204,6 @@ const sectionSchema = new Schema({
     }
 }, { _id: true })
 
-const aiSummaryFailureSchema = new Schema({
-    provider: {
-        type: String,
-        default: '',
-        trim: true
-    },
-    code: {
-        type: String,
-        default: '',
-        trim: true
-    }
-}, { _id: false })
-
-const aiSummarySchema = new Schema({
-    text: {
-        type: String,
-        default: ''
-    },
-    provider: {
-        type: String,
-        default: '',
-        trim: true
-    },
-    generatedAt: {
-        type: Date,
-        default: null
-    },
-    fallbackUsed: {
-        type: Boolean,
-        default: false
-    },
-    sourceUpdatedAt: {
-        type: Date,
-        default: null
-    },
-    failedProviders: {
-        type: [aiSummaryFailureSchema],
-        default: []
-    }
-}, { _id: false })
-
 // ==================== MAIN COURSE SCHEMA ====================
 
 const CourseSchema = new Schema({
@@ -349,9 +308,19 @@ const CourseSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Review'
     }],
+    // Kept as Mixed so legacy object-shaped summaries still read safely.
     aiSummary: {
-        type: aiSummarySchema,
-        default: () => ({})
+        type: Schema.Types.Mixed,
+        default: ''
+    },
+    aiSummaryGeneratedAt: {
+        type: Date,
+        default: null
+    },
+    aiSummaryModel: {
+        type: String,
+        default: '',
+        trim: true
     }
 }, opts)
 

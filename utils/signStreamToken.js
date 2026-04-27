@@ -12,11 +12,14 @@ function base64UrlDecode(input) {
 }
 
 function getSigningSecret() {
-  return process.env.VR_STREAM_TOKEN_SECRET || process.env.JWT_SECRET || process.env.SESSION_SECRET || 'dev-stream-token-secret-change-me';
+  return process.env.VR_STREAM_TOKEN_SECRET || process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
 }
 
 function signPayload(payloadObj) {
   const secret = getSigningSecret();
+  if (!secret) {
+    throw new Error('VR stream signing secret is not configured');
+  }
   return crypto.createHmac('sha256', secret).update(payloadObj).digest('base64url');
 }
 

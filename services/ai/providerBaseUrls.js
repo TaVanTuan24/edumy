@@ -1,7 +1,7 @@
 const { normalizeBaseUrl } = require('../../utils/validateAiBaseUrl')
 
 const DEFAULT_BASE_URLS = {
-    openai: readBaseUrl(process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1'),
+    openai: readBaseUrl(process.env.AI_BASE_URL || process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1'),
     xai: readBaseUrl(process.env.XAI_BASE_URL || 'https://api.x.ai/v1'),
     claude: readBaseUrl(process.env.CLAUDE_BASE_URL || 'https://api.anthropic.com/v1'),
     gemini: readBaseUrl(process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta')

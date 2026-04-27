@@ -1367,6 +1367,12 @@ html[data-theme="dark"] .course-show-page {
     font-size: 0.92rem;
 }
 
+.preview-ai-summary-copy {
+    white-space: pre-line;
+    color: var(--cp-text);
+    line-height: 1.7;
+}
+
 .preview-ai-summary-debug {
     padding: 12px 14px;
     border-radius: 16px;

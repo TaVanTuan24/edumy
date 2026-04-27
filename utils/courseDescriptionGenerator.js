@@ -1,5 +1,5 @@
-const ollama = require('../config/ollama');
 const { aiConfig } = require('../config/ai');
+const { generatePromptReply } = require('../services/ai/chatOrchestrator');
 const { getCanonicalSections } = require('./courseContentAdapter');
 
 const descriptionCache = new Map();
@@ -101,20 +101,16 @@ function parseAiDescription(text) {
   return raw;
 }
 
-async function callOllama(prompt) {
-  const response = await ollama.post(
-    '/api/generate',
-    {
-      model: aiConfig.ollama.model,
-      prompt,
-      stream: false
-    },
-    { timeout: Math.min(aiConfig.ollama.timeoutMs, 12000) }
-  );
-
-  return response && response.data && response.data.response
-    ? String(response.data.response)
-    : '';
+async function callAi(prompt) {
+  return generatePromptReply({
+    model: aiConfig.chatModel,
+    prompt,
+    options: {
+      temperature: 0.2,
+      maxTokens: 220,
+      timeoutMs: Math.min(aiConfig.providers.openai.timeoutMs, 12000)
+    }
+  });
 }
 
 async function generateCourseDescription(course) {
@@ -127,7 +123,7 @@ async function generateCourseDescription(course) {
 
   try {
     const prompt = buildPrompt(course);
-    const aiText = await callOllama(prompt);
+    const aiText = await callAi(prompt);
     const description = parseAiDescription(aiText) || fallbackDescription;
     const safeDescription = normalizeText(description) || fallbackDescription;
     descriptionCache.set(cacheKey, safeDescription);

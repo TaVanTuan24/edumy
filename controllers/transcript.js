@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const Video = require('../models/video');
 const Transcript = require('../models/Transcript');
 const ExpressError = require('../utils/ExpressError');
-const ollama = require('../config/ollama');
+const { aiConfig } = require('../config/ai');
+const { generatePromptReply } = require('../services/ai/chatOrchestrator');
 
 let fetchTranscriptFn = null;
 
@@ -528,18 +529,16 @@ function normalizeQuizItems(items) {
 async function repairQuizFormat(rawOutput, numberOfQuestions) {
   const repairPrompt = `Convert the following content into VALID JSON only.\n\nRules:\n- Return ONLY a JSON array.\n- Exactly ${numberOfQuestions} items when possible.\n- Each item fields: question (string), options (array of 4 strings), correctAnswer (A/B/C/D), explanation (string), suggestedTimestamp (mm:ss).\n- Do not include markdown fences.\n\nContent to convert:\n${String(rawOutput || '').slice(0, 12000)}`;
 
-  const repairResponse = await ollama.post('/api/generate', {
-    model: 'llama3.2',
+  return generatePromptReply({
+    model: aiConfig.chatModel,
     prompt: repairPrompt,
-    stream: false,
     options: {
       temperature: 0.1,
-      top_p: 0.9,
-      max_tokens: 2200
+      topP: 0.9,
+      maxTokens: 2200,
+      timeoutMs: aiConfig.providers.openai.timeoutMs
     }
   });
-
-  return String(repairResponse && repairResponse.data && repairResponse.data.response || '');
 }
 
 function normalizeExternalErrorMessage(err, fallback) {
@@ -668,27 +667,23 @@ module.exports.aiGenerateQuiz = async (req, res) => {
 
   let aiResponse;
   try {
-    aiResponse = await ollama.post('/api/generate', {
-      model: 'llama3.2',
+    aiResponse = await generatePromptReply({
+      model: aiConfig.chatModel,
       prompt,
-      stream: false,
       options: {
         temperature: 0.35,
-        top_p: 0.9,
-        max_tokens: 2600
+        topP: 0.9,
+        maxTokens: 2600,
+        timeoutMs: aiConfig.providers.openai.timeoutMs
       }
     });
   } catch (err) {
-    const rawMessage = normalizeExternalErrorMessage(err, 'Failed to call Ollama');
-
-    if (String(err && err.code || '').toUpperCase() === 'ECONNREFUSED') {
-      throw new ExpressError('Cannot connect to Ollama. Please ensure Ollama is running on localhost:11434.', 503);
-    }
+    const rawMessage = normalizeExternalErrorMessage(err, 'Failed to call the configured AI provider');
 
     throw new ExpressError(`AI quiz generation failed: ${rawMessage}`, 502);
   }
 
-  const rawOutput = String(aiResponse && aiResponse.data && aiResponse.data.response || '');
+  const rawOutput = String(aiResponse || '');
   const parsedQuiz = parseQuizJson(rawOutput);
   let normalizedQuiz = normalizeQuizItems(parsedQuiz);
 

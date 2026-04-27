@@ -1,14 +1,6 @@
-const DEFAULT_MODEL = 'llama3.2'
+const DEFAULT_MODEL = process.env.AI_CHAT_MODEL || 'gpt-5.5'
 
 const MODEL_CATALOG = [
-    {
-        id: 'llama3.2',
-        label: 'llama3.2',
-        provider: 'Ollama',
-        providerKey: 'ollama',
-        enabled: true,
-        description: 'Local Ollama model'
-    },
     {
         id: 'grok',
         label: 'Grok Scraper',
@@ -36,6 +28,16 @@ const MODEL_CATALOG = [
         apiModel: process.env.OPENAI_GPT54_MODEL || process.env.OPENAI_MODEL || 'gpt-5.4',
         timeoutEnv: 'OPENAI_TIMEOUT_MS',
         description: 'OpenAI GPT-5.4'
+    },
+    {
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        provider: 'OpenAI',
+        providerKey: 'openai',
+        requiresKey: 'openaiKey',
+        apiModel: process.env.OPENAI_GPT55_MODEL || 'gpt-5.5',
+        timeoutEnv: 'OPENAI_TIMEOUT_MS',
+        description: 'OpenAI GPT-5.5'
     },
     {
         id: 'claude-3-5-sonnet',

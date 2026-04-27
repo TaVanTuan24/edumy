@@ -265,6 +265,14 @@ iframe {
   gap: 0.45rem;
 }
 
+.auth-divider {
+  margin: 0.1rem 0;
+}
+
+.auth-google-btn {
+  width: 100%;
+}
+
 .auth-switch a {
   color: var(--app-accent-strong);
   font-weight: 700;
