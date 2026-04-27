@@ -4,7 +4,8 @@ const { isLoggedIn, isAdmin } = require('../../middleware');
 const Course = require('../../models/course');
 const ContentLibrary = require('../../models/contentLibrary');
 const {
-    syncCourseContent
+    syncCourseContent,
+    normalizeQuizQuestions
 } = require('../../utils/courseContentAdapter');
 const { prepareLessonForWrite, syncCourseAggregateFields } = require('../../utils/courseStats');
 const { adminApiLimiter } = require('../../utils/rateLimiters');
@@ -458,14 +459,20 @@ router.get('/library', async (req, res) => {
         const query = { userId: req.user._id };
         
         if (type) {
-            query.type = type;
+            query.type = type === 'video' ? 'lesson' : type;
         }
 
         const items = await ContentLibrary.find(query)
             .sort({ updatedAt: -1 })
-            .limit(50);
+            .limit(50)
+            .lean();
 
-        res.json({ success: true, items });
+        const normalizedItems = items.map((item) => ({
+            ...item,
+            type: item.type === 'lesson' ? 'video' : item.type
+        }));
+
+        res.json({ success: true, items: normalizedItems });
     } catch (err) {
         console.error('Get library error:', err);
         res.status(500).json({ error: 'Failed to get library items' });
@@ -476,27 +483,39 @@ router.get('/library', async (req, res) => {
 router.post('/library', async (req, res) => {
     try {
         const { type, title, data, tags } = req.body;
+        const normalizedType = type === 'video' ? 'lesson' : type;
+        const safeData = data && typeof data === 'object' ? { ...data } : {};
+
+        if (normalizedType === 'quiz') {
+            safeData.quiz = normalizeQuizQuestions(safeData.quiz);
+        }
 
         // Create preview string
         let preview = '';
-        if (type === 'slide' && data.slides) {
-            preview = `${data.slides.length} slides`;
-        } else if (type === 'quiz' && data.quiz) {
-            preview = `${data.quiz.length} questions`;
-        } else if (type === 'video' && data.videoUrl) {
+        if (normalizedType === 'slide' && safeData.slides) {
+            preview = `${safeData.slides.length} slides`;
+        } else if (normalizedType === 'quiz' && safeData.quiz) {
+            preview = `${safeData.quiz.length} questions`;
+        } else if (normalizedType === 'lesson' && safeData.videoUrl) {
             preview = 'Video lesson';
         }
 
         const item = await ContentLibrary.create({
             userId: req.user._id,
-            type,
+            type: normalizedType,
             title,
-            data,
+            data: safeData,
             preview,
             tags: tags || []
         });
 
-        res.json({ success: true, item });
+        res.json({
+            success: true,
+            item: {
+                ...item.toObject(),
+                type: item.type === 'lesson' ? 'video' : item.type
+            }
+        });
     } catch (err) {
         console.error('Add to library error:', err);
         res.status(500).json({ error: 'Failed to add to library' });
@@ -547,15 +566,15 @@ router.post('/lesson/from-library', async (req, res) => {
         // Create lesson from library data
         const newLesson = {
             title: libraryItem.title,
-            type: libraryItem.type === 'lesson' ? 'video' : libraryItem.type,
+            type: libraryItem.type === 'lesson' || libraryItem.type === 'video' ? 'video' : libraryItem.type,
             videoUrl: libraryItem.data.videoUrl || '',
             preview: libraryItem.data.videoUrl || '',
             refId: String(libraryItem._id),
             content: {
                 slides: libraryItem.data.slides || [],
-                questions: libraryItem.data.quiz || []
+                questions: normalizeQuizQuestions(libraryItem.data.quiz || [])
             },
-            quiz: libraryItem.data.quiz || [],
+            quiz: normalizeQuizQuestions(libraryItem.data.quiz || []),
             order: section.lessons.length
         };
 
@@ -603,7 +622,7 @@ router.post('/course/add-item', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Library item not found' });
         }
 
-        const normalizedType = type === 'lesson' ? 'video' : type;
+        const normalizedType = type === 'lesson' || type === 'video' ? 'video' : type;
         const newLesson = {
             title: libraryItem.title || ('New ' + normalizedType),
             type: normalizedType,
@@ -618,7 +637,7 @@ router.post('/course/add-item', async (req, res) => {
         if (normalizedType === 'slide') {
             newLesson.content = { slides: libraryItem.data?.slides || [] };
         } else if (normalizedType === 'quiz') {
-            const quiz = libraryItem.data?.quiz || [];
+            const quiz = normalizeQuizQuestions(libraryItem.data?.quiz || []);
             newLesson.content = { questions: quiz };
             newLesson.quiz = quiz;
         }
@@ -666,22 +685,66 @@ router.post('/lesson/to-library', async (req, res) => {
         if (lesson.type === 'slide') {
             data.slides = Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides : [];
         } else if (lesson.type === 'quiz') {
-            data.quiz = lesson.quiz;
+            data.quiz = normalizeQuizQuestions(lesson.quiz);
         } else if (lesson.type === 'video') {
             data.videoUrl = lesson.videoUrl;
+        }
+
+        data.sourceLessonId = String(lesson._id || '');
+        data.sourceRefId = String(lesson.refId || '');
+
+        const normalizedLibraryType = lesson.type === 'video' ? 'lesson' : lesson.type;
+        const duplicateQuery = {
+            userId: req.user._id,
+            type: normalizedLibraryType,
+            $or: [
+                { 'data.sourceLessonId': data.sourceLessonId }
+            ]
+        };
+
+        if (data.sourceRefId) {
+            duplicateQuery.$or.push({ 'data.sourceRefId': data.sourceRefId });
+        }
+
+        const existingItem = await ContentLibrary.findOne(duplicateQuery);
+        if (existingItem) {
+            existingItem.title = title || lesson.title;
+            existingItem.data = {
+                ...existingItem.data,
+                ...data
+            };
+            existingItem.preview = lesson.type === 'slide' ? `${(data.slides || []).length} slides`
+                : lesson.type === 'quiz' ? `${(data.quiz || []).length} questions`
+                : 'Video lesson';
+            await existingItem.save();
+
+            return res.json({
+                success: true,
+                item: {
+                    ...existingItem.toObject(),
+                    type: existingItem.type === 'lesson' ? 'video' : existingItem.type
+                },
+                duplicate: true
+            });
         }
 
         // Create library item
         const item = await ContentLibrary.create({
             userId: req.user._id,
-            type: lesson.type,
+            type: normalizedLibraryType,
             title: title || lesson.title,
             data,
             preview: lesson.type === 'slide' ? `${(data.slides || []).length} slides` : 
-                     lesson.type === 'quiz' ? `${lesson.quiz.length} questions` : 'Video lesson'
+                     lesson.type === 'quiz' ? `${(data.quiz || []).length} questions` : 'Video lesson'
         });
 
-        res.json({ success: true, item });
+        res.json({
+            success: true,
+            item: {
+                ...item.toObject(),
+                type: item.type === 'lesson' ? 'video' : item.type
+            }
+        });
     } catch (err) {
         console.error('Save to library error:', err);
         res.status(500).json({ error: 'Failed to save to library' });

@@ -7,7 +7,7 @@
 
     // ==================== CONFIGURATION ====================
     let courseId = '';
-    let currentLibraryTab = 'video';
+    let currentLibraryTab = 'all';
     let courseData = [];
     const sortableInstances = new Map();
     let librarySortable = null;
@@ -330,6 +330,7 @@
                     });
                     if (evt && evt.item && evt.item.dataset.libraryInsert === '1') {
                         delete evt.item.dataset.libraryInsert;
+                        setReorderStatus('Item added', 'saved', true);
                         return;
                     }
                     persistLessonReorder(evt);
@@ -351,6 +352,8 @@
 
         // Section collapse toggle
         document.addEventListener('click', handleSectionToggle);
+
+        document.addEventListener('keydown', handleLibraryEscape);
 
     }
 
@@ -544,7 +547,7 @@
         }
 
         // Handle library toggle button
-        if (e.target.closest('.library-add-btn') || e.target.closest('.library-popup-header .close-btn') || e.target.closest('.library-drawer-backdrop')) {
+        if (e.target.closest('.library-add-btn') || e.target.closest('.library-popup-header .close-btn')) {
             toggleLibrary();
             return;
         }
@@ -657,6 +660,14 @@
 
         if (sectionCtx && sectionCtx.sectionCard) {
             sectionCtx.sectionCard.classList.add('is-selected-for-library');
+        }
+    }
+
+    function handleLibraryEscape(e) {
+        if (e.key !== 'Escape') return;
+        const popup = document.getElementById('libraryPopup');
+        if (popup && popup.classList.contains('show')) {
+            toggleLibrary(false);
         }
     }
 
@@ -2060,7 +2071,8 @@
     async function addItemToSection(sectionId, type, refId) {
         try {
             const normalizedType = type === 'lesson' ? 'video' : type;
-            const res = await fetch('/api/admin/course/add-item', {
+            const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+            const res = await fetcher('/api/admin/course/add-item', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2071,9 +2083,9 @@
                 })
             });
             const data = await res.json();
-            if (!data.success) {
+            if (!res.ok || !data.success) {
                 console.error('[CourseEditor] Failed to add library item', data);
-                showToast('Failed to add item', 'danger');
+                showToast(data.error || 'Failed to add item', 'danger');
                 return;
             }
             const sectionIndex = courseData.findIndex((section) => String(section._id) === String(sectionId));
@@ -2092,8 +2104,8 @@
                 }
             }
             showToast('Item added.', 'success');
-        } catch {
-            showToast('Failed to add item', 'danger');
+        } catch (error) {
+            showToast(error && error.message ? error.message : 'Failed to add item', 'danger');
         }
     }
 
@@ -2116,6 +2128,7 @@
 
         if (sourceSectionIndex === destSectionIndex && sourceIndex === destIndex) {
             refreshLessonIndexes(sourceSectionIndex);
+            setReorderStatus('Drag canceled', 'saved', true);
             return;
         }
 
@@ -2220,15 +2233,16 @@
     }
 
     // ==================== LIBRARY FUNCTIONS ====================
-    function toggleLibrary() {
+    function toggleLibrary(forceOpen) {
         const popup = document.getElementById('libraryPopup');
-        const backdrop = document.getElementById('libraryDrawerBackdrop');
-        const nextOpen = !popup.classList.contains('show');
+        const pageRoot = document.querySelector('.course-editor-page');
+        const nextOpen = typeof forceOpen === 'boolean'
+            ? forceOpen
+            : !popup.classList.contains('show');
         popup.classList.toggle('show', nextOpen);
-        if (backdrop) {
-            backdrop.classList.toggle('show', nextOpen);
+        if (pageRoot) {
+            pageRoot.classList.toggle('library-open', nextOpen);
         }
-        document.body.classList.toggle('library-open', nextOpen);
         if (nextOpen) {
             loadLibraryItems();
         }
@@ -2269,15 +2283,18 @@
         content.innerHTML = '<div class="library-empty"><i class="fas fa-spinner fa-spin"></i></div>';
 
         try {
-            const res = await fetch('/api/admin/library?type=' + currentLibraryTab);
+            const query = currentLibraryTab === 'all' ? '' : ('?type=' + encodeURIComponent(currentLibraryTab));
+            const res = await fetch('/api/admin/library' + query);
             const data = await res.json();
 
             if (!data.success || !data.items.length) {
-                content.innerHTML = '<div class="library-empty"><p>No ' + currentLibraryTab + 's in library</p></div>';
+                const label = currentLibraryTab === 'all' ? 'items' : currentLibraryTab + 's';
+                content.innerHTML = '<div class="library-empty"><p>No ' + label + ' in library</p></div>';
                 return;
             }
 
             const icons = { video: 'fa-play-circle', slide: 'fa-file-alt', quiz: 'fa-question-circle' };
+            const labels = { video: 'Video', slide: 'Slide', quiz: 'Quiz' };
 
             content.innerHTML = data.items.map(item => `
                 <div class="library-item" 
@@ -2286,14 +2303,18 @@
                      data-type="${item.type}"
                      data-content-type="${item.type}"
                      data-title="${escapeAttribute(item.title || '')}"
-                     data-preview="${escapeAttribute(item.preview || '')}">
+                     data-preview="${escapeAttribute(item.preview || '')}"
+                     data-ref-id="${escapeAttribute(item._id)}">
                     <div class="library-item-drag" aria-hidden="true" title="Drag into a course section">
                         <i class="fa-solid fa-grip-lines"></i>
                     </div>
                     <div class="lib-icon ${item.type}">
                         <i class="fas ${icons[item.type]}"></i>
                     </div>
-                    <span class="lib-title">${escapeHtml(formatLessonTitle(item.title))}</span>
+                    <div class="item-info">
+                        <div class="lib-title">${escapeHtml(formatLessonTitle(item.title))}</div>
+                        <div class="item-meta">${escapeHtml(labels[item.type] || item.type)}${item.preview ? ' - ' + escapeHtml(item.preview) : ''}</div>
+                    </div>
                     <div class="library-item-actions">
                         <button class="add-btn" type="button" data-library-add="${item._id}" data-library-type="${item.type}" aria-label="Add to selected section" title="Add to selected section">
                             <i class="fa-solid fa-plus"></i>
@@ -2432,11 +2453,11 @@
             variant: 'danger',
             onConfirm: async function() {
                 const fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
-                const res = await fetcher('/library/' + encodeURIComponent(id), {
+                const res = await fetcher('/api/admin/library/' + encodeURIComponent(id), {
                     method: 'DELETE'
                 });
                 const data = await res.json();
-                if (!data.success) {
+                if (!res.ok || !data.success) {
                     throw new Error(data.error || 'Delete failed');
                 }
             }

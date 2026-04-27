@@ -143,6 +143,9 @@ UserSchema.pre('save', function(next) {
     next();
 });
 
-UserSchema.plugin(passportLocalMongoose);
+UserSchema.plugin(passportLocalMongoose, {
+    usernameQueryFields: ['email'],
+    usernameCaseInsensitive: true
+});
 
 module.exports = mongoose.model('User', UserSchema);

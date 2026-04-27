@@ -16,13 +16,13 @@
                 <form action="/login" method="POST" class="validated-form auth-form" novalidate>
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <div class="auth-form-group">
-                        <label class="form-label" for="username">Username</label>
-                        <input class="form-control" type="text" id="username" name="username" autofocus required>
+                        <label class="form-label" for="username">Username or email</label>
+                        <input class="form-control" type="text" id="username" name="username" autocomplete="username" autofocus required>
                     </div>
 
                     <div class="auth-form-group">
                         <label class="form-label" for="password">Password</label>
-                        <input class="form-control" type="password" id="password" name="password" required>
+                        <input class="form-control" type="password" id="password" name="password" autocomplete="current-password" required>
                     </div>
                     <button class="btn btn-primary auth-submit" type="submit">Login</button>
                 </form>

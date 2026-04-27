@@ -22,10 +22,6 @@ body {
     color: var(--text-main);
 }
 
-body.library-open {
-    overflow: hidden;
-}
-
 .top-bar {
     background: color-mix(in srgb, var(--surface-card) 95%, transparent);
     backdrop-filter: blur(8px);
@@ -706,40 +702,22 @@ body.library-open {
 }
 
 .library-drawer-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.42);
-    backdrop-filter: blur(3px);
-    z-index: 998;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-}
-
-.library-drawer-backdrop.show {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-body.library-dragging .library-drawer-backdrop {
-    pointer-events: none;
-    opacity: 0.18;
-}
-
-body.library-dragging .library-popup {
-    overflow: visible;
+    display: none !important;
 }
 
 .library-popup {
     position: fixed;
-    top: 0;
+    --library-navbar-offset: 78px;
+    top: var(--library-navbar-offset);
     right: 0;
     bottom: 0;
-    width: min(420px, calc(100vw - 24px));
-    max-height: 100vh;
+    width: min(420px, 90vw);
+    height: calc(100vh - var(--library-navbar-offset));
+    max-height: calc(100vh - var(--library-navbar-offset));
     background: #fff;
-    border: 1px solid var(--border);
-    border-radius: 20px 0 0 20px;
+    border-left: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    border-radius: 24px 0 0 0;
     box-shadow: 0 24px 60px rgba(18, 29, 43, 0.22);
     z-index: 1000;
     display: flex;
@@ -759,9 +737,10 @@ body.library-dragging .library-popup {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px;
+    padding: 14px 16px;
     border-bottom: 1px solid #edf0f3;
     background: #fafbff;
+    flex: 0 0 auto;
 }
 
 .library-popup-header h6 {
@@ -784,8 +763,9 @@ body.library-dragging .library-popup {
 
 .library-tabs {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     border-bottom: 1px solid #edf0f3;
+    flex: 0 0 auto;
 }
 
 .library-tabs button {
@@ -813,6 +793,7 @@ html[data-theme="dark"] .library-tabs button {
     padding: 10px;
     overflow-y: auto;
     flex: 1;
+    min-height: 0;
 }
 
 .library-item {
@@ -826,6 +807,7 @@ html[data-theme="dark"] .library-tabs button {
     margin-bottom: 8px;
     background: #fbfcfe;
     cursor: grab;
+    transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .library-item-drag {
@@ -902,6 +884,8 @@ html[data-theme="dark"] .library-tabs button {
 .library-item:hover {
     border-color: #c7d0dc;
     background: #f7faff;
+    box-shadow: 0 10px 24px rgba(18, 29, 43, 0.08);
+    transform: translateY(-1px);
 }
 
 .library-empty {
@@ -935,6 +919,14 @@ html[data-theme="dark"] .library-tabs button {
 
 body.is-sorting,
 body.is-sorting * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -ms-user-select: none !important;
+    cursor: grabbing !important;
+}
+
+body.library-dragging,
+body.library-dragging * {
     user-select: none !important;
     -webkit-user-select: none !important;
     -ms-user-select: none !important;
@@ -1050,17 +1042,20 @@ body.hit-test-mode .hit-test-active {
     }
 
     .library-popup {
-        width: min(100vw, 100%);
-        border-radius: 18px 18px 0 0;
-        top: auto;
-        left: 0;
+        --library-navbar-offset: 72px;
+        width: min(90vw, 420px);
+        top: var(--library-navbar-offset);
+        left: auto;
         right: 0;
-        max-height: min(72vh, 620px);
-        transform: translateY(100%);
+        bottom: 0;
+        height: calc(100vh - var(--library-navbar-offset));
+        max-height: calc(100vh - var(--library-navbar-offset));
+        border-radius: 22px 0 0 0;
+        transform: translateX(100%);
     }
 
     .library-popup.show {
-        transform: translateY(0);
+        transform: translateX(0);
     }
 
     .library-add-btn span {
@@ -1104,6 +1099,36 @@ html[data-theme="dark"] .library-item-drag {
     background: var(--app-surface-soft);
     color: var(--text-main);
     border-color: var(--border);
+}
+
+html[data-theme="dark"] .sidebar-title,
+html[data-theme="dark"] .section-title,
+html[data-theme="dark"] .item-title,
+html[data-theme="dark"] .lib-title,
+html[data-theme="dark"] .editor-content .form-label,
+html[data-theme="dark"] .editor-content .card-header h5,
+html[data-theme="dark"] .editor-placeholder h4 {
+    color: var(--text-main);
+}
+
+html[data-theme="dark"] .sidebar-subtitle,
+html[data-theme="dark"] .item-meta,
+html[data-theme="dark"] .library-empty,
+html[data-theme="dark"] .top-bar-label,
+html[data-theme="dark"] .small.text-muted,
+html[data-theme="dark"] .text-muted {
+    color: var(--text-muted) !important;
+}
+
+html[data-theme="dark"] .section-icon,
+html[data-theme="dark"] .drag-handle,
+html[data-theme="dark"] .drag-handle i {
+    color: #a8b3c2;
+}
+
+html[data-theme="dark"] .lesson-item.is-active .item-title,
+html[data-theme="dark"] .section-card.is-selected-for-library .section-title {
+    color: #f3f6fb;
 }
 
 html[data-theme="dark"] .lesson-item:hover,
