@@ -1291,6 +1291,10 @@ input::placeholder {
 }
 
 @media (max-width: 991.98px) {
+    .app-navbar .navbar-toggler {
+        display: inline-flex;
+    }
+
     .auth-card,
     .app-footer .footer-inner,
     .course-show-page .learning-layout,

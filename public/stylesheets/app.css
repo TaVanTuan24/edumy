@@ -50,6 +50,15 @@
     --app-info-text: #1d4ed8;
     --app-danger-soft: rgba(239, 68, 68, 0.12);
     --app-danger-text: #b42318;
+    --app-bg-accent-1: rgba(56, 189, 248, 0.18);
+    --app-bg-accent-2: rgba(99, 102, 241, 0.12);
+    --app-bg-accent-3: rgba(245, 158, 11, 0.1);
+    --app-bg-mesh-opacity: 0.95;
+    --app-bg-blob-opacity: 0.4;
+    --app-bg-noise-opacity: 0.035;
+    --app-bg-animation-duration: 34s;
+    --app-page-enter-duration: 420ms;
+    --app-page-enter-distance: 10px;
 }
 
 html[data-theme="dark"] {
@@ -84,6 +93,12 @@ html[data-theme="dark"] {
     --app-info-text: #bfdbfe;
     --app-danger-soft: rgba(239, 68, 68, 0.18);
     --app-danger-text: #fda4af;
+    --app-bg-accent-1: rgba(56, 189, 248, 0.12);
+    --app-bg-accent-2: rgba(94, 234, 212, 0.09);
+    --app-bg-accent-3: rgba(249, 115, 22, 0.09);
+    --app-bg-mesh-opacity: 0.78;
+    --app-bg-blob-opacity: 0.3;
+    --app-bg-noise-opacity: 0.045;
 }
 
 #cluster-map {
@@ -98,6 +113,211 @@ body {
     background: var(--app-bg);
     color: var(--app-text);
     transition: background-color 180ms ease, color 180ms ease;
+}
+
+body.app-shell {
+    position: relative;
+    isolation: isolate;
+}
+
+.app-shell > * {
+    position: relative;
+    z-index: 1;
+}
+
+.app-background {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: clip;
+    pointer-events: none;
+}
+
+.app-background-gradient,
+.app-background-blobs,
+.app-background-noise,
+.app-background-blob {
+    position: absolute;
+    inset: 0;
+}
+
+.app-background-gradient {
+    background:
+        radial-gradient(circle at 14% 18%, var(--app-bg-accent-1), transparent 30%),
+        radial-gradient(circle at 84% 16%, var(--app-bg-accent-2), transparent 24%),
+        radial-gradient(circle at 72% 74%, var(--app-bg-accent-3), transparent 28%),
+        linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 96%, #ffffff 4%) 0%, color-mix(in srgb, var(--app-bg) 86%, var(--app-bg-elevated) 14%) 100%);
+    opacity: var(--app-bg-mesh-opacity);
+    transform: scale(1.08);
+    transform-origin: center;
+    animation: appBackgroundShift calc(var(--app-bg-animation-duration) * 1.25) ease-in-out infinite alternate;
+}
+
+.app-background-blobs {
+    filter: blur(52px);
+    opacity: var(--app-bg-blob-opacity);
+    will-change: transform;
+}
+
+.app-background-blob {
+    inset: auto;
+    border-radius: 999px;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), transparent 62%);
+}
+
+.app-background-blob-a {
+    width: 28rem;
+    height: 28rem;
+    top: 8%;
+    left: -6%;
+    background:
+        radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--app-bg-accent-1) 88%, #ffffff 12%), transparent 68%),
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.24), transparent 72%);
+    animation: appBlobFloatA calc(var(--app-bg-animation-duration) * 0.9) ease-in-out infinite alternate;
+}
+
+.app-background-blob-b {
+    width: 22rem;
+    height: 22rem;
+    top: 48%;
+    right: -4%;
+    background:
+        radial-gradient(circle at 36% 36%, color-mix(in srgb, var(--app-bg-accent-2) 92%, #ffffff 8%), transparent 66%),
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.18), transparent 72%);
+    animation: appBlobFloatB calc(var(--app-bg-animation-duration) * 1.05) ease-in-out infinite alternate;
+}
+
+.app-background-blob-c {
+    width: 18rem;
+    height: 18rem;
+    bottom: -2%;
+    left: 46%;
+    background:
+        radial-gradient(circle at 42% 36%, color-mix(in srgb, var(--app-bg-accent-3) 94%, #ffffff 6%), transparent 65%),
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.12), transparent 74%);
+    animation: appBlobFloatC calc(var(--app-bg-animation-duration) * 1.15) ease-in-out infinite alternate;
+}
+
+.app-background-noise {
+    opacity: var(--app-bg-noise-opacity);
+    background-image:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.65) 0.6px, transparent 0.9px),
+        radial-gradient(circle at 80% 40%, rgba(15, 23, 42, 0.3) 0.5px, transparent 0.8px),
+        radial-gradient(circle at 30% 70%, rgba(255, 255, 255, 0.45) 0.45px, transparent 0.8px);
+    background-size: 19px 19px, 23px 23px, 29px 29px;
+    mix-blend-mode: soft-light;
+}
+
+.app-shell[data-page-tone="home"] {
+    --app-bg-accent-1: rgba(99, 102, 241, 0.2);
+    --app-bg-accent-2: rgba(56, 189, 248, 0.16);
+    --app-bg-accent-3: rgba(251, 146, 60, 0.12);
+    --app-bg-blob-opacity: 0.48;
+    --app-bg-animation-duration: 28s;
+}
+
+.app-shell[data-page-tone="dashboard"] {
+    --app-bg-accent-1: rgba(14, 165, 233, 0.15);
+    --app-bg-accent-2: rgba(96, 165, 250, 0.1);
+    --app-bg-accent-3: rgba(15, 118, 110, 0.08);
+}
+
+.app-shell[data-page-tone="player"],
+.app-shell[data-page-tone="admin"] {
+    --app-bg-accent-1: rgba(96, 165, 250, 0.08);
+    --app-bg-accent-2: rgba(148, 163, 184, 0.06);
+    --app-bg-accent-3: rgba(245, 158, 11, 0.04);
+    --app-bg-blob-opacity: 0.18;
+    --app-bg-noise-opacity: 0.02;
+    --app-bg-animation-duration: 42s;
+}
+
+.app-shell[data-page-tone="chat"] {
+    --app-bg-accent-1: rgba(15, 118, 110, 0.14);
+    --app-bg-accent-2: rgba(20, 184, 166, 0.1);
+    --app-bg-accent-3: rgba(59, 130, 246, 0.08);
+}
+
+.app-main {
+    width: 100%;
+    min-width: 0;
+    background: transparent;
+}
+
+.app-page-stage {
+    min-width: 0;
+    width: 100%;
+    animation: appPageEnter var(--app-page-enter-duration) var(--app-page-ease, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+
+.ai-chat-main .app-page-stage,
+.app-content-full .app-page-stage {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+[data-animate] {
+    animation: appPageEnter 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: calc(var(--reveal-delay, 0ms) + 40ms);
+}
+
+.app-card,
+.app-card-elevated,
+.card,
+.course-skeleton-card,
+.dashboard-course-item,
+.practice-item,
+.preview-section-card,
+.show-panel-card,
+.leaderboard-row,
+.discussion-item {
+    transition:
+        transform 240ms ease,
+        box-shadow 240ms ease,
+        border-color 240ms ease,
+        background-color 220ms ease,
+        color 180ms ease;
+}
+
+.form-control,
+.form-select,
+.input-group-text,
+textarea,
+input,
+select {
+    transition:
+        border-color 220ms ease,
+        box-shadow 220ms ease,
+        background-color 220ms ease,
+        color 180ms ease,
+        transform 220ms ease;
+}
+
+.btn {
+    transition:
+        background-color 220ms ease,
+        border-color 220ms ease,
+        color 180ms ease,
+        box-shadow 220ms ease,
+        transform 220ms ease,
+        filter 220ms ease;
+    will-change: transform;
+}
+
+.btn:active {
+    transform: scale(0.985);
+}
+
+a:not(.btn):not(.nav-link):not(.navbar-brand):not(.dropdown-item) {
+    text-decoration-color: transparent;
+    text-underline-offset: 0.18em;
+    transition: color 220ms ease, text-decoration-color 220ms ease, opacity 220ms ease;
+}
+
+a:not(.btn):not(.nav-link):not(.navbar-brand):not(.dropdown-item):hover {
+    text-decoration-color: currentColor;
 }
 
 .app-page-shell {
@@ -275,9 +495,13 @@ body {
 .app-loading-line {
     height: 12px;
     border-radius: 999px;
-    background: linear-gradient(90deg, var(--app-skeleton-base), var(--app-skeleton-glow), var(--app-skeleton-base));
-    background-size: 220% 100%;
-    animation: appSkeletonShimmer 1.4s linear infinite;
+    background:
+        linear-gradient(90deg,
+            color-mix(in srgb, var(--app-skeleton-base) 92%, transparent) 0%,
+            color-mix(in srgb, var(--app-skeleton-glow) 95%, #ffffff 5%) 48%,
+            color-mix(in srgb, var(--app-skeleton-base) 92%, transparent) 100%);
+    background-size: 240% 100%;
+    animation: appSkeletonShimmer 1.8s linear infinite;
 }
 
 .app-loading-line.is-short {
@@ -287,6 +511,53 @@ body {
 @keyframes appSkeletonShimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+@keyframes appBackgroundShift {
+    0% {
+        transform: scale(1.06) translate3d(0, 0, 0);
+    }
+    100% {
+        transform: scale(1.12) translate3d(1.5%, -1%, 0);
+    }
+}
+
+@keyframes appBlobFloatA {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    100% {
+        transform: translate3d(7%, 4%, 0) scale(1.08);
+    }
+}
+
+@keyframes appBlobFloatB {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    100% {
+        transform: translate3d(-6%, -5%, 0) scale(1.1);
+    }
+}
+
+@keyframes appBlobFloatC {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    100% {
+        transform: translate3d(4%, -6%, 0) scale(1.06);
+    }
+}
+
+@keyframes appPageEnter {
+    from {
+        opacity: 0;
+        transform: translate3d(0, var(--app-page-enter-distance), 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
 }
 
 
@@ -815,10 +1086,58 @@ html[data-theme="dark"] .btn-close {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .app-background-gradient,
+    .app-background-blob,
+    .app-page-stage,
+    [data-animate] {
+        animation: none !important;
+        transform: none !important;
+    }
+
+    .btn,
+    .app-card,
+    .app-card-elevated,
+    .card,
+    .dashboard-course-item,
+    .practice-item,
+    .preview-section-card,
+    .show-panel-card,
+    .leaderboard-row,
+    .discussion-item,
+    .form-control,
+    .form-select,
+    textarea,
+    input,
+    select,
+    a {
+        transition-duration: 0.01ms !important;
+        transform: none !important;
+    }
+
     .skeleton-shimmer::after,
     .course-skeleton-card::after,
     .chart-skeleton::after {
         animation: none;
+    }
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .btn:hover {
+        transform: translateY(-1px) scale(1.02);
+        box-shadow: 0 12px 24px color-mix(in srgb, var(--app-shadow-color) 55%, transparent);
+    }
+
+    .app-card:hover,
+    .app-card-elevated:hover,
+    .card:hover,
+    .dashboard-course-item:hover,
+    .practice-item:hover,
+    .preview-section-card:hover,
+    .show-panel-card:hover,
+    .leaderboard-row:hover,
+    .discussion-item:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--app-shadow-md);
     }
 }
 

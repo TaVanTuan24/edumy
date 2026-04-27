@@ -534,6 +534,7 @@
       '<div class="ai-typing-indicator" role="status" aria-label="Assistant is generating">' +
         '<span></span><span></span><span></span>' +
       '</div>';
+    els.messages.classList.add('is-streaming-active');
     const statusChip = assistant.head.querySelector('.ai-status-chip');
     if (statusChip) statusChip.textContent = label || 'Thinking';
     assistant.raw = '';
@@ -544,6 +545,7 @@
     if (!token) return;
     assistant.raw += token;
     revealStreamingText(assistant);
+    pulseStreamingChunk(assistant);
     if (state.shouldAutoScroll) {
       scrollToBottom();
     }
@@ -569,7 +571,9 @@
     assistant.wrap.classList.remove('is-streaming', 'is-thinking');
     assistant.wrap.classList.toggle('is-error', settings.status === 'error');
     assistant.body.innerHTML = renderMarkdown(assistant.raw);
+    assistant.body.classList.remove('is-stream-chunk');
     decorateRenderedMessage(assistant.body);
+    els.messages.classList.remove('is-streaming-active');
 
     assistant.wrap.querySelectorAll('[data-copy-message]').forEach(function(button) {
       button.dataset.copyMessage = assistant.raw;
@@ -602,6 +606,16 @@
 
     assistant.wrap.classList.remove('is-thinking');
     assistant.body.textContent = assistant.raw;
+  }
+
+  function pulseStreamingChunk(assistant) {
+    if (!assistant || !assistant.body) return;
+    assistant.body.classList.remove('is-stream-chunk');
+    window.requestAnimationFrame(function() {
+      if (assistant.body) {
+        assistant.body.classList.add('is-stream-chunk');
+      }
+    });
   }
 
   function getTypingDelay(assistant) {

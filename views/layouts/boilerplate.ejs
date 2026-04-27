@@ -39,11 +39,41 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 
-<body class="app-shell d-flex flex-column min-vh-100 <%= typeof bodyClass !== 'undefined' ? bodyClass : '' %>">
+<%
+    const shellBodyClass = typeof bodyClass !== 'undefined' ? bodyClass : '';
+    const shellMainClass = typeof mainClass !== 'undefined' ? mainClass : '';
+    const currentPathValue = String(typeof currentPath !== 'undefined' ? currentPath : '');
+    let pageTone = 'default';
+
+    if (shellBodyClass.includes('home-page-shell') || currentPathValue === '/') {
+        pageTone = 'home';
+    } else if (shellBodyClass.includes('ai-chat-shell') || currentPathValue.startsWith('/ai')) {
+        pageTone = 'chat';
+    } else if (currentPathValue === '/courses') {
+        pageTone = 'dashboard';
+    } else if (currentPathValue.startsWith('/courses/') && !currentPathValue.includes('/edit')) {
+        pageTone = 'player';
+    } else if (currentPathValue.startsWith('/admin') || shellMainClass.includes('app-content-full')) {
+        pageTone = 'admin';
+    }
+%>
+
+<body class="app-shell d-flex flex-column min-vh-100 <%= shellBodyClass %>" data-page-tone="<%= pageTone %>">
+    <div class="app-background" aria-hidden="true">
+        <div class="app-background-gradient"></div>
+        <div class="app-background-blobs">
+            <span class="app-background-blob app-background-blob-a"></span>
+            <span class="app-background-blob app-background-blob-b"></span>
+            <span class="app-background-blob app-background-blob-c"></span>
+        </div>
+        <div class="app-background-noise"></div>
+    </div>
     <%- include('../partials/navbar')%>
-        <main class="app-main container-fluid p-0 <%= typeof mainClass !== 'undefined' ? mainClass : '' %>">
+        <main class="app-main container-fluid p-0 <%= shellMainClass %>">
+            <div class="app-page-stage">
             <%- include('../partials/flash')%>
                 <%- body %>
+            </div>
         </main>
         <% if (!(typeof hideFooter !== 'undefined' && hideFooter)) { %>
             <%- include('../partials/footer')%>

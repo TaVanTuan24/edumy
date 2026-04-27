@@ -342,6 +342,11 @@ iframe {
 }
 
 @media (min-width: 992px) {
+  .app-navbar .navbar-toggler,
+  .app-navbar .navbar-toggle {
+    display: none !important;
+  }
+
   .app-navbar {
     padding-block: 0.25rem;
   }
@@ -369,6 +374,11 @@ iframe {
     width: auto;
   }
 
+  .app-navbar .navbar-nav-main,
+  .app-navbar .navbar-actions {
+    display: flex;
+  }
+
   .modal-dialog {
     margin: 1.75rem auto;
   }
@@ -377,6 +387,62 @@ iframe {
 @media (max-width: 991.98px) {
   .app-navbar .navbar-toggler {
     display: inline-flex !important;
+  }
+
+  .app-navbar .navbar-shell {
+    align-items: center;
+  }
+
+  .app-navbar .navbar-collapse,
+  .app-navbar .navbar-menu {
+    margin-top: 0.85rem;
+    padding: 0.85rem;
+    border-top: 1px solid var(--app-navbar-border);
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--app-navbar-bg) 94%, transparent);
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
+    backdrop-filter: blur(16px);
+  }
+
+  .app-navbar .navbar-nav-main,
+  .app-navbar .navbar-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.25rem;
+  }
+
+  .app-navbar .navbar-actions {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .app-navbar .nav-link,
+  .app-navbar .navbar-actions .nav-link,
+  .app-navbar .navbar-actions form,
+  .app-navbar .navbar-actions button.nav-link {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .app-navbar .navbar-actions form .nav-link {
+    display: inline-flex;
+  }
+
+  .app-navbar .notification-dropdown,
+  .app-navbar .notification-dropdown .nav-link {
+    width: 100%;
+  }
+
+  .app-navbar .notification-dropdown .nav-link {
+    justify-content: space-between;
+  }
+
+  .app-navbar .notification-menu {
+    width: 100%;
+    max-width: none;
   }
 
   .learning-layout {
