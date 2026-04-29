@@ -30,21 +30,21 @@ function buildCurriculumOutline(course) {
 }
 
 function buildFallbackDescription(course) {
-  const title = normalizeText(course && course.title) || 'Khóa học';
-  const topic = normalizeText(course && course.topic) || 'nhiều chủ đề';
+  const title = normalizeText(course && course.title) || 'Course';
+  const topic = normalizeText(course && course.topic) || 'multiple topics';
   const outline = buildCurriculumOutline(course);
   const sectionNames = outline.map((entry) => entry.sectionTitle).filter(Boolean).slice(0, 3);
   const lessonNames = outline.flatMap((entry) => entry.lessons).slice(0, 5).map((line) => line.replace(/^[^:]+:\s*/, ''));
 
   const sectionPart = sectionNames.length
-    ? `Nội dung được tổ chức qua các phần như ${sectionNames.join(', ')}.`
-    : 'Nội dung được chia thành các phần học rõ ràng.';
+    ? `Content is organized into sections such as ${sectionNames.join(', ')}.`
+    : 'Content is divided into clear learning sections.';
 
   const lessonPart = lessonNames.length
-    ? `Bạn sẽ đi qua các bài học tiêu biểu như ${lessonNames.join(', ')}.`
-    : 'Khóa học tập trung vào các bài học thực hành và dễ theo dõi.';
+    ? `You will work through representative lessons such as ${lessonNames.join(', ')}.`
+    : 'The course focuses on practical, easy-to-follow lessons.';
 
-  return `${title} là khóa học thuộc chủ đề ${topic}, được thiết kế để giúp người học nắm được lộ trình học tập rõ ràng từ cơ bản đến ứng dụng. ${sectionPart} ${lessonPart}`;
+  return `${title} is a ${topic} course designed to help learners follow a clear path from fundamentals to application. ${sectionPart} ${lessonPart}`;
 }
 
 function buildPrompt(course) {
@@ -55,13 +55,13 @@ function buildPrompt(course) {
   return [
     'You are an educational course copywriter.',
     '',
-    'Write a concise Vietnamese course description based only on the curriculum structure below.',
+    'Write a concise English course description based only on the curriculum structure below.',
     'Rules:',
     '- Return JSON only',
     '- No markdown',
     '- No bullet points',
     '- 2 to 3 sentences',
-    '- 60 to 110 Vietnamese words',
+    '- 60 to 110 English words',
     '- Keep it natural, clear, and appealing',
     '- Do not invent lessons or tools not present in the outline',
     '- Summarize what learners will study and why it matters',

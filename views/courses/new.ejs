@@ -86,7 +86,7 @@
             </section>
 
             <div class="mb-3">
-              <label class="form-label" for="topic">Chủ đề</label>
+              <label class="form-label" for="topic">Topic</label>
               <select name="course[topic]" id="topic" class="form-control" required>
                 <% ['Software', 'Hardware', 'AI', 'Network', 'Language', 'Security', 'Other'].forEach((topic) => { %>
                   <option value="<%= topic %>" <%= courseForm.topic === topic ? 'selected' : '' %>><%= topic %></option>

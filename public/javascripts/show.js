@@ -430,7 +430,7 @@ function updateProgressUI() {
 
   bar.style.width = percent + '%';
   bar.setAttribute('aria-valuenow', completed);
-  label.innerText = 'Tiến độ học: ' + completed + ' / ' + total + ' video (' + percent + '%)';
+  label.innerText = 'Learning progress: ' + completed + ' / ' + total + ' videos (' + percent + '%)';
 }
 
 function resumeLastContext() {
@@ -463,13 +463,13 @@ window.saveNote = function saveNote(index) {
     .then((data) => {
       if (!data.success) {
         if (typeof window.showAppToast === 'function') {
-          window.showAppToast('Lưu ghi chú thất bại', 'danger');
+          window.showAppToast('Failed to save notes', 'danger');
           return;
         }
-        alert('Lưu ghi chú thất bại');
+        alert('Failed to save notes');
       }
     })
-    .catch((err) => console.error('[Lỗi lưu ghi chú]', err));
+    .catch((err) => console.error('[Save notes error]', err));
 };
 
 function readJson(key, fallback) {

@@ -15,30 +15,30 @@
   <div class="leaderboard-shell">
     <section class="leaderboard-hero" data-animate>
       <div class="leaderboard-hero-copy">
-        <span class="leaderboard-eyebrow">Bảng xếp hạng</span>
-        <h1 class="leaderboard-title">Bảng xếp hạng học viên đang tăng tốc mạnh nhất</h1>
-        <p class="leaderboard-lead">Theo dõi thứ hạng, nhìn rõ khoảng cách XP và dùng áp lực tích cực từ nhóm dẫn đầu để giữ nhịp học đều mỗi ngày.</p>
+        <span class="leaderboard-eyebrow">Leaderboard</span>
+        <h1 class="leaderboard-title">Leaderboard for the fastest-growing learners</h1>
+        <p class="leaderboard-lead">Track rankings, see XP gaps clearly, and use positive momentum from the leaders to keep a steady daily learning rhythm.</p>
 
         <div class="leaderboard-stats">
           <article class="leaderboard-stat">
             <span class="leaderboard-stat-value"><%= totalDisplayed %></span>
-            <span class="leaderboard-stat-label">Học viên đang hiển thị</span>
+            <span class="leaderboard-stat-label">Learners displayed</span>
           </article>
           <article class="leaderboard-stat">
             <span class="leaderboard-stat-value"><%= champion ? champion.totalXP : 0 %></span>
-            <span class="leaderboard-stat-label">XP của người dẫn đầu</span>
+            <span class="leaderboard-stat-label">Leader XP</span>
           </article>
           <article class="leaderboard-stat">
             <span class="leaderboard-stat-value"><%= currentUserEntry ? '#' + currentUserEntry.rank : '-' %></span>
-            <span class="leaderboard-stat-label">Vị trí hiện tại của bạn</span>
+            <span class="leaderboard-stat-label">Your current rank</span>
           </article>
         </div>
       </div>
 
       <div class="leaderboard-hero-panel">
         <div class="leaderboard-hero-panel-head">
-          <span class="leaderboard-chip">Đang dẫn nhịp</span>
-          <a class="btn btn-light leaderboard-back-btn" href="/profile">Quay lại hồ sơ</a>
+          <span class="leaderboard-chip">Leading the pace</span>
+          <a class="btn btn-light leaderboard-back-btn" href="/profile">Back to profile</a>
         </div>
 
         <% if (champion) { %>
@@ -46,11 +46,11 @@
             <div class="leaderboard-champion-rank">#1</div>
             <div>
               <div class="leaderboard-champion-name"><%= champion.username %></div>
-              <div class="leaderboard-champion-meta">Cấp <%= champion.level %> • <%= champion.totalXP %> XP</div>
+              <div class="leaderboard-champion-meta">Level <%= champion.level %> • <%= champion.totalXP %> XP</div>
             </div>
           </div>
         <% } else { %>
-          <div class="leaderboard-empty-inline">Chưa có dữ liệu bảng xếp hạng.</div>
+          <div class="leaderboard-empty-inline">No leaderboard data yet.</div>
         <% } %>
       </div>
     </section>
@@ -71,13 +71,13 @@
               <% } %>
             </div>
             <div class="podium-medal">
-              <% if (entry.rank === 1) { %>Vô địch<% } %>
-              <% if (entry.rank === 2) { %>Á quân<% } %>
+              <% if (entry.rank === 1) { %>Champion<% } %>
+              <% if (entry.rank === 2) { %>Runner-up<% } %>
               <% if (entry.rank === 3) { %>Top 3<% } %>
             </div>
             <div class="podium-rank">#<%= entry.rank %></div>
-            <h2 class="podium-name"><%= entry.username %><% if (entry.isCurrentUser) { %> <span class="podium-you">Bạn</span><% } %></h2>
-            <p class="podium-meta">Cấp <%= entry.level %></p>
+            <h2 class="podium-name"><%= entry.username %><% if (entry.isCurrentUser) { %> <span class="podium-you">You</span><% } %></h2>
+            <p class="podium-meta">Level <%= entry.level %></p>
             <div class="podium-xp"><%= entry.totalXP %> XP</div>
             <div class="podium-bar">
               <span data-progress-width="<%= maxXP ? Math.max(18, Math.round((entry.totalXP / maxXP) * 100)) : 18 %>"></span>
@@ -91,14 +91,14 @@
       <div class="leaderboard-card app-card-elevated leaderboard-main-card" data-animate>
         <div class="leaderboard-card-head">
           <div>
-            <h2>Bảng xếp hạng chi tiết</h2>
-            <p>Danh sách đang hiển thị theo tổng XP tích lũy. Giữ nhịp hoàn thành bài học để tăng hạng.</p>
+            <h2>Detailed Leaderboard</h2>
+            <p>This list is sorted by total accumulated XP. Keep completing lessons consistently to move up.</p>
           </div>
           <span class="leaderboard-limit-badge">Top <%= leaderboard.limit %></span>
         </div>
 
         <% if (!topUsers.length) { %>
-          <div class="leaderboard-empty-state">Chưa có dữ liệu bảng xếp hạng.</div>
+          <div class="leaderboard-empty-state">No leaderboard data yet.</div>
         <% } else { %>
           <div class="leaderboard-table-list">
             <% topUsers.forEach((entry) => { %>
@@ -108,8 +108,8 @@
                 </div>
 
                 <div class="leaderboard-row-user">
-                  <h3><%= entry.username %><% if (entry.isCurrentUser) { %> <span class="leaderboard-you-pill">Bạn</span><% } %></h3>
-                  <p>Cấp <%= entry.level %></p>
+                  <h3><%= entry.username %><% if (entry.isCurrentUser) { %> <span class="leaderboard-you-pill">You</span><% } %></h3>
+                  <p>Level <%= entry.level %></p>
                 </div>
 
                 <div class="leaderboard-row-progress">
@@ -132,8 +132,8 @@
         <section class="leaderboard-card app-card-elevated current-user-card" data-animate>
           <div class="leaderboard-card-head leaderboard-card-head-tight">
             <div>
-              <h2>Vị trí của bạn</h2>
-              <p>Điểm neo để biết bạn đang cách nhóm đầu bao xa.</p>
+              <h2>Your Rank</h2>
+              <p>A reference point for how far you are from the leaders.</p>
             </div>
           </div>
 
@@ -141,24 +141,24 @@
             <div class="current-user-spotlight">
               <div class="current-user-rank">#<%= currentUserEntry.rank %></div>
               <div class="current-user-name"><%= currentUserEntry.username %></div>
-              <div class="current-user-meta">Cấp <%= currentUserEntry.level %> • <%= currentUserEntry.totalXP %> XP</div>
+              <div class="current-user-meta">Level <%= currentUserEntry.level %> • <%= currentUserEntry.totalXP %> XP</div>
             </div>
           <% } else { %>
-            <div class="leaderboard-empty-inline">Không tìm thấy dữ liệu của tài khoản hiện tại.</div>
+            <div class="leaderboard-empty-inline">No data found for the current account.</div>
           <% } %>
         </section>
 
         <section class="leaderboard-card app-card-elevated leaderboard-tip-card" data-animate>
           <div class="leaderboard-card-head leaderboard-card-head-tight">
             <div>
-              <h2>Cách leo hạng</h2>
-              <p>Tăng XP đều quan trọng hơn bứt tốc ngắn hạn.</p>
+              <h2>How to Climb</h2>
+              <p>Steady XP growth matters more than short bursts.</p>
             </div>
           </div>
           <ul class="leaderboard-tips">
-            <li>Hoàn thành bài học dở trước khi mở quá nhiều khóa học mới.</li>
-            <li>Duy trì nhịp học mỗi ngày để không bị đứt quãng tiến độ.</li>
-            <li>Nhắm vượt người ngay phía trên bạn thay vì chỉ nhìn top 1.</li>
+            <li>Finish in-progress lessons before opening too many new courses.</li>
+            <li>Maintain a daily learning rhythm so your progress does not stall.</li>
+            <li>Aim to pass the learner directly above you instead of only watching #1.</li>
           </ul>
         </section>
 
@@ -166,8 +166,8 @@
           <section class="leaderboard-card app-card-elevated leaderboard-mini-card" data-animate>
             <div class="leaderboard-card-head leaderboard-card-head-tight">
               <div>
-                <h2>Nhóm bám đuổi</h2>
-                <p>Các vị trí ngay sau top 3.</p>
+                <h2>Chasing Pack</h2>
+                <p>The positions just behind the top 3.</p>
               </div>
             </div>
             <div class="leaderboard-mini-list">

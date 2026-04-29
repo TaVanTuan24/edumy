@@ -147,9 +147,67 @@
   overflow: hidden;
 }
 
+.profile-vr-modal {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1080;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body.vr-pairing-modal-open > :not(.profile-vr-modal):not(.modal-backdrop):not(script) {
+  filter: blur(6px);
+  transition: filter 160ms ease;
+}
+
+body.vr-pairing-modal-open .modal-backdrop {
+  z-index: 1070;
+}
+
+body.vr-pairing-modal-open .modal-backdrop.show {
+  opacity: 0.38;
+}
+
+.profile-vr-modal.show {
+  display: grid !important;
+  place-items: center;
+  padding: 1rem;
+}
+
+.profile-vr-modal .modal-dialog,
+.profile-vr-modal .modal-content {
+  opacity: 1;
+  filter: none;
+}
+
+body.vr-pairing-modal-open .profile-vr-modal,
+body.vr-pairing-modal-open .profile-vr-modal .modal-dialog,
+body.vr-pairing-modal-open .profile-vr-modal .modal-content {
+  opacity: 1;
+  filter: none;
+  backdrop-filter: none;
+}
+
+.profile-vr-modal .profile-modal-shell {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.24);
+}
+
+.profile-vr-modal .modal-header,
+.profile-vr-modal .modal-body,
+.profile-vr-modal .modal-footer {
+  background: inherit;
+  position: relative;
+  z-index: 1;
+}
+
 .profile-vr-modal .modal-dialog {
+  width: min(460px, calc(100vw - 2rem));
   max-width: 460px;
-  margin: 1.75rem auto;
+  margin: 0 auto;
 }
 
 .profile-vr-modal .modal-header {
@@ -189,8 +247,9 @@
 
 @media (max-width: 576px) {
   .profile-vr-modal .modal-dialog {
+    width: 100%;
     max-width: none;
-    margin: 0.75rem;
+    margin: 0;
   }
 
   .profile-vr-modal .modal-header,
@@ -459,6 +518,12 @@ html[data-theme="dark"] .profile-vr-code-input {
   background: var(--profile-surface-soft);
   color: var(--profile-text);
   border-color: var(--profile-border);
+}
+
+html[data-theme="dark"] .profile-vr-modal .profile-modal-shell {
+  background: #111827 !important;
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.55);
 }
 
 html[data-theme="dark"] .xp-track {

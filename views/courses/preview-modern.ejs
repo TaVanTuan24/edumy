@@ -65,31 +65,31 @@
 
           <div class="mt-4 d-flex flex-wrap gap-2">
             <% if (isEnrolled) { %>
-              <a class="btn btn-success" href="/courses/<%= course._id %>">Vào khóa học</a>
+              <a class="btn btn-success" href="/courses/<%= course._id %>">Go to course</a>
             <% } else { %>
               <form action="/explore/<%= course._id %>/enroll" method="POST">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <button class="btn btn-success">Tham gia khóa học</button>
+                <button class="btn btn-success">Enroll in course</button>
               </form>
             <% } %>
-            <a class="btn btn-outline-light" href="/explore">Quay lại explore</a>
+            <a class="btn btn-outline-light" href="/explore">Back to Explore</a>
           </div>
         </div>
 
         <div class="show-course-summary-card">
-          <h3>Tóm tắt nhanh</h3>
+          <h3>Quick Summary</h3>
           <div class="show-course-summary-stats">
             <div class="show-course-summary-stat">
               <strong><%= totalSections %></strong>
-              <span>Section trong khóa học</span>
+              <span>Sections in this course</span>
             </div>
             <div class="show-course-summary-stat">
               <strong><%= totalLessons %></strong>
-              <span>Bài học có thể xem trước</span>
+              <span>Previewable lessons</span>
             </div>
             <div class="show-course-summary-stat">
               <strong><%= totalDurationLabel %></strong>
-              <span><%= stats.hasDuration ? 'Tổng thời lượng đã được đồng bộ trước đó' : 'Thời lượng chưa khả dụng' %></span>
+              <span><%= stats.hasDuration ? 'Total duration has already been synced' : 'Duration unavailable' %></span>
             </div>
           </div>
         </div>
@@ -157,7 +157,7 @@
                   </div>
 
                   <% if (!sections.length) { %>
-                    <p class="text-muted mb-0">Khóa học này chưa có nội dung preview.</p>
+                    <p class="text-muted mb-0">This course does not have preview content yet.</p>
                   <% } %>
 
                   <div class="preview-curriculum-accordion" id="previewCurriculumAccordion">
@@ -188,7 +188,7 @@
                         >
                           <div class="preview-section-body">
                             <% if (!section.lessons || !section.lessons.length) { %>
-                              <p class="text-muted mb-0">Chưa có lesson trong section này.</p>
+                              <p class="text-muted mb-0">No lessons in this section yet.</p>
                             <% } else { %>
                               <div class="preview-lesson-list">
                                 <% (section.lessons || []).forEach((item, lessonIndex) => { %>
@@ -217,24 +217,24 @@
       <div class="col-12 col-lg-4">
         <div class="learning-sidebar-inner">
           <div class="mb-3">
-            <h6 class="mb-2">Thông tin nhanh</h6>
+            <h6 class="mb-2">Quick Info</h6>
             <div class="progress preview-progress">
               <div class="progress-bar bg-success preview-progress-bar" role="progressbar"></div>
             </div>
-            <div class="small text-muted mt-2">Toàn bộ curriculum preview đã sẵn sàng để xem.</div>
+            <div class="small text-muted mt-2">The full curriculum preview is ready to view.</div>
           </div>
 
           <div class="card mb-3 preview-cta-card">
             <div class="card-body">
-              <div class="small text-uppercase text-muted fw-semibold mb-2">Bắt đầu học</div>
-              <h6 class="mb-2">Bạn có thể tham gia trực tiếp từ trang preview.</h6>
-              <p class="text-muted small mb-3">Sau khi tham gia, khóa học sẽ xuất hiện trong danh sách học của bạn.</p>
+              <div class="small text-uppercase text-muted fw-semibold mb-2">Start Learning</div>
+              <h6 class="mb-2">You can enroll directly from the preview page.</h6>
+              <p class="text-muted small mb-3">After enrolling, the course will appear in your learning list.</p>
               <% if (isEnrolled) { %>
-                <a class="btn btn-success w-100" href="/courses/<%= course._id %>">Vào khóa học</a>
+                <a class="btn btn-success w-100" href="/courses/<%= course._id %>">Go to course</a>
               <% } else { %>
                 <form action="/explore/<%= course._id %>/enroll" method="POST" class="d-grid">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button class="btn btn-success">Tham gia khóa học</button>
+                  <button class="btn btn-success">Enroll in course</button>
                 </form>
               <% } %>
             </div>

@@ -128,10 +128,10 @@ catch {
         Write-Host "error.details:$details"
 
         if ($code -eq "UNAUTHORIZED") {
-            Write-Host "Hint: cấp JWT VR token hợp lệ qua -Token hoặc bỏ -SkipAuth nếu endpoint cần auth."
+            Write-Host "Hint: provide a valid VR JWT token with -Token, or remove -SkipAuth if the endpoint requires auth."
         }
         elseif ($code -eq "RESOLVE_FAILED") {
-            Write-Host "Hint: backend vẫn chưa resolve được source này; kiểm tra error.details để biết fail ở ytdl-core/yt-dlp-managed."
+            Write-Host "Hint: the backend still cannot resolve this source; check error.details to see whether ytdl-core or yt-dlp-managed failed."
         }
     }
     else {

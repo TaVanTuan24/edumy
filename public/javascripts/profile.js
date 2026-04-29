@@ -25,6 +25,12 @@
     });
   }
 
+  function promoteModalToBody(modalElement) {
+    if (!modalElement || modalElement.parentElement === document.body) return;
+
+    document.body.appendChild(modalElement);
+  }
+
   function initVrPairingForm() {
     const form = document.getElementById('vrPairingForm');
     const input = document.getElementById('vrPairingCodeInput');
@@ -32,6 +38,8 @@
     const message = document.getElementById('vrPairingMessage');
     const modalElement = document.getElementById('vrPairingModal');
     if (!form || !input || !submit || !message || !modalElement) return;
+
+    promoteModalToBody(modalElement);
 
     function sanitizeCode(value) {
       return String(value || '').replace(/\D/g, '').slice(0, 5);
@@ -52,14 +60,43 @@
       message.textContent = '';
     }
 
+    let scrollPosition = { x: 0, y: 0 };
+
+    function captureScrollPosition() {
+      scrollPosition = {
+        x: window.scrollX || window.pageXOffset || 0,
+        y: window.scrollY || window.pageYOffset || 0
+      };
+    }
+
+    function restoreScrollPosition() {
+      window.scrollTo(scrollPosition.x, scrollPosition.y);
+    }
+
+    function focusCodeInput() {
+      try {
+        input.focus({ preventScroll: true });
+      } catch (_err) {
+        input.focus();
+        restoreScrollPosition();
+      }
+      input.select();
+    }
+
+    modalElement.addEventListener('show.bs.modal', function() {
+      captureScrollPosition();
+      document.body.classList.add('vr-pairing-modal-open');
+    });
+
     modalElement.addEventListener('shown.bs.modal', function() {
       window.setTimeout(function() {
-        input.focus();
-        input.select();
+        restoreScrollPosition();
+        focusCodeInput();
       }, 80);
     });
 
     modalElement.addEventListener('hidden.bs.modal', function() {
+      document.body.classList.remove('vr-pairing-modal-open');
       input.value = '';
       clearMessage();
       updateSubmitState();

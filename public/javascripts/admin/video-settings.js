@@ -68,7 +68,7 @@
 
     aiBtn.addEventListener('click', async function() {
       if (!state.videoId) {
-        setAiStatus('Không tìm thấy videoId cho bài học này.', true);
+        setAiStatus('No videoId was found for this lesson.', true);
         return;
       }
 
@@ -80,7 +80,7 @@
       aiBtn.disabled = true;
 
       try {
-        setAiStatus('Đang lấy transcript từ YouTube...');
+        setAiStatus('Fetching transcript from YouTube...');
 
         const transcriptRes = await fetch(`/videos/${encodeURIComponent(state.videoId)}/transcript`, {
           method: 'POST',
@@ -91,10 +91,10 @@
 
         const transcriptData = await parseApiResponse(transcriptRes);
         if (!transcriptRes.ok || !transcriptData || !transcriptData.success) {
-          throw new Error(transcriptData && transcriptData.message ? transcriptData.message : 'Không thể tạo transcript.');
+          throw new Error(transcriptData && transcriptData.message ? transcriptData.message : 'Could not create transcript.');
         }
 
-        setAiStatus('Transcript đã lưu. Đang tạo quiz bằng AI...');
+        setAiStatus('Transcript saved. Generating quiz with AI...');
 
         const quizRes = await fetch(`/videos/${encodeURIComponent(state.videoId)}/ai-quiz`, {
           method: 'POST',
@@ -107,12 +107,12 @@
 
         const quizData = await parseApiResponse(quizRes);
         if (!quizRes.ok || !quizData || !quizData.success) {
-          throw new Error(quizData && quizData.message ? quizData.message : 'Không thể tạo quiz bằng AI.');
+          throw new Error(quizData && quizData.message ? quizData.message : 'Could not generate quiz with AI.');
         }
 
         const generated = Array.isArray(quizData.quiz) ? quizData.quiz : [];
         if (!generated.length) {
-          throw new Error('AI không trả về câu hỏi hợp lệ.');
+          throw new Error('AI did not return valid questions.');
         }
 
         console.log('[AI Quiz Generated]', generated);
@@ -135,11 +135,11 @@
           };
         }));
 
-        setAiStatus(`Đã tạo ${generated.length} câu hỏi${strictMode ? ' (strict mode)' : ''}. Đang lưu vào video settings...`);
+        setAiStatus(`Generated ${generated.length} questions${strictMode ? ' (strict mode)' : ''}. Saving to video settings...`);
         persistQuizzes();
       } catch (err) {
         console.error('[AI Auto Quiz Error]', err);
-        setAiStatus(err && err.message ? err.message : 'Đã có lỗi khi tạo quiz AI.', true);
+        setAiStatus(err && err.message ? err.message : 'An error occurred while generating the AI quiz.', true);
       } finally {
         aiBtn.disabled = false;
       }
@@ -158,13 +158,13 @@
 
     if (response.redirected || looksLikeHtml) {
       const loginHint = response.url && response.url.includes('/users/login')
-        ? 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.'
-        : 'Server trả về HTML thay vì JSON. Vui lòng kiểm tra đăng nhập/quyền truy cập.';
+        ? 'Your session has expired. Please log in again.'
+        : 'The server returned HTML instead of JSON. Please check your login status and access permissions.';
 
       return { success: false, message: loginHint };
     }
 
-    return { success: false, message: text || 'Phản hồi không hợp lệ từ server.' };
+    return { success: false, message: text || 'Invalid response from the server.' };
   }
 
   function parseSuggestedTimestamp(raw) {
@@ -779,7 +779,7 @@
         renderQuizList();
         resetForm();
         closeQuizPanel();
-        setAiStatus(`Đã lưu ${state.quizzes.length} câu hỏi vào video thành công.`);
+        setAiStatus(`Saved ${state.quizzes.length} questions to the video successfully.`);
       })
       .catch(function(err) {
         console.error('[Timed Quiz Save Error]', err);

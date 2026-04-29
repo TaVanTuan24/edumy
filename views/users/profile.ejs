@@ -11,23 +11,23 @@
   <div class="profile-header-card app-card-elevated">
     <div class="profile-avatar-wrap">
       <% if (avatarUrl) { %>
-        <img class="profile-avatar-image" src="<%= avatarUrl %>" alt="Ảnh đại diện của <%= user.username %>">
+        <img class="profile-avatar-image" src="<%= avatarUrl %>" alt="Profile photo of <%= user.username %>">
       <% } else { %>
         <div class="profile-avatar" aria-hidden="true"><%= avatarLetter %></div>
       <% } %>
 
       <form class="profile-avatar-form" action="/profile/avatar" method="POST" enctype="multipart/form-data">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <label class="avatar-upload-btn" for="profileAvatarInput">Đổi ảnh đại diện</label>
+        <label class="avatar-upload-btn" for="profileAvatarInput">Change profile photo</label>
         <input id="profileAvatarInput" class="avatar-upload-input" type="file" name="avatar" accept="image/png,image/jpeg,image/jpg">
-        <button id="profileAvatarSubmit" class="btn btn-primary btn-sm" type="submit" disabled>Cập nhật ảnh</button>
+        <button id="profileAvatarSubmit" class="btn btn-primary btn-sm" type="submit" disabled>Update photo</button>
       </form>
     </div>
 
     <div class="profile-header-copy">
       <h1 class="profile-name"><%= user.username %></h1>
       <p class="profile-email mb-1"><%= user.email %></p>
-      <p class="profile-meta mb-0">Tham gia từ <%= new Date(user.createdAt || user._id.getTimestamp()).toLocaleDateString('vi-VN') %></p>
+      <p class="profile-meta mb-0">Joined on <%= new Date(user.createdAt || user._id.getTimestamp()).toLocaleDateString('en-US') %></p>
       <div class="profile-actions mt-3">
         <button
           type="button"
@@ -51,9 +51,9 @@
 
   <section class="profile-grid mt-4">
     <article class="profile-card app-card">
-      <h2>Tiến độ cấp độ</h2>
+      <h2>Level Progress</h2>
       <div class="level-row">
-        <span class="level-pill app-badge app-badge-status">Cấp <%= gamification.currentLevel %></span>
+        <span class="level-pill app-badge app-badge-status">Level <%= gamification.currentLevel %></span>
         <span class="xp-pill app-badge app-badge-xp"><%= gamification.totalXP %> XP</span>
       </div>
       <div class="xp-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= gamification.levelProgress.progressPercent %>">
@@ -61,34 +61,34 @@
       </div>
       <p class="progress-note mb-0">
         <% if (gamification.levelProgress.nextLevel) { %>
-          Còn <strong><%= gamification.levelProgress.xpToNextLevel %> XP</strong> để lên cấp <%= gamification.levelProgress.nextLevel %>
+          <strong><%= gamification.levelProgress.xpToNextLevel %> XP</strong> until level <%= gamification.levelProgress.nextLevel %>
         <% } else { %>
-          Bạn đã đạt cấp tối đa hiện tại
+          You have reached the current maximum level
         <% } %>
       </p>
     </article>
 
     <article class="profile-card app-card">
-      <h2>Chuỗi học tập</h2>
+      <h2>Learning Streak</h2>
       <div class="streak-row">
         <div class="streak-box">
           <i class="fa-solid fa-fire"></i>
           <div>
-            <div class="streak-value"><%= gamification.currentStreak %> ngày</div>
-            <div class="streak-label">Chuỗi hiện tại</div>
+            <div class="streak-value"><%= gamification.currentStreak %> days</div>
+            <div class="streak-label">Current streak</div>
           </div>
         </div>
         <div class="streak-box muted">
           <i class="fa-solid fa-fire-flame-curved"></i>
           <div>
-            <div class="streak-value"><%= gamification.longestStreak %> ngày</div>
-            <div class="streak-label">Chuỗi dài nhất</div>
+            <div class="streak-value"><%= gamification.longestStreak %> days</div>
+            <div class="streak-label">Longest streak</div>
           </div>
         </div>
       </div>
       <p class="progress-note mb-0">
         <% if (gamification.lastActivityDate) { %>
-          Last activity: <strong><%= new Date(gamification.lastActivityDate).toLocaleDateString('vi-VN', { timeZone: gamification.activityTimezone || 'UTC' }) %></strong>
+          Last activity: <strong><%= new Date(gamification.lastActivityDate).toLocaleDateString('en-US', { timeZone: gamification.activityTimezone || 'UTC' }) %></strong>
         <% } else { %>
           Complete your first learning session to start a streak.
         <% } %>
@@ -96,13 +96,13 @@
     </article>
 
     <article class="profile-card app-card">
-      <h2>Thống kê học tập</h2>
+      <h2>Learning Stats</h2>
       <ul class="stat-list">
-        <li><span>Tổng XP</span><strong><%= gamification.totalXP %></strong></li>
-        <li><span>Bài học đã hoàn thành</span><strong><%= gamification.completedLessonsCount %></strong></li>
-        <li><span>Quiz đã hoàn thành</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.quizzesCompleted : 0 %></strong></li>
-        <li><span>Tương tác AI</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.aiInteractions : 0 %></strong></li>
-        <li><span>Khóa học đã hoàn thành</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.coursesCompleted : 0 %></strong></li>
+        <li><span>Total XP</span><strong><%= gamification.totalXP %></strong></li>
+        <li><span>Lessons completed</span><strong><%= gamification.completedLessonsCount %></strong></li>
+        <li><span>Quizzes completed</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.quizzesCompleted : 0 %></strong></li>
+        <li><span>AI interactions</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.aiInteractions : 0 %></strong></li>
+        <li><span>Courses completed</span><strong><%= user.gamification && user.gamification.stats ? user.gamification.stats.coursesCompleted : 0 %></strong></li>
       </ul>
     </article>
   </section>
@@ -110,10 +110,10 @@
   <section class="profile-card app-card mt-4">
     <div class="badge-head">
       <div>
-        <h2 class="mb-0">Bộ sưu tập huy hiệu</h2>
-        <p class="badge-subtitle mb-0">Mở khóa thêm huy hiệu bằng cách học đều, làm quiz và dùng các công cụ AI.</p>
+        <h2 class="mb-0">Badge Collection</h2>
+        <p class="badge-subtitle mb-0">Unlock more badges by learning consistently, completing quizzes, and using AI tools.</p>
       </div>
-      <span class="badge-count app-badge app-badge-topic"><%= gamification.earnedBadges.length %> / <%= gamification.badges.length %> đã mở khóa</span>
+      <span class="badge-count app-badge app-badge-topic"><%= gamification.earnedBadges.length %> / <%= gamification.badges.length %> unlocked</span>
     </div>
 
     <div class="badge-grid mt-3">
@@ -124,9 +124,9 @@
             <h3><%= badge.name %></h3>
             <p><%= badge.description %></p>
             <% if (badge.earnedAt) { %>
-              <small>Mở khóa ngày <%= new Date(badge.earnedAt).toLocaleDateString('vi-VN') %></small>
+              <small>Unlocked on <%= new Date(badge.earnedAt).toLocaleDateString('en-US') %></small>
             <% } else { %>
-              <small>Chưa mở khóa</small>
+              <small>Not unlocked yet</small>
             <% } %>
           </div>
         </article>
@@ -137,10 +137,10 @@
   <section class="profile-card app-card mt-4">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
-        <h2 class="mb-1">Bảng xếp hạng</h2>
-        <p class="mb-0 text-muted">Xem vị trí của bạn so với những học viên khác.</p>
+        <h2 class="mb-1">Leaderboard</h2>
+        <p class="mb-0 text-muted">See how you rank against other learners.</p>
       </div>
-      <a href="/leaderboard" class="btn btn-primary">Mở leaderboard</a>
+      <a href="/leaderboard" class="btn btn-primary">Open leaderboard</a>
     </div>
 
     <% if (leaderboard && leaderboard.topUsers && leaderboard.topUsers.length > 0) { %>
@@ -148,9 +148,9 @@
         <table class="table table-sm align-middle mb-0">
           <thead>
             <tr>
-              <th>Hạng</th>
-              <th>Học viên</th>
-              <th>Cấp</th>
+              <th>Rank</th>
+              <th>Learner</th>
+              <th>Level</th>
               <th>XP</th>
             </tr>
           </thead>
@@ -158,7 +158,7 @@
             <% leaderboard.topUsers.forEach((entry) => { %>
               <tr class="<%= entry.isCurrentUser ? 'table-primary' : '' %>">
                 <td>#<%= entry.rank %></td>
-                <td><%= entry.username %> <%= entry.isCurrentUser ? '(Bạn)' : '' %></td>
+                <td><%= entry.username %> <%= entry.isCurrentUser ? '(You)' : '' %></td>
                 <td><%= entry.level %></td>
                 <td><strong><%= entry.totalXP %></strong></td>
               </tr>

@@ -84,12 +84,12 @@
           <div id="tab-notes" class="tab-pane">
             <div class="card mb-3 support-panel-card" id="videoNoteSection">
               <div class="card-body">
-                <h5 class="card-title">Ghi chú buổi học</h5>
+                <h5 class="card-title">Lesson Notes</h5>
                 <% (course.sections || []).forEach((section, index) => { %>
                   <textarea class="form-control section-note section-note-hidden"
                     id="note-section-<%= index %>"
                     rows="5"
-                    placeholder="Nhập ghi chú cho <%= section.title %>..."
+                    placeholder="Enter notes for <%= section.title %>..."
                     onblur="saveNote(<%= index %>)"
                     ><%= sectionNotes[index] || '' %></textarea>
                 <% }) %>
@@ -335,7 +335,7 @@
   </div>
 </div>
 
-<!-- Khai báo biến và load JS -->
+<!-- Declare variables and load JS -->
 <script>
   window.__COURSE__ = <%- serializeJson(course) %>;
   window.completedVideos = <%- serializeJson(completedVideos) %>;

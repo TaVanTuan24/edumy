@@ -516,7 +516,7 @@
 
     bar.style.width = percent + '%';
     bar.setAttribute('aria-valuenow', completed);
-    label.innerText = 'Tiến độ học: ' + completed + ' / ' + total + ' video (' + percent + '%)';
+    label.innerText = 'Learning progress: ' + completed + ' / ' + total + ' videos (' + percent + '%)';
     syncLearningStageHeader();
   }
 
@@ -561,7 +561,7 @@
       : function(message) { window.alert(message); };
 
     if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-      notify('Vui lòng chọn số sao từ 1 đến 5.', 'warning');
+      notify('Please select a rating from 1 to 5 stars.', 'warning');
       return;
     }
 
@@ -584,7 +584,7 @@
       })
       .catch(function(err) {
         console.error('[Review Submit Error]', err);
-        notify('Gửi đánh giá thất bại.', 'danger');
+        notify('Failed to submit review.', 'danger');
       })
       .finally(function() {
         if (button) button.disabled = false;
@@ -695,11 +695,11 @@
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (!data.success) {
-          notify('Lưu ghi chú thất bại', 'danger');
+          notify('Failed to save notes', 'danger');
         }
       })
       .catch(function(err) {
-        console.error('[Lỗi lưu ghi chú]', err);
+        console.error('[Save notes error]', err);
       });
   }
 

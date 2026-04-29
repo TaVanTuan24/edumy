@@ -284,11 +284,11 @@ module.exports.createCourse = async (req, res) => {
       const structure = await scanDriveStructure(folderId);
       course.sections = structure.reverse();
     } catch (err) {
-      console.error("Lỗi khi quét Google Drive:", err.message);
-      req.flash('error', 'Không thể quét nội dung Drive. Vui lòng kiểm tra link!');
+      console.error("Google Drive scan error:", err.message);
+      req.flash('error', 'Could not scan Drive content. Please check the link.');
     }
   } else if (!Array.isArray(course.sections) || !course.sections.length) {
-    req.flash('error', 'Drive link không hợp lệ!');
+    req.flash('error', 'Invalid Drive link.');
   }
 
   }
@@ -515,7 +515,7 @@ module.exports.updateProgress = async (req, res) => {
 
     const hasLessonId = !!lessonId;
     const hasVideo = typeof video === 'string' && video.length > 0;
-    if (!hasVideo && !hasLessonId) throw new Error('Thiếu hoặc sai định dạng video URL');
+    if (!hasVideo && !hasLessonId) throw new Error('Missing video URL or invalid video URL format');
 
     const videoLink = hasVideo ? video.split('?')[0] : '';
     const courseObjectId = new mongoose.Types.ObjectId(courseId);
@@ -607,7 +607,7 @@ module.exports.updateProgress = async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error('[❌ Lỗi khi lưu progress]', err);
+    console.error('[Progress save error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -687,7 +687,7 @@ module.exports.saveNote = async (req, res) => {
     await note.save();
     res.json({ success: true });
   } catch (err) {
-    console.error('[Lỗi ghi chú]', err);
+    console.error('[Notes error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

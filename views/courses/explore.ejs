@@ -20,47 +20,47 @@
     <section class="discovery-hero">
       <div>
         <span class="discovery-eyebrow">Explore Learning</span>
-        <h1 class="discovery-title">Khám phá khóa học phù hợp cho mục tiêu tiếp theo của bạn</h1>
+        <h1 class="discovery-title">Discover the right course for your next goal</h1>
         <p class="discovery-lead">
-          Duyệt theo từng chủ đề, xem nhanh chất lượng khóa học và tìm đúng nội dung bạn muốn học mà không phải đọc qua một danh sách card đơn điệu.
+          Browse by topic, quickly assess course quality, and find the content you want to learn without scanning a flat list of cards.
         </p>
 
         <div class="discovery-stats">
           <div class="discovery-stat">
             <span class="discovery-stat-value"><%= totalCourses %></span>
-            <span class="discovery-stat-label">Khóa học đang mở</span>
+            <span class="discovery-stat-label">Available courses</span>
           </div>
           <div class="discovery-stat">
             <span class="discovery-stat-value"><%= topics.length %></span>
-            <span class="discovery-stat-label">Chủ đề đang có</span>
+            <span class="discovery-stat-label">Available topics</span>
           </div>
           <div class="discovery-stat">
             <span class="discovery-stat-value">Preview</span>
-            <span class="discovery-stat-label">Có thể xem trước trước khi tham gia</span>
+            <span class="discovery-stat-label">Preview before enrolling</span>
           </div>
         </div>
       </div>
 
       <div class="discovery-hero-card">
-        <h3>Bắt đầu từ một bài học nhỏ hôm nay</h3>
+        <h3>Start with one small lesson today</h3>
         <ul class="discovery-checklist">
-          <li>Học đều mỗi ngày sẽ tạo ra khác biệt lớn sau vài tháng.</li>
-          <li>Mỗi khóa học hoàn thành là một kỹ năng thực tế bạn thật sự sở hữu.</li>
-          <li>Bắt đầu ngay với chủ đề khiến bạn tò mò nhất rồi đi tiếp từ đó.</li>
+          <li>Learning consistently every day creates a big difference after a few months.</li>
+          <li>Every completed course becomes a practical skill you truly own.</li>
+          <li>Start with the topic that makes you most curious, then keep going from there.</li>
         </ul>
       </div>
     </section>
 
     <% if (!topics.length) { %>
       <section class="topic-section">
-        <div class="alert alert-light border">Chưa có khóa học nào để hiển thị.</div>
+        <div class="alert alert-light border">No courses to display yet.</div>
       </section>
     <% } else { %>
       <section class="topic-section">
         <div class="topic-head">
           <div>
-            <h2 class="topic-title">Tìm khóa học phù hợp nhanh hơn</h2>
-            <div class="topic-meta">Gợi ý xuất hiện theo từng ký tự và chỉ tìm trong danh sách Explore hiện tại</div>
+            <h2 class="topic-title">Find the right course faster</h2>
+            <div class="topic-meta">Suggestions appear as you type and only search the current Explore list</div>
           </div>
 
           <div
@@ -96,7 +96,7 @@
           id="exploreCoursesSearchEmpty"
           hidden
         >
-          Không tìm thấy khóa học phù hợp.
+          No matching courses found.
         </div>
       </section>
     <% } %>
@@ -106,7 +106,7 @@
         <div class="topic-head">
           <div>
             <h2 class="topic-title"><%= topic %></h2>
-            <div class="topic-meta"><%= groupedCourses[topic].length %> khóa học trong chủ đề này</div>
+            <div class="topic-meta"><%= groupedCourses[topic].length %> courses in this topic</div>
           </div>
         </div>
 
@@ -139,13 +139,13 @@
                     </span>
                     <span class="text-muted small">(<%= course.totalReviews %> reviews)</span>
                   <% } else { %>
-                    <span class="text-muted small fst-italic">Chưa có đánh giá</span>
+                    <span class="text-muted small fst-italic">No reviews yet</span>
                   <% } %>
                 </div>
 
                 <div class="course-card-footer">
                   <span class="course-card-topic"><%= topic %></span>
-                  <a href="/explore/<%= course._id %>/preview" class="btn btn-primary">Xem preview</a>
+                  <a href="/explore/<%= course._id %>/preview" class="btn btn-primary">View preview</a>
                 </div>
               </div>
             </article>

@@ -15,7 +15,6 @@
         <a class="nav-link <%= isPath('/') ? 'active' : '' %>" href="/">Home</a>
         <a class="nav-link <%= isPathPrefix('/courses') && !isCurrentUserAdmin ? 'active' : '' %>" href="/courses">Courses</a>
         <a class="nav-link <%= isPathPrefix('/explore') ? 'active' : '' %>" href="/explore">Explore</a>
-        <!-- <a class="nav-link" href="/video-models">AI Video Models</a> -->
         <a class="nav-link <%= isPathPrefix('/ai') ? 'active' : '' %>" href="/ai">AI Chat</a>
         <% if (currentUser && isCurrentUserAdmin) { %>
           <a class="nav-link <%= isPathPrefix('/admin') ? 'active' : '' %>" href="/admin">Admin</a>
