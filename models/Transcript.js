@@ -27,4 +27,7 @@ const transcriptSchema = new Schema({
   }
 }, { timestamps: true });
 
+// Compound index for RAG queries that sort transcripts by offset within a video
+transcriptSchema.index({ videoId: 1, offset: 1 });
+
 module.exports = mongoose.model('Transcript', transcriptSchema);

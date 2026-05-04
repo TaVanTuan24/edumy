@@ -30,6 +30,14 @@ const UserSchema = new Schema({
         type: [Schema.Types.Mixed],
         default: []
     },
+    /**
+     * @deprecated enrolledCourseIds is a legacy field kept for backward compatibility only.
+     * Do NOT write new data to this field. Use enrolledCourses instead.
+     * All new enrollments should use enrolledCourses with object format:
+     *   { courseId, progress, lastSeenUpdatedAt, enrolledAt }
+     * See scripts/migrate-enrollment-fields.js to consolidate data.
+     * This field will be removed in a future release after migration is verified.
+     */
     enrolledCourseIds: {
         type: [Schema.Types.ObjectId],
         ref: 'Course',

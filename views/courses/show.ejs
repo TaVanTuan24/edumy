@@ -29,6 +29,45 @@
             <span>Next</span>
             <i class="fa-solid fa-arrow-right"></i>
           </button>
+<<<<<<< HEAD
+=======
+        <% } %>
+      </div>
+    </div>
+
+    <div id="videoPlayerContainer" class="ratio ratio-16x9 mb-3" style="display: none;">
+      <iframe id="videoIframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      <video id="html5VideoPlayer" controls playsinline style="display:none; width:100%; height:100%; background:#000;"></video>
+      <button id="interactiveQuizHotspot" class="interactive-quiz-hotspot" type="button" aria-label="Open interactive quiz" style="display:none;">
+        ?
+      </button>
+    </div>
+    <div id="videoProviderNotice" class="small mb-3" style="display:none;"></div>
+
+    <div class="course-tabs-wrap">
+      <div class="course-tabs">
+        <button class="tab-btn active" type="button" data-tab="overview">Overview</button>
+        <button class="tab-btn" type="button" data-tab="notes">Notes</button>
+        <button class="tab-btn" type="button" data-tab="reviews">Reviews</button>
+        <button class="tab-btn" type="button" data-tab="discussions">Discussions</button>
+      </div>
+      <div class="tab-content">
+        <div id="tab-overview" class="tab-pane active">
+          <div class="card mb-3" id="courseInfo">
+            <div class="card-body">
+              <h5 class="card-title"><%= course.title %></h5>
+              <p class="card-text"><%= course.description %></p>
+            </div>
+
+            <% if ((currentUser && course.author.equals(currentUser._id)) || currentUser._id == '675da20f3dfdaa4f789ffa00') { %>
+              <div class="card-body">
+                <!-- <form class="d-inline" action="/courses/<%=course._id%>?_method=DELETE" method="POST">
+                  <button class="btn btn-danger">Delete</button>
+                </form> -->
+              </div>
+            <% } %>
+          </div>
+>>>>>>> aa236e6 (fix bug)
         </div>
       </header>
 
@@ -336,7 +375,7 @@
 </div>
 
 <!-- Declare variables and load JS -->
-<script>
+<script nonce="<%= cspNonce %>">
   window.__COURSE__ = <%- serializeJson(course) %>;
   window.completedVideos = <%- serializeJson(completedVideos) %>;
   window.sectionNotes = <%- serializeJson(sectionNotes) %>;
@@ -353,7 +392,7 @@
 <script src="/javascripts/show/render.js" defer></script>
 <script src="/javascripts/show/app.js" defer></script>
 <script src="/javascripts/show/aiChat.js" defer></script>
-<script>
+<script nonce="<%= cspNonce %>">
   (function() {
     const notice = document.getElementById('courseStatusNotice');
     if (!notice) return;

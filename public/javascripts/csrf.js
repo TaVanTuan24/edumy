@@ -2,8 +2,27 @@
   'use strict';
 
   function getCsrfToken() {
+    // 1. Try meta tag first (server-rendered)
     const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? String(meta.getAttribute('content') || '') : '';
+    if (meta) {
+      const token = String(meta.getAttribute('content') || '');
+      if (token) return token;
+    }
+
+    // 2. Fallback: read from cookie (Double Submit Cookie pattern)
+    var cookieValue = '';
+    try {
+      var cookies = document.cookie.split(';');
+      for (var i = 0; i < cookies.length; i++) {
+        var cookie = cookies[i].trim();
+        if (cookie.indexOf('XSRF-TOKEN=') === 0) {
+          cookieValue = decodeURIComponent(cookie.substring('XSRF-TOKEN='.length));
+          break;
+        }
+      }
+    } catch (_e) {}
+
+    return cookieValue;
   }
 
   function isSameOriginRequest(input) {

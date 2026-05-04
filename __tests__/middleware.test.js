@@ -117,9 +117,9 @@ describe('middleware', () => {
     expect(res.redirect).not.toHaveBeenCalled();
   });
 
-  test('isAdmin allows the configured admin user id', () => {
+  test('isAdmin allows the configured admin user id via env', () => {
     delete process.env.ADMIN_EMAILS;
-    delete process.env.ADMIN_USER_IDS;
+    process.env.ADMIN_USER_IDS = '68a69b0a055071b7e4410b8f';
 
     const req = {
       xhr: false,
@@ -134,5 +134,7 @@ describe('middleware', () => {
 
     expect(next).toHaveBeenCalled();
     expect(res.redirect).not.toHaveBeenCalled();
+
+    delete process.env.ADMIN_USER_IDS;
   });
 });

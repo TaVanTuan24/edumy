@@ -1,16 +1,5 @@
 const rateLimit = require('express-rate-limit');
-
-function wantsJson(req) {
-  const acceptHeader = String(req.get('Accept') || '').toLowerCase();
-  const contentType = String(req.get('Content-Type') || '').toLowerCase();
-  return Boolean(
-    req.xhr
-    || acceptHeader.includes('application/json')
-    || contentType.includes('application/json')
-    || req.path.startsWith('/api/')
-    || req.originalUrl.startsWith('/ai/')
-  );
-}
+const { wantsJson } = require('./requestHelpers');
 
 function createLimiter(options = {}) {
   const {

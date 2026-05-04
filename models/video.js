@@ -40,4 +40,8 @@ const videoSchema = new Schema({
 
 videoSchema.index({ courseId: 1, sectionIndex: 1, lessonIndex: 1 }, { unique: true, sparse: true });
 
+// Sparse indexes for RAG service lookups by URL/youtubeVideoId
+videoSchema.index({ courseId: 1, url: 1 }, { sparse: true });
+videoSchema.index({ courseId: 1, youtubeVideoId: 1 }, { sparse: true });
+
 module.exports = mongoose.model('Video', videoSchema);

@@ -1,4 +1,67 @@
+
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Build output
+dist/
+build/
+out/
+
+# Test coverage
+coverage/
+*.lcov
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vscode/settings.json
+.vscode/jass-cache/
+*.swp
+*.swo
+*~
+
+# NPM
+*.tgz
+.npm/
+.npmrc
+
+# Cache
+.cache/
+.eslintcache
+.parcel-cache/
+
+# Temp files
+*.tmp
+*.temp
+tmp/
+
+# Archive (already committed, ignore future changes)
+# archive/  # Uncomment only if you want to stop tracking
+
+# QA screenshots (auto-generated)
+qa-shhots/
+
+# Uploads (if stored locally before cloudinary)
+uploads/
+
 node_modules
 /.continue/
-.env
-.vscode/jass-cache/

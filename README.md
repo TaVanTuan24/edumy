@@ -75,6 +75,118 @@ Production example:
 GOOGLE_CALLBACK_URL=https://your-render-app-name.onrender.com/auth/google/callback
 ```
 
+## Tests
+
+```bash
+npm test
+```
+
+Runs all Jest tests in-band. Requires a running MongoDB instance (set `MONGO_URI` in `.env`).
+
+## Docker
+
+Build and run with Docker Compose (includes MongoDB):
+
+```bash
+# Create .env with at least SESSION_SECRET and MONGO_URI
+cp .env.example .env
+
+# Build and start
+docker compose up --build
+
+# Run in background
+docker compose up -d --build
+```
+
+The app will be available at `http://localhost:3000`.
+
+Stop and remove containers:
+
+```bash
+docker compose down
+
+# Also remove database volume
+docker compose down -v
+```
+
+### Docker standalone (without Compose)
+
+```bash
+docker build -t edumy .
+docker run -p 3000:3000 --env-file .env edumy
+```
+
+## CI
+
+GitHub Actions CI runs on push/PR to `main`/`master`:
+- Installs dependencies with `npm ci`
+- Runs tests with `npm test`
+- Uses MongoDB service container for tests
+
+Workflow: `.github/workflows/ci.yml`
+
+## Health check
+
+```
+GET /health
+```
+
+Returns JSON with:
+- `status`: `"ok"` or `"degraded"`
+- `version`: app version from `package.json`
+- `uptime`: server uptime in seconds
+- `memory`: Node.js memory usage
+- `dependencies.mongodb.status`: `"ok"` or `"disconnected"`
+- `dependencies.ai.status`: `"configured"` or `"not_configured"`
+
+Returns HTTP 200 when healthy, 503 when MongoDB is disconnected.
+
+## Admin access
+
+Configure admin users via environment variables:
+
+```env
+ADMIN_EMAILS=admin@example.com,another@example.com
+ADMIN_USER_IDS=mongodb_object_id_1,mongodb_object_id_2
+```
+
+Users matching either an admin email or admin user ID will have admin privileges. Both fields accept comma-separated values.
+
+## Migration scripts
+
+> **WARNING:** Always run with `--dry-run` (default) first. Only use `--apply` after reviewing the output and backing up your database. Never run `--apply` on production without a backup.
+
+### Progress merge (legacy Progress → UserCourseProgress)
+
+```bash
+# Dry-run (default) — shows what would change
+node scripts/migrate-progress-merge.js
+
+# Apply changes
+node scripts/migrate-progress-merge.js --apply
+```
+
+- Reads legacy `Progress` documents (completedVideos)
+- Creates `UserCourseProgress` entries if missing
+- Merges missing lessons into existing `UserCourseProgress` using `$addToSet`
+- Idempotent: safe to run multiple times
+- Does NOT delete `Progress` data
+
+### Enrollment field consolidation (enrolledCourseIds → enrolledCourses)
+
+```bash
+# Dry-run (default) — shows what would change
+node scripts/migrate-enrollment-fields.js
+
+# Apply changes
+node scripts/migrate-enrollment-fields.js --apply
+```
+
+- Reads `enrolledCourseIds` (legacy ObjectId array)
+- Backfills missing entries into `enrolledCourses` (canonical Mixed array)
+- Idempotent: skips courses already present in `enrolledCourses`
+- Does NOT delete `enrolledCourseIds`
+
 ## Render deployment
 
 - Build command: `npm install`

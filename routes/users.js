@@ -7,6 +7,7 @@ const users = require('../controllers/users');
 const { storage, imageFileFilter, MAX_IMAGE_UPLOAD_BYTES } = require('../config/cloudinary');
 const { isLoggedIn } = require('../middleware');
 const { authLoginLimiter, authRegisterLimiter, uploadLimiter } = require('../utils/rateLimiters');
+const { validate, registerSchema, loginSchema } = require('../middleware/validate');
 
 const upload = multer({
     storage,
@@ -19,12 +20,13 @@ const upload = multer({
 
 router.route('/register')
     .get(users.renderRegister)
-    .post(authRegisterLimiter, catchAsync(users.register));
+    .post(authRegisterLimiter, validate(registerSchema), catchAsync(users.register));
 
 router.route('/login')
     .get(users.renderLogin)
     .post(
         authLoginLimiter,
+        validate(loginSchema),
         passport.authenticate('local', { failureFlash: true, failureRedirect: '/login' }),
         users.login
     );

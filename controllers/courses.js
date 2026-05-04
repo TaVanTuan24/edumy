@@ -8,6 +8,8 @@ const mongoose = require('mongoose');
 const { awardGamification, buildGamificationViewModel, recordLearningActivity } = require('../utils/gamification');
 const Discussion = require('../models/discussion');
 const { logAuditEvent } = require('../utils/auditLogger');
+const { wantsJson } = require('../utils/requestHelpers');
+const logger = require('../utils/logger');
 const { buildLearnerDashboard } = require('../services/learnerDashboardService');
 const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
 const { findLessonContext } = require('../utils/lessonLocator');
@@ -33,16 +35,6 @@ function countCourseLessons(course) {
   }, 0);
 }
 
-function wantsJson(req) {
-  const acceptHeader = String(req.get('Accept') || '').toLowerCase();
-  const contentType = String(req.get('Content-Type') || '').toLowerCase();
-  return Boolean(
-    req.xhr
-    || acceptHeader.includes('application/json')
-    || contentType.includes('application/json')
-    || req.originalUrl.startsWith('/api/')
-  );
-}
 
 function sanitizeCourseInput(rawCourse) {
   const source = rawCourse && typeof rawCourse === 'object' ? rawCourse : {};
@@ -284,7 +276,7 @@ module.exports.createCourse = async (req, res) => {
       const structure = await scanDriveStructure(folderId);
       course.sections = structure.reverse();
     } catch (err) {
-      console.error("Google Drive scan error:", err.message);
+      logger.error({ err }, "Google Drive scan error");
       req.flash('error', 'Could not scan Drive content. Please check the link.');
     }
   } else if (!Array.isArray(course.sections) || !course.sections.length) {
@@ -302,12 +294,12 @@ module.exports.createCourse = async (req, res) => {
     });
     applyGeneratedCourseSummary(course, summaryResult);
     await course.save();
-    console.log('[course-summary] generated once for course:', String(course._id));
+    logger.info('[course-summary] generated once for course: %s', String(course._id));
   } catch (err) {
     aiSummaryFailed = true;
     clearGeneratedCourseSummary(course);
     await course.save();
-    console.error('[course-summary] failed to generate AI summary:', err.message);
+    logger.error({ err }, '[course-summary] failed to generate AI summary');
   }
 
   await logAuditEvent({
@@ -462,7 +454,7 @@ module.exports.regenerateAiSummary = async (req, res) => {
     });
     applyGeneratedCourseSummary(course, summaryResult);
     await course.save();
-    console.log('[course-summary] generated once for course:', String(course._id));
+    logger.info('[course-summary] generated once for course: %s', String(course._id));
 
     if (wantsJson(req)) {
       return res.json({
@@ -476,7 +468,7 @@ module.exports.regenerateAiSummary = async (req, res) => {
     req.flash('success', `AI summary regenerated with ${summaryResult.model}.`);
     return res.redirect(redirectTo);
   } catch (err) {
-    console.error('[course-summary] failed to generate AI summary:', err.message);
+    logger.error({ err }, '[course-summary] failed to generate AI summary');
 
     if (wantsJson(req)) {
       return res.status(503).json({
@@ -607,7 +599,7 @@ module.exports.updateProgress = async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error('[Progress save error]', err);
+    logger.error({ err }, '[Progress save error]');
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -666,7 +658,7 @@ module.exports.saveQuizResult = async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[Quiz Result Save Error]', err);
+    logger.error({ err }, '[Quiz Result Save Error]');
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -687,7 +679,7 @@ module.exports.saveNote = async (req, res) => {
     await note.save();
     res.json({ success: true });
   } catch (err) {
-    console.error('[Notes error]', err);
+    logger.error({ err }, '[Notes error]');
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -717,7 +709,7 @@ module.exports.createReview = async (req, res) => {
     await course.save();
     res.json({ success: true });
   } catch (err) {
-    console.error('[Review Create Error]', err);
+    logger.error({ err }, '[Review Create Error]');
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -747,7 +739,7 @@ module.exports.getReviews = async (req, res) => {
       reviewCount: reviews.length
     });
   } catch (err) {
-    console.error('[Review Fetch Error]', err);
+    logger.error({ err }, '[Review Fetch Error]');
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -813,7 +805,7 @@ module.exports.askLessonAi = async (req, res) => {
       answer: reply
     });
   } catch (err) {
-    console.error('[Lesson AI Error]', err.message);
+    logger.error({ err }, '[Lesson AI Error]');
     if (err.publicMessage) {
       return res.status(err.statusCode || 503).json({ success: false, error: err.publicMessage });
     }

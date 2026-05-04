@@ -20,8 +20,13 @@
     markerDragging: false,
     markerStartClientX: 0,
     markerStartClientY: 0,
+<<<<<<< HEAD
     markerStartX: DEFAULT_ICON_X_PERCENT,
     markerStartY: DEFAULT_ICON_Y_PERCENT,
+=======
+    markerStartX: 86,
+    markerStartY: 82,
+>>>>>>> aa236e6 (fix bug)
     dragging: false,
     dragMoved: false,
     dragStartX: 0,
@@ -57,11 +62,15 @@
     bindPositionInputs();
     bindOverlayMarker();
     bindPreviewHotspot();
+<<<<<<< HEAD
     bindAiAutoQuiz();
+=======
+>>>>>>> aa236e6 (fix bug)
     syncMarkerFromInputs();
     renderQuizList();
   }
 
+<<<<<<< HEAD
   function bindAiAutoQuiz() {
     const aiBtn = document.getElementById('aiAutoQuizBtn');
     if (!aiBtn) return;
@@ -210,6 +219,9 @@
   }
 
   function _ensureYouTubeApi() {
+=======
+  function ensureYouTubeApi() {
+>>>>>>> aa236e6 (fix bug)
     if (window.YT && window.YT.Player) return Promise.resolve();
     if (state.youtubeReadyPromise) return state.youtubeReadyPromise;
 
@@ -374,11 +386,19 @@
           options: options,
           correctOptionIndex: Math.min(3, Math.max(0, Number(entry && entry.correctOptionIndex) || 0)),
           explanation: String(entry && entry.explanation || '').trim(),
+<<<<<<< HEAD
           pauseOnShow: Boolean(entry && entry.pauseOnShow),
           order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index,
           position: {
             xPercent: normalizePercent(entry && entry.position && entry.position.xPercent, DEFAULT_ICON_X_PERCENT),
             yPercent: normalizePercent(entry && entry.position && entry.position.yPercent, DEFAULT_ICON_Y_PERCENT)
+=======
+          pauseOnShow: entry && entry.pauseOnShow === false ? false : true,
+          order: Number.isFinite(Number(entry && entry.order)) ? Number(entry.order) : index,
+          position: {
+            xPercent: normalizePercent(entry && entry.position && entry.position.xPercent, 86),
+            yPercent: normalizePercent(entry && entry.position && entry.position.yPercent, 82)
+>>>>>>> aa236e6 (fix bug)
           }
         };
       })
@@ -495,8 +515,13 @@
     if (!xInput || !yInput) return;
 
     function onInput() {
+<<<<<<< HEAD
       xInput.value = String(normalizePercent(xInput.value, DEFAULT_ICON_X_PERCENT));
       yInput.value = String(normalizePercent(yInput.value, DEFAULT_ICON_Y_PERCENT));
+=======
+      xInput.value = String(normalizePercent(xInput.value, 86));
+      yInput.value = String(normalizePercent(yInput.value, 82));
+>>>>>>> aa236e6 (fix bug)
       syncMarkerFromInputs();
     }
 
@@ -513,8 +538,13 @@
       state.markerDragging = true;
       state.markerStartClientX = e.clientX;
       state.markerStartClientY = e.clientY;
+<<<<<<< HEAD
       state.markerStartX = normalizePercent(getFormValue('timedQuizPosX'), DEFAULT_ICON_X_PERCENT);
       state.markerStartY = normalizePercent(getFormValue('timedQuizPosY'), DEFAULT_ICON_Y_PERCENT);
+=======
+      state.markerStartX = normalizePercent(getFormValue('timedQuizPosX'), 86);
+      state.markerStartY = normalizePercent(getFormValue('timedQuizPosY'), 82);
+>>>>>>> aa236e6 (fix bug)
       e.preventDefault();
     });
 
@@ -529,8 +559,13 @@
       const nextX = state.markerStartX + ((dx / rect.width) * 100);
       const nextY = state.markerStartY + ((dy / rect.height) * 100);
 
+<<<<<<< HEAD
       setFormValue('timedQuizPosX', String(normalizePercent(nextX, DEFAULT_ICON_X_PERCENT).toFixed(1)));
       setFormValue('timedQuizPosY', String(normalizePercent(nextY, DEFAULT_ICON_Y_PERCENT).toFixed(1)));
+=======
+      setFormValue('timedQuizPosX', String(normalizePercent(nextX, 86).toFixed(1)));
+      setFormValue('timedQuizPosY', String(normalizePercent(nextY, 82).toFixed(1)));
+>>>>>>> aa236e6 (fix bug)
       syncMarkerFromInputs();
     });
 
@@ -543,8 +578,13 @@
     const marker = document.getElementById('videoSettingsMarker');
     if (!marker) return;
 
+<<<<<<< HEAD
     const x = normalizePercent(getFormValue('timedQuizPosX'), DEFAULT_ICON_X_PERCENT);
     const y = normalizePercent(getFormValue('timedQuizPosY'), DEFAULT_ICON_Y_PERCENT);
+=======
+    const x = normalizePercent(getFormValue('timedQuizPosX'), 86);
+    const y = normalizePercent(getFormValue('timedQuizPosY'), 82);
+>>>>>>> aa236e6 (fix bug)
     marker.style.left = 'calc(' + x + '% - 18px)';
     marker.style.top = 'calc(' + y + '% - 18px)';
   }
@@ -563,7 +603,11 @@
     });
   }
 
+<<<<<<< HEAD
   function _startPreviewPolling() {
+=======
+  function startPreviewPolling() {
+>>>>>>> aa236e6 (fix bug)
     clearPreviewPolling();
     if (!state.previewPlayer || typeof state.previewPlayer.getCurrentTime !== 'function') return;
 
@@ -575,7 +619,11 @@
       let current = 0;
       try {
         current = Number(state.previewPlayer.getCurrentTime() || 0);
+<<<<<<< HEAD
       } catch {
+=======
+      } catch (err) {
+>>>>>>> aa236e6 (fix bug)
         current = 0;
       }
 
@@ -606,8 +654,13 @@
     if (!overlay || !hotspot || !quiz) return;
 
     const rect = overlay.getBoundingClientRect();
+<<<<<<< HEAD
     const xPercent = normalizePercent(quiz && quiz.position && quiz.position.xPercent, DEFAULT_ICON_X_PERCENT);
     const yPercent = normalizePercent(quiz && quiz.position && quiz.position.yPercent, DEFAULT_ICON_Y_PERCENT);
+=======
+    const xPercent = normalizePercent(quiz && quiz.position && quiz.position.xPercent, 86);
+    const yPercent = normalizePercent(quiz && quiz.position && quiz.position.yPercent, 82);
+>>>>>>> aa236e6 (fix bug)
     const size = 34;
 
     const left = Math.max(0, Math.min(rect.width - size, (rect.width * (xPercent / 100)) - (size / 2)));
@@ -686,8 +739,13 @@
     const question = String(getFormValue('timedQuizQuestion') || '').trim();
     const timestamp = parseTimestampToSeconds(getFormValue('timedQuizTimestamp'));
     const explanation = String(getFormValue('timedQuizExplanation') || '').trim();
+<<<<<<< HEAD
     const posX = normalizePercent(getFormValue('timedQuizPosX'), DEFAULT_ICON_X_PERCENT);
     const posY = normalizePercent(getFormValue('timedQuizPosY'), DEFAULT_ICON_Y_PERCENT);
+=======
+    const posX = normalizePercent(getFormValue('timedQuizPosX'), 86);
+    const posY = normalizePercent(getFormValue('timedQuizPosY'), 82);
+>>>>>>> aa236e6 (fix bug)
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
     const pauseOnShow = Boolean(pauseOnShowEl && pauseOnShowEl.checked);
 
@@ -727,7 +785,11 @@
       correctOptionIndex: correctOptionIndex,
       explanation: explanation,
       pauseOnShow: pauseOnShow,
+<<<<<<< HEAD
       order: previous ? Number(previous.order || 0) : state.quizzes.length,
+=======
+      order: editIndex >= 0 ? editIndex : state.quizzes.length,
+>>>>>>> aa236e6 (fix bug)
       position: {
         xPercent: posX,
         yPercent: posY
@@ -840,8 +902,13 @@
     setFormValue('timedQuizTimestamp', formatSeconds(quiz.triggerTimeSec));
     setFormValue('timedQuizQuestion', quiz.question || '');
     setFormValue('timedQuizExplanation', quiz.explanation || '');
+<<<<<<< HEAD
     setFormValue('timedQuizPosX', String(normalizePercent(quiz && quiz.position && quiz.position.xPercent, DEFAULT_ICON_X_PERCENT)));
     setFormValue('timedQuizPosY', String(normalizePercent(quiz && quiz.position && quiz.position.yPercent, DEFAULT_ICON_Y_PERCENT)));
+=======
+    setFormValue('timedQuizPosX', String(normalizePercent(quiz && quiz.position && quiz.position.xPercent, 86)));
+    setFormValue('timedQuizPosY', String(normalizePercent(quiz && quiz.position && quiz.position.yPercent, 82)));
+>>>>>>> aa236e6 (fix bug)
 
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
     if (pauseOnShowEl) pauseOnShowEl.checked = Boolean(quiz.pauseOnShow);
@@ -864,8 +931,13 @@
     setFormValue('timedQuizTimestamp', '');
     setFormValue('timedQuizQuestion', '');
     setFormValue('timedQuizExplanation', '');
+<<<<<<< HEAD
     setFormValue('timedQuizPosX', String(DEFAULT_ICON_X_PERCENT));
     setFormValue('timedQuizPosY', String(DEFAULT_ICON_Y_PERCENT));
+=======
+    setFormValue('timedQuizPosX', '86');
+    setFormValue('timedQuizPosY', '82');
+>>>>>>> aa236e6 (fix bug)
 
     const pauseOnShowEl = document.getElementById('timedQuizPauseOnShow');
     if (pauseOnShowEl) pauseOnShowEl.checked = false;

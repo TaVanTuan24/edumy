@@ -1285,7 +1285,10 @@
     if (questionEl) questionEl.textContent = quiz.question;
     if (stampEl) stampEl.textContent = 'Checkpoint at ' + formatQuizTime(quiz.triggerTimeSec);
     modal.classList.add('inline-quiz-mode');
+<<<<<<< HEAD
     modal.classList.toggle('is-mobile', isMobileInlineQuiz);
+=======
+>>>>>>> aa236e6 (fix bug)
     if (feedbackEl) {
       feedbackEl.className = 'interactive-quiz-feedback';
       feedbackEl.textContent = '';
@@ -1347,8 +1350,12 @@
         if (closeBtn) closeBtn.disabled = false;
         submitBtn.disabled = true;
 
+<<<<<<< HEAD
         // Give learners more time to read explanation when they answer incorrectly.
         const autoCloseDelayMs = isCorrect ? 850 : 5000;
+=======
+        // Keep playback uninterrupted and close overlay shortly after submit.
+>>>>>>> aa236e6 (fix bug)
         setTimeout(function() {
           hideInteractiveQuizModal();
           interactiveState.activeQuiz = null;
@@ -1357,7 +1364,11 @@
             activeQuizTime: '',
             status: 'answered-auto-closed'
           });
+<<<<<<< HEAD
         }, autoCloseDelayMs);
+=======
+        }, 850);
+>>>>>>> aa236e6 (fix bug)
       };
     }
 
@@ -1380,6 +1391,7 @@
       container.appendChild(modal);
     }
 
+<<<<<<< HEAD
     if (container && isMobileInlineQuiz) {
       modal.style.display = 'block';
       modal.style.left = '50%';
@@ -1387,6 +1399,9 @@
       modal.style.bottom = '10px';
       modal.style.display = '';
     } else if (container && anchorRect) {
+=======
+    if (container && anchorRect) {
+>>>>>>> aa236e6 (fix bug)
       const containerRect = container.getBoundingClientRect();
       const gap = 10;
 
@@ -1394,7 +1409,10 @@
       modal.style.display = 'block';
       modal.style.left = '0px';
       modal.style.top = '0px';
+<<<<<<< HEAD
       modal.style.bottom = '';
+=======
+>>>>>>> aa236e6 (fix bug)
 
       const popupWidth = Math.min(340, Math.max(250, modal.offsetWidth || 320));
       const popupHeight = Math.max(170, modal.offsetHeight || 220);
@@ -1427,10 +1445,15 @@
     if (!modal) return;
     modal.classList.remove('show');
     modal.classList.remove('inline-quiz-mode');
+<<<<<<< HEAD
     modal.classList.remove('is-mobile');
     modal.style.left = '';
     modal.style.top = '';
     modal.style.bottom = '';
+=======
+    modal.style.left = '';
+    modal.style.top = '';
+>>>>>>> aa236e6 (fix bug)
     modal.setAttribute('aria-hidden', 'true');
   }
 
@@ -1658,10 +1681,13 @@
     url.searchParams.set('origin', window.location.origin);
     url.searchParams.set('rel', '0');
     url.searchParams.set('playsinline', '1');
+<<<<<<< HEAD
     url.searchParams.set('fs', '0');
     url.searchParams.set('modestbranding', '1');
     url.searchParams.set('iv_load_policy', '3');
     url.searchParams.set('showinfo', '0');
+=======
+>>>>>>> aa236e6 (fix bug)
     return url.toString();
   }
 
@@ -1894,6 +1920,7 @@
         youtubePlayer = new window.YT.Player('videoIframe', {
           host: 'https://www.youtube-nocookie.com',
           videoId: videoId,
+<<<<<<< HEAD
           playerVars: {
             rel: 0,
             origin: window.location.origin,
@@ -1902,6 +1929,9 @@
             showinfo: 0,
             playsinline: 1
           },
+=======
+          playerVars: { rel: 0, origin: window.location.origin, modestbranding: 1 },
+>>>>>>> aa236e6 (fix bug)
           events: {
             onReady: function() {
               syncYouTubeTime('youtube-ready');
@@ -1992,7 +2022,11 @@
 
     try {
       current = Number(youtubePlayer.getCurrentTime() || 0);
+<<<<<<< HEAD
     } catch {
+=======
+    } catch (err) {
+>>>>>>> aa236e6 (fix bug)
       current = Number(youtubeFallbackElapsed || 0);
     }
 
@@ -2003,7 +2037,11 @@
           youtubeDurationSec = candidate;
           duration = candidate;
         }
+<<<<<<< HEAD
       } catch {
+=======
+      } catch (err) {
+>>>>>>> aa236e6 (fix bug)
         duration = youtubeDurationSec;
       }
     }
@@ -2026,7 +2064,11 @@
     lastYoutubeTime = current;
   }
 
+<<<<<<< HEAD
   function startYouTubePolling() {
+=======
+  function startYouTubePolling(lesson) {
+>>>>>>> aa236e6 (fix bug)
     if (youtubePollId) clearInterval(youtubePollId);
     stopYouTubeApiWatchdog();
     youtubeZeroPollCount = 0;

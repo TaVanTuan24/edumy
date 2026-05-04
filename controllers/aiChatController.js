@@ -6,6 +6,7 @@ const { awardGamification } = require('../utils/gamification')
 const { encryptKey, decryptKey } = require('../utils/apiKeyCrypto')
 const { validateApiKey, buildKeyStatus } = require('../utils/apiKeySecurity')
 const { logAuditEvent } = require('../utils/auditLogger')
+const logger = require('../utils/logger')
 const { normalizeBaseUrl, getSafeBaseUrlHost } = require('../utils/validateAiBaseUrl')
 const {
     generateChatReply,
@@ -98,7 +99,7 @@ async function sendMessage(req, res) {
             title: chat.title
         })
     } catch (err) {
-        console.error('AI Chat Error:', err.message)
+        logger.error({ err }, 'AI Chat Error')
 
         if (err.statusCode && !err.publicMessage) {
             return res.status(err.statusCode).json({ error: err.message })
@@ -122,7 +123,7 @@ async function sendMessage(req, res) {
                 }
             })
             await chat.save().catch((saveError) => {
-                console.error('AI Chat Error Save Failed:', saveError.message)
+                logger.error({ err: saveError }, 'AI Chat Error Save Failed')
             })
         }
 
@@ -225,7 +226,7 @@ async function streamMessage(req, res) {
         })
         res.end()
     } catch (err) {
-        console.error('AI Chat Stream Error:', err.message)
+        logger.error({ err }, 'AI Chat Stream Error')
         if (aborted) return
 
         const aiError = getAiErrorResponse(err, model)
@@ -241,7 +242,7 @@ async function streamMessage(req, res) {
                 }
             })
             await chat.save().catch((saveError) => {
-                console.error('AI Chat Stream Error Save Failed:', saveError.message)
+                logger.error({ err: saveError }, 'AI Chat Stream Error Save Failed')
             })
         }
 
@@ -303,7 +304,7 @@ async function regenerateLast(req, res) {
             title: chat.title
         })
     } catch (err) {
-        console.error('AI Regenerate Error:', err.message)
+        logger.error({ err }, 'AI Regenerate Error')
         const aiError = getAiErrorResponse(err, model)
         return res.status(aiError.statusCode).json({
             success: false,
@@ -401,7 +402,7 @@ async function streamRegenerateLast(req, res) {
         })
         res.end()
     } catch (err) {
-        console.error('AI Regenerate Stream Error:', err.message)
+        logger.error({ err }, 'AI Regenerate Stream Error')
         if (aborted) return
         const aiError = getAiErrorResponse(err, model)
         writeStreamEvent(res, 'error', {
@@ -432,7 +433,7 @@ async function listChats(req, res) {
 
         res.json(formattedChats)
     } catch (err) {
-        console.error('List Chats Error:', err.message)
+        logger.error({ err }, 'List Chats Error')
         res.status(500).json({ error: 'Failed to fetch chats' })
     }
 }
@@ -680,7 +681,7 @@ async function getChat(req, res) {
 
         res.json(formattedChat)
     } catch (err) {
-        console.error('Get Chat Error:', err.message)
+        logger.error({ err }, 'Get Chat Error')
 
         if (err.name === 'CastError') {
             return res.status(400).json({ error: 'Invalid chat ID' })
@@ -703,7 +704,7 @@ async function deleteChat(req, res) {
 
         res.json({ success: true, message: 'Chat deleted successfully' })
     } catch (err) {
-        console.error('Delete Chat Error:', err.message)
+        logger.error({ err }, 'Delete Chat Error')
 
         if (err.name === 'CastError') {
             return res.status(400).json({ error: 'Invalid chat ID' })

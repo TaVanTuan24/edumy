@@ -14,13 +14,16 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const cors = require('cors');
-const csrf = require('csurf');
+const { csrfProtection, csrfTokenOnly } = require('./middleware/csrf');
+const { cspNonce } = require('./middleware/cspNonce');
 const rateLimit = require('express-rate-limit');
 const mongoStore = require('connect-mongo');
 const mongoose = require('mongoose');
 const { connectDB, closeDB } = require('./config/database');
 const passport = require('./config/passport');
 const { isAdminUser, sanitizeReturnTo } = require('./middleware');
+const { wantsJson } = require('./utils/requestHelpers');
+const logger = require('./utils/logger');
 const serializeJsonForHtml = require('./utils/serializeJsonForHtml');
 const catchAsync = require('./utils/catchAsync');
 const homeController = require('./controllers/home');
@@ -41,6 +44,7 @@ const vrRoutes = require('./routes/vr');
 const vrAuthRoutes = require('./routes/vrAuth');
 
 const isProduction = process.env.NODE_ENV === 'production';
+const appVersion = require('./package.json').version || 'unknown';
 const sessionSecret = String(process.env.SESSION_SECRET || '').trim() || 'dev-session-secret-change-me';
 const mongoUri = String(process.env.MONGO_URI || '').trim();
 
@@ -49,7 +53,7 @@ if (isProduction && sessionSecret === 'dev-session-secret-change-me') {
 }
 
 if (!isProduction && sessionSecret === 'dev-session-secret-change-me') {
-  console.warn('[session] SESSION_SECRET is not set. Using the development fallback secret.');
+  logger.warn('[session] SESSION_SECRET is not set. Using the development fallback secret.');
 }
 
 if (!mongoUri) {
@@ -57,20 +61,9 @@ if (!mongoUri) {
 }
 
 const app = express();
-const csrfProtection = csrf();
 
 app.set('trust proxy', 1);
 
-function requestWantsJson(req) {
-  const acceptHeader = String(req.get('Accept') || '').toLowerCase();
-  const contentType = String(req.get('Content-Type') || '').toLowerCase();
-  return Boolean(
-    req.xhr
-    || acceptHeader.includes('application/json')
-    || contentType.includes('application/json')
-    || req.path.startsWith('/api/')
-  );
-}
 
 function shouldSkipCsrf(req) {
   const path = String(req.path || '');
@@ -130,7 +123,7 @@ const store = mongoStore.create({
   touchAfter: 24 * 3600
 });
 store.on("error", function (e) {
-  console.error('[session] store error:', e && e.message ? e.message : e);
+  logger.error({ err: e }, '[session] store error');
 });
 
 const sessionConfig = {
@@ -152,13 +145,15 @@ app.use(session(sessionConfig))
 app.use(flash())
 app.use((req, res, next) => {
   if (shouldSkipCsrf(req)) {
-    return next();
+    return csrfTokenOnly(req, res, next);
   }
 
   return csrfProtection(req, res, next);
 });
 
-// Helmet CSP same as before
+app.use(cspNonce);
+
+// Helmet CSP with per-request nonce
 const scriptSrcUrls = [
   "https://stackpath.bootstrapcdn.com/",
   "https://kit.fontawesome.com/",
@@ -181,55 +176,56 @@ const connectSrcUrls = [
   "https://www.youtube-nocookie.com"
 ];
 const fontSrcUrls = ["https://cdnjs.cloudflare.com/", "https://fonts.gstatic.com/"];
-app.use(helmet.contentSecurityPolicy({
-  directives: {
-    upgradeInsecureRequests: null,
-    defaultSrc: ["'self'", "https://drive.google.com/"],
-    connectSrc: ["'self'", ...connectSrcUrls],
-    scriptSrc: ["'self'", "'unsafe-inline'", ...scriptSrcUrls],
-    scriptSrcAttr: ["'self'", "'unsafe-inline'"],
-    styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls],
-    workerSrc: ["'self'", "blob:"],
-    frameSrc: [
-      "'self'",
-      "https://drive.google.com/",
-      "https://www.youtube.com",
-      "https://www.youtube-nocookie.com",
-      "https://res.cloudinary.com"
-    ],
-    objectSrc: [],
-    imgSrc: [
-      "'self'",
-      "blob:",
-      "data:",
-      "https:",
-      "https://res.cloudinary.com/dwxy9oepm/",
-      "https://images.unsplash.com/",
-      "https://i.ytimg.com",
-      "https://*.ytimg.com",
-    ],
-    fontSrc: ["'self'", ...fontSrcUrls],
-  },
-}));
+// CSP with per-request nonce — middleware uses function to access res.locals.cspNonce
+app.use((req, res, next) => {
+  const nonce = res.locals.cspNonce || '';
+  helmet.contentSecurityPolicy({
+    directives: {
+      upgradeInsecureRequests: null,
+      defaultSrc: ["'self'", "https://drive.google.com/"],
+      connectSrc: ["'self'", ...connectSrcUrls],
+      // Nonce takes precedence; 'unsafe-inline' kept as fallback for older browsers that ignore nonce
+      scriptSrc: ["'self'", `'nonce-${nonce}'`, "'unsafe-inline'", ...scriptSrcUrls],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      // 'unsafe-inline' required for styleSrc due to Bootstrap inline styles and CDN component styles
+      styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls],
+      workerSrc: ["'self'", "blob:"],
+      frameSrc: [
+        "'self'",
+        "https://drive.google.com/",
+        "https://www.youtube.com",
+        "https://www.youtube-nocookie.com",
+        "https://res.cloudinary.com"
+      ],
+      objectSrc: [],
+      imgSrc: [
+        "'self'",
+        "blob:",
+        "data:",
+        "https:",
+        "https://res.cloudinary.com/dwxy9oepm/",
+        "https://images.unsplash.com/",
+        "https://i.ytimg.com",
+        "https://*.ytimg.com",
+      ],
+      fontSrc: ["'self'", ...fontSrcUrls],
+    },
+  })(req, res, next);
+});
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use(async (req, res, next) => {
-  let csrfToken = '';
-  if (typeof req.csrfToken === 'function') {
-    try {
-      csrfToken = req.csrfToken();
-    } catch (_error) {
-      csrfToken = '';
-    }
-  }
+const NOTIFICATION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+app.use(async (req, res, next) => {
   res.locals.currentUser = req.user;
   res.locals.isCurrentUserAdmin = isAdminUser(req.user);
   res.locals.serializeJson = serializeJsonForHtml;
   res.locals.stripFileExtension = stripFileExtension;
-  res.locals.csrfToken = csrfToken;
+  if (!res.locals.csrfToken) {
+    res.locals.csrfToken = '';
+  }
   res.locals.currentPath = String(req.path || '');
   res.locals.currentUrl = String(req.originalUrl || req.path || '');
   res.locals.success = req.flash('success');
@@ -237,8 +233,26 @@ app.use(async (req, res, next) => {
   res.locals.courseNotifications = [];
   res.locals.courseNotificationCount = 0;
 
-  if (!req.user || !req.user._id) {
+  // Skip notification query for API requests, static assets, unauthenticated users, and non-GET methods
+  const shouldFetchNotifications = req.user
+    && req.user._id
+    && req.method === 'GET'
+    && !wantsJson(req)
+    && !req.path.startsWith('/api/')
+    && !req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/);
+
+  if (!shouldFetchNotifications) {
     return next();
+  }
+
+  // Check session cache first
+  if (req.session && req.session.notificationCache) {
+    const cached = req.session.notificationCache;
+    if (Date.now() - cached.generatedAt < NOTIFICATION_CACHE_TTL_MS) {
+      res.locals.courseNotifications = cached.notifications;
+      res.locals.courseNotificationCount = cached.count;
+      return next();
+    }
   }
 
   try {
@@ -253,14 +267,12 @@ app.use(async (req, res, next) => {
     const enrolledEntries = user.enrolledCourses
       .map((entry) => {
         if (!entry) return null;
-
         if (entry.courseId) {
           return {
             courseId: String(entry.courseId),
             lastSeenUpdatedAt: entry.lastSeenUpdatedAt || null
           };
         }
-
         return {
           courseId: String(entry),
           lastSeenUpdatedAt: null
@@ -280,13 +292,10 @@ app.use(async (req, res, next) => {
       .map((entry) => {
         const course = courseMap.get(entry.courseId);
         if (!course) return null;
-
         const courseUpdatedAt = course.updatedAt ? new Date(course.updatedAt) : null;
         const lastSeen = entry.lastSeenUpdatedAt ? new Date(entry.lastSeenUpdatedAt) : null;
-
         if (!courseUpdatedAt) return null;
         if (lastSeen && courseUpdatedAt <= lastSeen) return null;
-
         return {
           courseId: course._id,
           courseTitle: course.title,
@@ -298,8 +307,17 @@ app.use(async (req, res, next) => {
 
     res.locals.courseNotifications = notifications;
     res.locals.courseNotificationCount = notifications.length;
+
+    // Cache in session
+    if (req.session) {
+      req.session.notificationCache = {
+        generatedAt: Date.now(),
+        notifications,
+        count: notifications.length
+      };
+    }
   } catch (err) {
-    console.error('Error fetching course notifications:', err);
+    logger.error({ err }, 'Error fetching course notifications');
     res.locals.courseNotifications = [];
     res.locals.courseNotificationCount = 0;
   }
@@ -326,9 +344,38 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    mongoConnected: mongoose.connection.readyState === 1
+  const mongoReady = mongoose.connection.readyState === 1;
+  const mem = process.memoryUsage();
+  const uptime = process.uptime();
+
+  const aiConfigured = Boolean(
+    String(process.env.AI_API_KEY || '').trim()
+    || String(process.env.AI_BASE_URL || '').trim()
+  );
+
+  const status = mongoReady ? 'ok' : 'degraded';
+  const httpStatus = mongoReady ? 200 : 503;
+
+  res.status(httpStatus).json({
+    status,
+    timestamp: new Date().toISOString(),
+    uptime: Math.round(uptime),
+    environment: isProduction ? 'production' : 'development',
+    version: appVersion,
+    memory: {
+      rss: mem.rss,
+      heapTotal: mem.heapTotal,
+      heapUsed: mem.heapUsed
+    },
+    dependencies: {
+      mongodb: {
+        status: mongoReady ? 'ok' : 'disconnected',
+        readyState: mongoose.connection.readyState
+      },
+      ai: {
+        status: aiConfigured ? 'configured' : 'not_configured'
+      }
+    }
   });
 });
 
@@ -339,36 +386,7 @@ app.all('*', (req, res, next) => {
   next(new ExpressError('Page Not Found', 404));
 });
 
-app.use((err, req, res, next) => {
-  if (err && err.code === 'EBADCSRFTOKEN') {
-    const message = 'Your form expired or the request could not be verified. Please try again.';
-
-    if (!isProduction) {
-      console.warn('[CSRF Failure]', {
-        method: req.method,
-        path: req.originalUrl || req.path,
-        hasBodyToken: Boolean(req.body && req.body._csrf),
-        hasHeaderToken: Boolean(req.get('CSRF-Token') || req.get('X-CSRF-Token')),
-        hasRequestedWith: Boolean(req.get('X-Requested-With')),
-        contentType: req.get('Content-Type') || ''
-      });
-    }
-
-    if (requestWantsJson(req)) {
-      return res.status(403).json({
-        success: false,
-        error: message,
-        code: 'EBADCSRFTOKEN'
-      });
-    }
-
-    req.flash('error', message);
-    const returnTo = sanitizeReturnTo(req.get('Referrer'), req) || '/';
-    return res.redirect(returnTo);
-  }
-
-  return next(err);
-});
+// CSRF errors are now handled directly in the csrf middleware
 
 // Production error handler
 app.use((err, req, res, _next) => {
@@ -397,7 +415,7 @@ app.use((err, req, res, _next) => {
 
   if (!err.message) err.message = 'Oh No, Something Went Wrong!';
 
-  if (requestWantsJson(req)) {
+  if (wantsJson(req)) {
     return res.status(statusCode).json({
       success: false,
       error: err.message
@@ -433,23 +451,23 @@ async function startServer() {
   await connectDB();
 
   server = app.listen(PORT, HOST, () => {
-    console.log(`[server] Listening on port ${PORT}`);
+    logger.info({ port: PORT }, '[server] Listening');
 
     if (!isProduction) {
       const lanAddresses = getLanAddresses();
       if (lanAddresses.length > 0) {
         lanAddresses.forEach((ip) => {
-          console.log(`[server] LAN URL: http://${ip}:${PORT}`);
+          logger.info(`[server] LAN URL: http://${ip}:${PORT}`);
         });
       } else {
-        console.log('[server] LAN URL: Unable to detect LAN IP automatically.');
+        logger.warn('[server] LAN URL: Unable to detect LAN IP automatically.');
       }
     }
   });
 }
 
 async function shutdown(signal) {
-  console.log(`${signal} received, shutting down gracefully`);
+  logger.info(`${signal} received, shutting down gracefully`);
 
   if (server) {
     await new Promise((resolve) => {
@@ -461,7 +479,7 @@ async function shutdown(signal) {
 }
 
 startServer().catch((err) => {
-  console.error('Failed to start server:', err);
+  logger.fatal({ err }, 'Failed to start server');
   process.exit(1);
 });
 

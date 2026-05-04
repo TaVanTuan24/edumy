@@ -1,0 +1,174 @@
+# Production Readiness Checklist
+
+Use this checklist before deploying Edumy to production.
+
+## Environment Variables (Required)
+
+- [ ] `MONGO_URI` — MongoDB Atlas connection string
+- [ ] `SESSION_SECRET` — Strong random string (min 32 chars)
+- [ ] `NODE_ENV=production`
+
+## Environment Variables (Recommended)
+
+- [ ] `CSRF_SECRET` — Separate secret for CSRF tokens (falls back to SESSION_SECRET)
+- [ ] `ADMIN_EMAILS` or `ADMIN_USER_IDS` — Admin access
+- [ ] `AI_API_KEY` + `AI_BASE_URL` — AI service
+- [ ] `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_KEY` + `CLOUDINARY_SECRET` — Image uploads
+- [ ] `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_CALLBACK_URL` — OAuth
+- [ ] `LOG_LEVEL=info` (default in production)
+
+## Database
+
+- [ ] MongoDB Atlas cluster running
+- [ ] Database backup strategy configured
+- [ ] Connection string uses TLS/SSL
+- [ ] IP whitelist includes deployment server
+
+## Migrations
+
+- [ ] Run `node scripts/migrate-progress-merge.js` (dry-run) — review output
+- [ ] Run `node scripts/migrate-enrollment-fields.js` (dry-run) — review output
+- [ ] Back up database
+- [ ] Run migrations with `--apply` only after backup
+- [ ] Verify sample users after migration
+
+## Security
+
+- [ ] `SESSION_SECRET` is strong and unique (not the dev fallback)
+- [ ] No secrets in `.env.example`, `docker-compose.yml`, or source code
+- [ ] CSP header working — check browser console for violations
+- [ ] CSRF tokens working on all forms
+- [ ] Rate limiting configured (`express-rate-limit`)
+- [ ] Helmet security headers active
+- [ ] Cookie `secure: true` in production (automatic when `NODE_ENV=production`)
+
+## Health & Monitoring
+
+- [ ] `GET /health` returns 200 with `status: "ok"`
+- [ ] Monitor `/health` with uptime service (e.g., UptimeRobot, Better Stack)
+- [ ] `dependencies.mongodb.status` = `"ok"`
+- [ ] `dependencies.ai.status` = `"configured"` or `"not_configured"`
+
+## Docker / CI
+
+- [ ] `docker build -t edumy .` succeeds
+- [ ] `docker compose up` starts app + MongoDB
+- [ ] GitHub Actions CI passes on main branch
+- [ ] Environment variables set in deployment platform (Render, Railway, etc.)
+
+## Frontend
+
+- [ ] Bootstrap CSS/JS SRI integrity hashes match CDN
+- [ ] Font Awesome SRI hash verified
+- [ ] No CSP violations in browser console
+- [ ] All pages load correctly
+
+## Logging
+
+- [ ] Logs output JSON in production (pino default)
+- [ ] No secrets logged (passwords, tokens, API keys)
+- [ ] Log level appropriate (`info` or `warn`)
+
+## Multi-Instance (if applicable)
+
+- [ ] Use external session store (MongoDB — already configured via `connect-mongo`)
+- [ ] Replace in-memory AI cache with Redis (see `services/ai/aiCacheService.js` docs)
+- [ ] Replace session notification cache with Redis (see `server.js` comments)
+- [ ] Ensure `trust proxy` setting matches load balancer
+
+## Rate Limits
+
+Current defaults (in `utils/rateLimiters.js`):
+- Global: 100 req / 15 min per IP
+- Login: 8 attempts / 15 min
+- Register: 6 attempts / 1 hour
+- AI Chat: 40 requests / 15 min
+- AI Stream: 25 requests / 15 min
+- Upload: 20 requests / 15 min
+
+Adjust if needed for expected traffic.
+
+## Post-Deploy Verification
+
+- [ ] Login/register works
+- [ ] Course creation works
+- [ ] AI chat responds
+- [ ] File upload works (if Cloudinary configured)
+- [ ] Google OAuth works (if configured)
+- [ ] No 500 errors in logs
+- [ ] Health check stable
+
+## Health Check Monitoring
+
+### Using `/health` with uptime monitors
+
+Point your uptime monitor (UptimeRobot, Better Stack, Pingdom, etc.) to:
+```
+GET https://your-domain.com/health
+```
+
+### Response interpretation
+
+| Field | Value | Meaning |
+|-------|-------|---------|
+| `status` | `"ok"` | App and MongoDB healthy |
+| `status` | `"degraded"` | MongoDB disconnected but app is running |
+| HTTP status | `200` | Healthy |
+| HTTP status | `503` | Unhealthy — MongoDB down or critical dependency failed |
+| `dependencies.mongodb.status` | `"ok"` | MongoDB `readyState === 1` |
+| `dependencies.mongodb.status` | `"disconnected"` | MongoDB connection lost |
+| `dependencies.ai.status` | `"configured"` | `AI_API_KEY` or `AI_BASE_URL` is set |
+| `dependencies.ai.status` | `"not_configured"` | No AI credentials configured |
+
+### Recommended monitoring thresholds
+
+- Check interval: 60 seconds
+- Alert after: 2 consecutive failures
+- Alert channels: email + Slack/webhook
+
+### Health check does NOT
+
+- Call AI provider (no cost, no latency)
+- Expose secrets, API keys, or connection strings
+- Query database beyond `readyState` check
+
+## Security Verification
+
+### CSRF
+- [ ] All HTML forms contain `_csrf` hidden input
+- [ ] AJAX requests send `x-csrf-token` header (via `csrf.js` auto-patch)
+- [ ] POST without token returns 403 with `code: "EBADCSRFTOKEN"`
+- [ ] Token rotates on each page load
+
+### CSP (Content Security Policy)
+- [ ] Browser console has no CSP violations for scripts (nonce-based)
+- [ ] `styleSrc` still includes `'unsafe-inline'` — documented limitation
+- [ ] All inline scripts use `nonce="<%= cspNonce %>"` attribute
+
+### Validation
+- [ ] Invalid JSON API input returns 400 with `success: false`
+- [ ] Invalid HTML form input redirects back with flash message
+- [ ] Unknown fields are stripped from request body
+
+### Admin Access
+- [ ] No hardcoded admin IDs in source code
+- [ ] Admin access configured via `ADMIN_EMAILS` and/or `ADMIN_USER_IDS` env vars
+- [ ] Non-admin users get 403 on `/admin` routes
+
+### Logging
+- [ ] Production logs output JSON (pino)
+- [ ] No cookies, tokens, passwords, or API keys in log output
+- [ ] Log level set to `info` or `warn` (not `debug`)
+
+### Secrets
+- [ ] `.env` is in `.gitignore`
+- [ ] `.env.example` contains no real secrets
+- [ ] Docker Compose reads secrets from `.env`, not hardcoded
+- [ ] `SESSION_SECRET` is strong (min 32 random chars)
+
+### Rate Limits
+- [ ] Login: 8 attempts / 15 min
+- [ ] Register: 6 attempts / 1 hour
+- [ ] AI Chat: 40 requests / 15 min
+- [ ] Upload: 20 requests / 15 min
+- [ ] Global: 100 requests / 15 min per IP

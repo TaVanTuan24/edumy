@@ -1,8 +1,7 @@
 const mongoose = require('mongoose');
+const { wantsJson } = require('../utils/requestHelpers');
 
-const DEFAULT_ADMIN_USER_IDS = process.env.NODE_ENV === 'production'
-  ? []
-  : ['68a69b0a055071b7e4410b8f'];
+const DEFAULT_ADMIN_USER_IDS = [];
 
 function sanitizeReturnTo(input, req) {
   const raw = String(input || '').trim();
@@ -37,10 +36,6 @@ const storeReturnTo = (req, res, next) => {
   next();
 };
 
-function wantsJson(req) {
-  const acceptHeader = String(req.get('Accept') || '').toLowerCase();
-  return req.xhr || acceptHeader.includes('application/json');
-}
 
 function getConfiguredAdminEmails() {
   const rawAdminEmails = String(process.env.ADMIN_EMAILS || '').trim();

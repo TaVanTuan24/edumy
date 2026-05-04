@@ -231,7 +231,7 @@
 
 <script id="my-courses-search-data" type="application/json"><%- serializeJson(searchCourses) %></script>
 <script src="/javascripts/course-search.js"></script>
-<script>
+<script nonce="<%= cspNonce %>">
   (function() {
     const root = document.querySelector('.learner-dashboard');
     if (!root) return;

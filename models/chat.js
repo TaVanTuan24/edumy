@@ -1,5 +1,7 @@
 const mongoose = require("mongoose")
 
+const MAX_CHAT_MESSAGES = Number(process.env.MAX_CHAT_MESSAGES || 200);
+
 const messageSchema = new mongoose.Schema({
     role: {
         type: String,
@@ -68,9 +70,15 @@ const chatSchema = new mongoose.Schema({
     }
 })
 
-// Update timestamp on save
+// Update timestamp on save and trim messages to prevent unbounded growth
 chatSchema.pre("save", function(next) {
     this.updatedAt = new Date()
+
+    // Trim messages array to the most recent MAX_CHAT_MESSAGES
+    if (Array.isArray(this.messages) && this.messages.length > MAX_CHAT_MESSAGES) {
+        this.messages = this.messages.slice(-MAX_CHAT_MESSAGES);
+    }
+
     next()
 })
 
