@@ -29,15 +29,9 @@
           allowfullscreen
           referrerpolicy="strict-origin-when-cross-origin"></iframe>
         <div id="videoPreviewOverlay" class="video-preview-overlay">
-<<<<<<< HEAD
           <button id="videoSettingsMarker" class="video-settings-marker" type="button" aria-label="Drag quiz position"><i class="fa-solid fa-circle-question" aria-hidden="true"></i></button>
           <button id="videoPreviewHotspot" class="video-preview-hotspot video-preview-hotspot-hidden" type="button" aria-label="Open quiz preview"><i class="fa-solid fa-bolt" aria-hidden="true"></i></button>
           <div id="videoPreviewQuizPopup" class="video-preview-quiz-popup video-preview-quiz-popup-hidden" aria-hidden="true"></div>
-=======
-          <button id="videoSettingsMarker" class="video-settings-marker" type="button" aria-label="Drag quiz position">?</button>
-          <button id="videoPreviewHotspot" class="video-preview-hotspot" type="button" aria-label="Open quiz preview" style="display:none;">?</button>
-          <div id="videoPreviewQuizPopup" class="video-preview-quiz-popup" style="display:none;" aria-hidden="true"></div>
->>>>>>> aa236e6 (fix bug)
         </div>
       </div>
     </section>
@@ -136,76 +130,6 @@
       <div id="timedQuizList" class="quiz-list"></div>
     </aside>
   </div>
-<<<<<<< HEAD
-=======
-
-  <button id="timedQuizFab" class="timed-quiz-fab" type="button" title="Add timed quiz">
-    <i class="fa-solid fa-plus"></i>
-  </button>
-
-  <div id="timedQuizPopover" class="timed-quiz-popover" aria-hidden="true">
-    <div class="timed-quiz-popover-head">
-      <h6 class="mb-0" id="timedQuizPopoverTitle">Add Timed Quiz</h6>
-      <button id="timedQuizCloseBtn" class="btn btn-sm btn-light" type="button">✕</button>
-    </div>
-
-    <div class="timed-quiz-popover-body">
-      <input type="hidden" id="timedQuizEditIndex" value="-1">
-
-      <div class="mb-2">
-        <label class="form-label">Timestamp</label>
-        <input id="timedQuizTimestamp" class="form-control form-control-sm" placeholder="03:50 or 230">
-      </div>
-
-      <div class="mb-2">
-        <label class="form-label">Question</label>
-        <textarea id="timedQuizQuestion" class="form-control form-control-sm" rows="2" placeholder="Type question"></textarea>
-      </div>
-
-      <div class="row g-2">
-        <% for (let i = 0; i < 4; i++) { %>
-          <div class="col-12">
-            <label class="form-label d-flex align-items-center justify-content-between mb-1">
-              <span>Option <%= i + 1 %></span>
-              <span class="small text-muted d-flex align-items-center gap-1">
-                <input type="checkbox" class="timedQuizCorrectCheck" data-correct-index="<%= i %>">
-                Correct
-              </span>
-            </label>
-            <input class="form-control form-control-sm timedQuizOptionInput" data-option-index="<%= i %>" placeholder="Option <%= i + 1 %>">
-          </div>
-        <% } %>
-      </div>
-
-      <div class="mb-2 mt-2">
-        <label class="form-label">Explanation (optional)</label>
-        <textarea id="timedQuizExplanation" class="form-control form-control-sm" rows="2" placeholder="Explain why the answer is correct"></textarea>
-      </div>
-
-      <div class="row g-2">
-        <div class="col-6">
-          <label class="form-label">X (%)</label>
-          <input id="timedQuizPosX" type="number" min="0" max="100" step="0.1" class="form-control form-control-sm" value="86">
-        </div>
-        <div class="col-6">
-          <label class="form-label">Y (%)</label>
-          <input id="timedQuizPosY" type="number" min="0" max="100" step="0.1" class="form-control form-control-sm" value="82">
-        </div>
-      </div>
-      <p class="small text-muted mt-2 mb-0">Drag the marker on video to set quiz icon position.</p>
-
-      <div class="form-check mb-2">
-        <input class="form-check-input" type="checkbox" id="timedQuizPauseOnShow" checked>
-        <label class="form-check-label" for="timedQuizPauseOnShow">Pause video when quiz appears</label>
-      </div>
-    </div>
-
-    <div class="timed-quiz-popover-actions">
-      <button id="timedQuizResetBtn" class="btn btn-sm btn-outline-secondary" type="button">Reset</button>
-      <button id="timedQuizSaveBtn" class="btn btn-sm btn-primary" type="button">Save Quiz</button>
-    </div>
-  </div>
->>>>>>> aa236e6 (fix bug)
 </div>
 
 <script id="video-settings-data" type="application/json">

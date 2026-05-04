@@ -22,6 +22,8 @@
     const courseId = popup.dataset.courseId || '';
     if (!input || !sendBtn || !messages || !transcript || !composer || !courseId) return;
 
+    mountLessonAiWidget(chatToggle, popup);
+
     const state = {
       contextExpanded: false,
       loading: false,
@@ -100,6 +102,16 @@
     syncLessonContext(contextSummary, contextDetails, contextToggle, status, state);
     syncUnreadIndicator(unreadIndicator, state);
     setWidgetOpenState(popup, chatToggle, state, false);
+  }
+
+  function mountLessonAiWidget(chatToggle, popup) {
+    if (!document.body || popup.parentElement === document.body) return;
+
+    if (chatToggle) {
+      document.body.appendChild(chatToggle);
+    }
+
+    document.body.appendChild(popup);
   }
 
   function sendCustomMessage(courseId, input, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state, popup, unreadIndicator) {
