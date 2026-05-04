@@ -1,11 +1,7 @@
 const path = require('path')
-const { DEFAULT_MODEL, getCatalogModels, getCatalogModel } = require('../services/ai/modelCatalog')
 
-const MODEL_OPTIONS = getCatalogModels()
-const SUPPORTED_MODELS = MODEL_OPTIONS.map((model) => model.id)
-const LEGACY_OPENAI_MODELS = new Set(['gpt-4o', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4'])
-const LEGACY_LOCAL_MODELS = new Set(['llama3', 'llama3.1', 'llama3.2'])
-const OPENAI_UPGRADE_MODEL = 'gpt-5.4'
+const MODEL_OPTIONS = []
+const SUPPORTED_MODELS = []
 
 function readBoolean(value, fallback) {
     if (value === undefined || value === null || value === '') return fallback
@@ -18,18 +14,12 @@ function readNumber(value, fallback) {
 }
 
 const grokEnabled = readBoolean(process.env.GROK_ENABLED, false)
-const envDefaultModel = String(process.env.AI_DEFAULT_MODEL || '').trim()
-const requestedDefaultModel = SUPPORTED_MODELS.includes(envDefaultModel)
-    ? envDefaultModel
-    : LEGACY_OPENAI_MODELS.has(envDefaultModel)
-        ? OPENAI_UPGRADE_MODEL
-        : DEFAULT_MODEL
 
 const aiConfig = {
-    provider: String(process.env.AI_PROVIDER || 'openai-compatible').trim().toLowerCase() || 'openai-compatible',
-    defaultModel: requestedDefaultModel === 'grok' && !grokEnabled ? DEFAULT_MODEL : requestedDefaultModel,
-    chatModel: String(process.env.AI_CHAT_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL,
-    summaryModel: String(process.env.AI_SUMMARY_MODEL || 'gpt-5.5').trim() || 'gpt-5.5',
+    provider: 'user-defined',
+    defaultModel: '',
+    chatModel: '',
+    summaryModel: String(process.env.AI_SUMMARY_MODEL || '').trim(),
     grok: {
         enabled: grokEnabled,
         scraperPath: path.resolve(process.env.GROK_SCRAPER_PATH || path.join(__dirname, '..', 'grok-scraper')),
@@ -52,29 +42,25 @@ const aiConfig = {
 }
 
 function normalizeAiModel(model) {
-    const value = String(model || aiConfig.defaultModel || DEFAULT_MODEL).trim()
-    if (LEGACY_OPENAI_MODELS.has(value)) return OPENAI_UPGRADE_MODEL
-    if (LEGACY_LOCAL_MODELS.has(value)) return aiConfig.chatModel
-    return SUPPORTED_MODELS.includes(value) ? value : aiConfig.defaultModel
+    return String(model || '').trim().slice(0, 200)
 }
 
 function getModelOptions() {
-    return MODEL_OPTIONS.map((model) => ({
-        ...model,
-        enabled: model.id === 'grok' ? aiConfig.grok.enabled : model.enabled === true
-    }))
+    return []
 }
 
 function getModelConfig(model) {
-    return getCatalogModel(model)
+    return {
+        id: normalizeAiModel(model),
+        apiModel: normalizeAiModel(model),
+        providerKey: 'user-defined',
+        requiresKey: 'apiKeyEncrypted'
+    }
 }
 
 function setGrokEnabled(enabled) {
     aiConfig.grok.enabled = Boolean(enabled)
     process.env.GROK_ENABLED = enabled ? 'true' : 'false'
-    if (aiConfig.defaultModel === 'grok' && !aiConfig.grok.enabled) {
-        aiConfig.defaultModel = DEFAULT_MODEL
-    }
 }
 
 module.exports = {

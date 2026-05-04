@@ -17,7 +17,18 @@ class AIKeyMissingError extends AIProviderError {
             code: 'API_KEY_MISSING',
             statusCode: 400,
             provider,
-            publicMessage: 'AI provider is not configured. Add a key in AI Settings or set AI_BASE_URL and AI_API_KEY on the server.'
+            publicMessage: 'Please configure your AI model, API key, and base URL before using AI chat.'
+        })
+    }
+}
+
+class AIConfigRequiredError extends AIProviderError {
+    constructor() {
+        super('User AI configuration is required', {
+            code: 'AI_CONFIG_REQUIRED',
+            statusCode: 400,
+            provider: 'user-defined',
+            publicMessage: 'Please configure your AI model, API key, and base URL before using AI chat.'
         })
     }
 }
@@ -144,6 +155,7 @@ function extractProviderMessage(error) {
 module.exports = {
     AIProviderError,
     AIKeyMissingError,
+    AIConfigRequiredError,
     AIAuthError,
     AIRateLimitError,
     AIQuotaExceededError,

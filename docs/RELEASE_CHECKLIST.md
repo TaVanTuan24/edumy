@@ -81,10 +81,11 @@ Manual QA checklist before deploying to staging or production.
 - [ ] Regenerate last response → new response
 
 ### AI Settings (BYOK)
-- [ ] Open AI settings → providers listed
-- [ ] Save API key → key encrypted and stored
-- [ ] Test connection → success/failure feedback
-- [ ] Clear key → key removed
+- [ ] Open AI settings -> custom Base URL/API Key/Model form shown
+- [ ] Save API key -> key encrypted and stored
+- [ ] Saved key -> only masked status shown, never raw key
+- [ ] Test connection -> success/failure feedback
+- [ ] Delete config -> saved custom AI config removed
 
 ## Admin Flows
 

@@ -126,7 +126,7 @@
   }
 
   function runLessonAiAction(courseId, action, message, messages, transcript, typing, status, contextSummary, contextDetails, contextToggle, sendBtn, modelSelect, state, popup, unreadIndicator) {
-    const model = modelSelect && modelSelect.value ? modelSelect.value : 'gpt-5.5';
+    const model = modelSelect && modelSelect.value ? modelSelect.value : '';
     const context = getCurrentContext();
 
     if (!context.lessonId && (context.sectionIndex == null || context.lessonIndex == null)) {
@@ -184,7 +184,7 @@
 
   function ensureWelcomeMessage(transcript) {
     if (!transcript || transcript.childElementCount > 0) return;
-    addMessage(transcript, 'ai', 'Ask about the current lesson, request a summary, or generate practice prompts.', 'gpt-5.5');
+    addMessage(transcript, 'ai', 'Ask about the current lesson, request a summary, or generate practice prompts.', '');
   }
 
   function addMessage(transcript, role, text, model) {
@@ -369,10 +369,7 @@
   }
 
   function formatModelLabel(model) {
-    if (model === 'grok') return 'Grok';
-    if (model === 'gpt-5.5') return 'GPT-5.5';
-    if (model === 'gpt-5.4') return 'GPT-5.4';
-    return 'GPT-5.5';
+    return model || 'AI';
   }
 
   function getCurrentContext() {

@@ -39,25 +39,26 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
 
-AI_PROVIDER=openai-compatible
+USER_AI_KEY_ENCRYPTION_SECRET=
+ALLOW_GLOBAL_AI_FALLBACK=false
 AI_BASE_URL=
 AI_API_KEY=
-AI_CHAT_MODEL=gpt-5.5
-AI_SUMMARY_MODEL=gpt-5.5
+AI_MODEL=
+AI_SUMMARY_MODEL=
 
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_KEY=
 CLOUDINARY_SECRET=
 ```
 
-## AI provider notes
+## AI BYOK notes
 
-- The app no longer depends on a local Ollama runtime.
-- Server-managed AI uses `AI_BASE_URL` plus `AI_API_KEY` with an OpenAI-compatible API.
-- The default chat model is `AI_CHAT_MODEL`.
-- Course summaries use `AI_SUMMARY_MODEL`.
-- Optional BYOK settings for OpenAI, xAI, Claude, and Gemini are still available in the `/ai` UI.
-- Grok scraper remains optional for local desktop use and should stay disabled on headless production servers unless you explicitly support it.
+- Users configure their own OpenAI-compatible AI settings in `/ai`: `baseUrl`, `apiKey`, and `model`.
+- The server no longer maintains or exposes a predefined model/provider list.
+- User API keys are encrypted at rest with `USER_AI_KEY_ENCRYPTION_SECRET` and are never returned to the client after saving.
+- Generate the encryption secret with `openssl rand -hex 32`. If this secret is lost or changed, saved user AI keys cannot be decrypted.
+- Optional global fallback for admin/dev can use `ALLOW_GLOBAL_AI_FALLBACK=true` with `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL`; it is not used for user-facing model selection.
+- Grok scraper remains optional for legacy admin workflows and should stay disabled on headless production servers unless you explicitly support it.
 
 ## Google OAuth
 
@@ -137,7 +138,7 @@ Returns JSON with:
 - `uptime`: server uptime in seconds
 - `memory`: Node.js memory usage
 - `dependencies.mongodb.status`: `"ok"` or `"disconnected"`
-- `dependencies.ai.status`: `"configured"` or `"not_configured"`
+- `dependencies.ai.status`: optional global fallback status; user BYOK settings are stored per user in MongoDB
 
 Returns HTTP 200 when healthy, 503 when MongoDB is disconnected.
 

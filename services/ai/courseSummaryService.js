@@ -1,20 +1,22 @@
 const { generatePromptReply } = require('./chatOrchestrator');
-const { aiConfig, SUPPORTED_MODELS } = require('../../config/ai');
+const { aiConfig } = require('../../config/ai');
+const { loadUserAiConfig } = require('./userAiClient');
 const { getCanonicalSections } = require('../../utils/courseContentAdapter');
 
-const DEFAULT_SUMMARY_MODEL = 'gpt-5.5';
+const DEFAULT_SUMMARY_MODEL = '';
 const MIN_SUMMARY_LENGTH = 30;
 const MAX_SECTIONS = 12;
 const MAX_LESSONS_PER_SECTION = 12;
 
 function getCourseSummaryModel() {
     const requested = String(process.env.AI_SUMMARY_MODEL || DEFAULT_SUMMARY_MODEL).trim();
-    return SUPPORTED_MODELS.includes(requested) ? requested : DEFAULT_SUMMARY_MODEL;
+    return requested.slice(0, 200);
 }
 
 async function generateCourseSummary(course, options = {}) {
     const userId = options && options.userId ? options.userId : null;
-    const model = getCourseSummaryModel();
+    const runtimeConfig = await loadUserAiConfig(userId);
+    const model = String(runtimeConfig && runtimeConfig.model || getCourseSummaryModel()).trim().slice(0, 200);
     const prompt = buildCourseSummaryPrompt(course);
     const generatedAt = new Date();
 

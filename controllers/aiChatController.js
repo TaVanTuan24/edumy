@@ -3,45 +3,28 @@ const User = require('../models/user')
 const UserAISettings = require('../models/userAISettings')
 const mongoose = require('mongoose')
 const { awardGamification } = require('../utils/gamification')
-const { encryptKey, decryptKey } = require('../utils/apiKeyCrypto')
-const { validateApiKey, buildKeyStatus } = require('../utils/apiKeySecurity')
+const { encryptKey, decryptKey, maskApiKey } = require('../utils/apiKeyCrypto')
 const { logAuditEvent } = require('../utils/auditLogger')
 const logger = require('../utils/logger')
-const { normalizeBaseUrl, getSafeBaseUrlHost } = require('../utils/validateAiBaseUrl')
+const { getSafeBaseUrlHost } = require('../utils/validateAiBaseUrl')
+const { normalizeUserAiBaseUrl, testConnection } = require('../services/ai/userAiClient')
 const {
     generateChatReply,
     generateChatReplyStream,
     getAiErrorResponse,
-    getModelOptions,
-    normalizeAiModel,
-    aiConfig
+    normalizeAiModel
 } = require('../services/ai/chatOrchestrator')
-const { getModelConfig } = require('../config/ai')
-const { getProvider } = require('../services/ai/providerRegistry')
-const { BASE_URL_FIELDS } = require('../services/ai/providerBaseUrls')
-
-const PROVIDER_KEY_FIELDS = {
-    openai: 'openaiKey',
-    xai: 'xaiKey',
-    claude: 'claudeKey',
-    gemini: 'geminiKey'
-}
-
-const TEST_MODELS = {
-    openai: 'gpt-5.5',
-    xai: 'grok-api',
-    claude: 'claude-3-5-sonnet',
-    gemini: 'gemini-pro'
-}
 
 async function renderChat(req, res) {
-    const aiModels = await getUserModelOptions(req.user._id)
-    const preferredDefault = aiModels.find((model) => model.enabled)
-        || aiModels[0]
+    const snapshot = await getUserSettingsSnapshot(req.user._id)
+    const defaultAiModel = snapshot.settings && snapshot.settings.model
+        ? snapshot.settings.model
+        : ''
 
     res.render('chat', {
-        aiModels,
-        defaultAiModel: preferredDefault ? preferredDefault.id : aiConfig.defaultModel,
+        aiModels: [],
+        defaultAiModel,
+        aiSettings: snapshot.settings,
         bodyClass: 'ai-chat-shell',
         mainClass: 'ai-chat-main',
         hideFooter: true
@@ -189,7 +172,7 @@ async function streamMessage(req, res) {
             chatId: chat._id,
             title: chat.title,
             model,
-            mode: model === 'grok' ? 'simulated' : 'stream'
+            mode: 'stream'
         })
 
         const reply = await generateChatReplyStream({
@@ -366,7 +349,7 @@ async function streamRegenerateLast(req, res) {
             chatId: chat._id,
             title: chat.title,
             model,
-            mode: model === 'grok' ? 'simulated' : 'stream'
+            mode: 'stream'
         })
 
         const reply = await generateChatReplyStream({
@@ -439,65 +422,59 @@ async function listChats(req, res) {
 }
 
 async function listModels(req, res) {
-    res.json(await getUserModelOptions(req.user._id))
+    res.json({
+        success: true,
+        models: [],
+        customModelsOnly: true,
+        message: 'Users can configure any OpenAI-compatible model in AI settings.'
+    })
 }
 
 async function getSettings(req, res) {
     const snapshot = await getUserSettingsSnapshot(req.user._id)
-    res.json({ ...snapshot, models: await getUserModelOptions(req.user._id) })
+    res.json({
+        success: true,
+        ...snapshot,
+        models: [],
+        customModelsOnly: true
+    })
 }
 
 async function saveSettings(req, res) {
     const payload = req.body || {}
-    const update = {}
-    const changedProviders = []
+    const existing = await UserAISettings.findOne({ user: req.user._id }).lean()
+    const normalizedBaseUrl = normalizeUserAiBaseUrl(payload.baseUrl)
+    const model = String(payload.model || '').trim()
+    const hasApiKeyInput = Object.prototype.hasOwnProperty.call(payload, 'apiKey')
+    const apiKey = hasApiKeyInput ? String(payload.apiKey || '').trim() : ''
 
-    for (const [provider, field] of Object.entries(PROVIDER_KEY_FIELDS)) {
-        if (Object.prototype.hasOwnProperty.call(payload, field)) {
-            const value = String(payload[field] || '').trim()
-            if (!value) continue
-
-            const validation = validateApiKey(provider, value)
-            if (!validation.ok) {
-                return res.status(400).json({ error: validation.error })
-            }
-
-            update[field] = encryptKey(validation.value)
-            changedProviders.push({
-                provider,
-                masked: validation.masked
-            })
-        }
+    if (!normalizedBaseUrl) {
+        return res.status(400).json({ success: false, error: 'Base URL must be a valid http:// or https:// URL.' })
     }
 
-    for (const [provider, field] of Object.entries(BASE_URL_FIELDS)) {
-        if (Object.prototype.hasOwnProperty.call(payload, field)) {
-            const value = String(payload[field] || '').trim()
-            if (!value) continue
-
-            let normalized
-            try {
-                normalized = normalizeBaseUrl(value, provider)
-            } catch (error) {
-                return res.status(400).json({ error: error.message || 'Invalid base URL.' })
-            }
-
-            update[field] = normalized || ''
-            changedProviders.push({
-                provider,
-                baseUrlConfigured: Boolean(normalized),
-                baseUrlHost: getSafeBaseUrlHost(normalized)
-            })
-        }
+    if (!model) {
+        return res.status(400).json({ success: false, error: 'Model is required.' })
     }
 
-    if (!Object.keys(update).length) {
-        const snapshot = await getUserSettingsSnapshot(req.user._id)
-        return res.json({
-            success: true,
-            ...snapshot,
-            models: await getUserModelOptions(req.user._id)
-        })
+    if (!existing && !hasApiKeyInput) {
+        return res.status(400).json({ success: false, error: 'API key is required when creating AI settings. Use an empty value only if your provider supports it.' })
+    }
+
+    const update = {
+        baseUrl: normalizedBaseUrl,
+        model
+    }
+
+    if (hasApiKeyInput) {
+        try {
+            update.apiKeyEncrypted = apiKey ? encryptKey(apiKey) : ''
+            update.apiKeyLast4 = apiKey ? apiKey.slice(-4) : ''
+        } catch (_error) {
+            return res.status(500).json({
+                success: false,
+                error: 'AI key encryption is not configured on this server.'
+            })
+        }
     }
 
     await UserAISettings.findOneAndUpdate(
@@ -512,143 +489,95 @@ async function saveSettings(req, res) {
         targetType: 'ai-settings',
         targetId: String(req.user._id),
         metadata: {
-            providers: changedProviders
+            baseUrlHost: getSafeBaseUrlHost(normalizedBaseUrl),
+            model,
+            apiKeyUpdated: hasApiKeyInput
         }
     })
 
     const snapshot = await getUserSettingsSnapshot(req.user._id)
-    res.json({ success: true, ...snapshot, models: await getUserModelOptions(req.user._id) })
+    res.json({ success: true, ...snapshot, models: [], customModelsOnly: true })
+}
+
+async function deleteSettings(req, res) {
+    await UserAISettings.findOneAndUpdate(
+        { user: req.user._id },
+        {
+            $set: {
+                baseUrl: '',
+                model: '',
+                apiKeyEncrypted: '',
+                apiKeyLast4: ''
+            },
+            $setOnInsert: { user: req.user._id }
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    )
+
+    await logAuditEvent({
+        req,
+        action: 'ai_settings_deleted',
+        targetType: 'ai-settings',
+        targetId: String(req.user._id),
+        metadata: {
+            customConfigOnly: true
+        }
+    })
+
+    const snapshot = await getUserSettingsSnapshot(req.user._id)
+    res.json({ success: true, ...snapshot, models: [], customModelsOnly: true })
+}
+
+async function testSettings(req, res) {
+    const payload = req.body || {}
+    const existing = await UserAISettings.findOne({ user: req.user._id }).lean()
+    const hasDraftConfig = Boolean(payload.baseUrl || payload.model || Object.prototype.hasOwnProperty.call(payload, 'apiKey'))
+    const baseUrl = normalizeUserAiBaseUrl(hasDraftConfig ? payload.baseUrl : existing && existing.baseUrl)
+    const model = String((hasDraftConfig ? payload.model : existing && existing.model) || '').trim()
+    const hasApiKeyInput = Object.prototype.hasOwnProperty.call(payload, 'apiKey')
+    const apiKey = hasDraftConfig && hasApiKeyInput
+        ? String(payload.apiKey || '').trim()
+        : decryptKey(existing && existing.apiKeyEncrypted)
+
+    if (!baseUrl || !model) {
+        return res.status(400).json({
+            success: false,
+            code: 'AI_CONFIG_REQUIRED',
+            message: 'Please configure your AI model, API key, and base URL before testing.'
+        })
+    }
+
+    try {
+        await testConnection({ baseUrl, model, apiKey })
+        return res.json({
+            success: true,
+            message: 'Connection successful'
+        })
+    } catch (error) {
+        const failure = mapUserAiTestFailure(error)
+        return res.status(failure.statusCode).json(failure.body)
+    }
 }
 
 async function clearSetting(req, res) {
-    const provider = String(req.params.provider || '').toLowerCase()
-    const field = PROVIDER_KEY_FIELDS[provider]
-    if (!field) {
-        return res.status(400).json({ error: 'Unknown provider' })
-    }
-
-    await UserAISettings.findOneAndUpdate(
-        { user: req.user._id },
-        { $set: { [field]: '' }, $setOnInsert: { user: req.user._id } },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-    )
-
-    await logAuditEvent({
-        req,
-        action: 'ai_key_removed',
-        targetType: 'ai-settings',
-        targetId: String(req.user._id),
-        metadata: {
-            provider
-        }
+    res.status(410).json({
+        success: false,
+        error: 'Provider-specific AI settings have been replaced by custom OpenAI-compatible AI settings.'
     })
-
-    const snapshot = await getUserSettingsSnapshot(req.user._id)
-    res.json({ success: true, ...snapshot, models: await getUserModelOptions(req.user._id) })
 }
 
 async function resetBaseUrl(req, res) {
-    const provider = String(req.params.provider || '').toLowerCase()
-    const field = BASE_URL_FIELDS[provider]
-    if (!field) {
-        return res.status(400).json({ error: 'Unknown provider' })
-    }
-
-    await UserAISettings.findOneAndUpdate(
-        { user: req.user._id },
-        { $set: { [field]: '' }, $setOnInsert: { user: req.user._id } },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-    )
-
-    await logAuditEvent({
-        req,
-        action: 'ai_base_url_reset',
-        targetType: 'ai-settings',
-        targetId: String(req.user._id),
-        metadata: {
-            provider
-        }
+    res.status(410).json({
+        success: false,
+        error: 'Provider-specific AI settings have been replaced by custom OpenAI-compatible AI settings.'
     })
-
-    const snapshot = await getUserSettingsSnapshot(req.user._id)
-    res.json({ success: true, ...snapshot, models: await getUserModelOptions(req.user._id) })
 }
 
 async function testProviderConnection(req, res) {
-    const provider = String(req.params.provider || '').toLowerCase()
-    const keyField = PROVIDER_KEY_FIELDS[provider]
-    const baseField = BASE_URL_FIELDS[provider]
-    const providerService = getProvider(provider)
-
-    if (!keyField || !baseField || !providerService || typeof providerService.generate !== 'function') {
-        return res.status(400).json({ error: 'Unknown provider' })
-    }
-
-    const settings = await UserAISettings.findOne({ user: req.user._id }).lean()
-    const apiKey = decryptKey(settings && settings[keyField])
-    const baseUrl = getStoredBaseUrl(provider, settings && settings[baseField])
-    const status = buildProviderStatus(provider, apiKey, baseUrl)
-
-    if (!apiKey) {
-        return res.status(400).json({
-            success: false,
-            ...status,
-            code: 'API_KEY_MISSING',
-            error: 'Save an API key before testing this provider.'
-        })
-    }
-
-    const testModel = getModelConfig(TEST_MODELS[provider])
-
-    try {
-        await providerService.generate({
-            apiKey,
-            baseUrl: baseUrl || undefined,
-            baseUrlConfigured: Boolean(baseUrl),
-            model: testModel.apiModel,
-            prompt: 'Reply with "ok".',
-            messages: [{ role: 'user', content: 'Reply with "ok".' }],
-            maxTokens: 16,
-            timeoutMs: Math.min(aiConfig.providers[provider].timeoutMs, 15000)
-        })
-
-        await logAuditEvent({
-            req,
-            action: 'ai_provider_tested',
-            targetType: 'ai-settings',
-            targetId: String(req.user._id),
-            metadata: {
-                provider,
-                success: true,
-                baseUrlConfigured: status.baseUrlConfigured,
-                baseUrlHost: status.baseUrlHost
-            }
-        })
-
-        return res.json({
-            success: true,
-            ...status,
-            message: 'Connection successful.'
-        })
-    } catch (error) {
-        const failure = mapProviderTestFailure(provider, status, error)
-
-        await logAuditEvent({
-            req,
-            action: 'ai_provider_tested',
-            targetType: 'ai-settings',
-            targetId: String(req.user._id),
-            metadata: {
-                provider,
-                success: false,
-                code: failure.body.code,
-                baseUrlConfigured: status.baseUrlConfigured,
-                baseUrlHost: status.baseUrlHost
-            }
-        })
-
-        return res.status(failure.statusCode).json(failure.body)
-    }
+    res.status(410).json({
+        success: false,
+        error: 'Provider-specific AI settings have been replaced by custom OpenAI-compatible AI settings.'
+    })
 }
 
 async function getChat(req, res) {
@@ -752,142 +681,71 @@ function getLastMessageModel(chat) {
     return lastAssistant ? normalizeAiModel(lastAssistant.model) : ''
 }
 
-async function getUserKeyStatus(userId) {
-    const snapshot = await getUserSettingsSnapshot(userId)
-    return snapshot.status
-}
-
 async function getUserSettingsSnapshot(userId) {
     const settings = await UserAISettings.findOne({ user: userId }).lean()
     return buildSettingsSnapshot(settings)
 }
 
 function buildSettingsSnapshot(settings) {
+    const rawApiKey = decryptKey(settings && settings.apiKeyEncrypted)
+    const hasApiKey = Boolean(rawApiKey || settings && settings.apiKeyLast4)
+    const baseUrl = normalizeUserAiBaseUrl(settings && settings.baseUrl)
+    const model = String(settings && settings.model || '').trim()
+
     return {
-        status: {
-            openai: buildProviderStatus('openai', decryptKey(settings && settings.openaiKey), settings && settings.openaiBaseUrl),
-            xai: buildProviderStatus('xai', decryptKey(settings && settings.xaiKey), settings && settings.xaiBaseUrl),
-            claude: buildProviderStatus('claude', decryptKey(settings && settings.claudeKey), settings && settings.claudeBaseUrl),
-            gemini: buildProviderStatus('gemini', decryptKey(settings && settings.geminiKey), settings && settings.geminiBaseUrl)
+        settings: {
+            baseUrl,
+            model,
+            hasApiKey,
+            apiKeyMasked: hasApiKey ? maskApiKey(rawApiKey, settings && settings.apiKeyLast4) : '',
+            updatedAt: settings && settings.updatedAt ? settings.updatedAt : null
         },
-        baseUrls: {
-            openai: getStoredBaseUrl('openai', settings && settings.openaiBaseUrl),
-            xai: getStoredBaseUrl('xai', settings && settings.xaiBaseUrl),
-            claude: getStoredBaseUrl('claude', settings && settings.claudeBaseUrl),
-            gemini: getStoredBaseUrl('gemini', settings && settings.geminiBaseUrl)
-        }
+        status: {
+            connected: Boolean(baseUrl && model),
+            hasApiKey,
+            apiKeyMasked: hasApiKey ? maskApiKey(rawApiKey, settings && settings.apiKeyLast4) : '',
+            baseUrlHost: getSafeBaseUrlHost(baseUrl)
+        },
+        baseUrls: {}
     }
 }
 
-function buildProviderStatus(provider, apiKey, baseUrl) {
-    const globalProvider = getGlobalProviderStatus(provider)
-    const keyStatus = globalProvider || buildKeyStatus(apiKey)
-    const normalizedBaseUrl = globalProvider && globalProvider.baseUrl
-        ? globalProvider.baseUrl
-        : getStoredBaseUrl(provider, baseUrl)
-    return {
-        provider,
-        connected: keyStatus.connected,
-        masked: keyStatus.masked,
-        baseUrlConfigured: Boolean(normalizedBaseUrl),
-        baseUrlHost: getSafeBaseUrlHost(normalizedBaseUrl)
-    }
-}
-
-function mapProviderTestFailure(provider, status, error) {
+function mapUserAiTestFailure(error) {
     const code = String(error && error.code || 'AI_PROVIDER_ERROR')
     const payload = {
         success: false,
-        ...status,
         code,
-        error: 'Connection test failed.'
+        message: 'Could not connect to this AI provider. Please check base URL, API key, and model.'
     }
 
     if (code === 'AI_AUTH_FAILED') {
-        payload.error = 'Invalid API key.'
+        payload.message = 'Invalid API key.'
         return { statusCode: 401, body: payload }
     }
 
     if (code === 'AI_RATE_LIMITED') {
-        payload.error = 'Rate limited.'
+        payload.message = 'Rate limited.'
         return { statusCode: 429, body: payload }
     }
 
     if (code === 'AI_MODEL_NOT_AVAILABLE') {
-        payload.error = 'Model unavailable for this provider.'
+        payload.message = 'Model unavailable for this provider.'
         return { statusCode: 404, body: payload }
     }
 
     if (code === 'AI_TIMEOUT' || code === 'AI_ENDPOINT_UNREACHABLE') {
-        payload.error = 'The configured endpoint could not be reached.'
+        payload.message = 'The configured endpoint could not be reached.'
         return { statusCode: code === 'AI_TIMEOUT' ? 504 : 502, body: payload }
     }
 
-    if (code === 'API_KEY_MISSING') {
-        payload.error = 'Save an API key before testing this provider.'
+    if (code === 'AI_CONFIG_REQUIRED') {
+        payload.message = 'Please configure your AI model, API key, and base URL before testing.'
         return { statusCode: 400, body: payload }
-    }
-
-    if (status.baseUrlConfigured) {
-        payload.error = 'The custom API endpoint could not complete the request. Check your Base URL, API key, and model name.'
-    } else {
-        payload.error = 'The provider could not complete the request.'
     }
 
     return {
         statusCode: error && error.statusCode ? error.statusCode : 503,
         body: payload
-    }
-}
-
-function getStoredBaseUrl(provider, value) {
-    const raw = String(value || '').trim()
-    if (!raw) return ''
-    try {
-        return normalizeBaseUrl(raw, provider) || ''
-    } catch {
-        return ''
-    }
-}
-
-async function getUserModelOptions(userId) {
-    const keyStatus = await getUserKeyStatus(userId)
-    return getModelOptions().map((model) => {
-        const config = getModelConfig(model.id)
-        const enabled = config.requiresKey
-            ? Boolean(keyStatus[config.providerKey] && keyStatus[config.providerKey].connected)
-            : model.enabled
-
-        const disabledReason = enabled
-            ? ''
-            : config.requiresKey
-                ? 'Requires API key'
-                : 'Disabled'
-
-        return {
-            ...model,
-            enabled,
-            disabledReason
-        }
-    })
-}
-
-function getGlobalProviderStatus(provider) {
-    const providerKey = String(provider || '').toLowerCase()
-    if (providerKey !== 'openai') {
-        return null
-    }
-
-    const apiKey = String(process.env.AI_API_KEY || '').trim()
-    const baseUrl = getStoredBaseUrl(providerKey, process.env.AI_BASE_URL || '')
-    if (!apiKey || !baseUrl) {
-        return null
-    }
-
-    return {
-        connected: true,
-        masked: 'Managed by server',
-        baseUrl
     }
 }
 
@@ -922,6 +780,8 @@ module.exports = {
     listModels,
     getSettings,
     saveSettings,
+    deleteSettings,
+    testSettings,
     clearSetting,
     resetBaseUrl,
     testProviderConnection,

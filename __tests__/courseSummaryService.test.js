@@ -2,7 +2,12 @@ jest.mock('../services/ai/chatOrchestrator', () => ({
   generatePromptReply: jest.fn()
 }));
 
+jest.mock('../services/ai/userAiClient', () => ({
+  loadUserAiConfig: jest.fn()
+}));
+
 const { generatePromptReply } = require('../services/ai/chatOrchestrator');
+const { loadUserAiConfig } = require('../services/ai/userAiClient');
 const {
   applyGeneratedCourseSummary,
   generateCourseSummary,
@@ -22,8 +27,13 @@ describe('courseSummaryService', () => {
     }
   });
 
-  test('generateCourseSummary uses gpt-5.5 by default', async () => {
+  test('generateCourseSummary uses the model from saved AI settings', async () => {
     delete process.env.AI_SUMMARY_MODEL;
+    loadUserAiConfig.mockResolvedValue({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'anthropic/claude-3.5-sonnet',
+      apiKey: 'sk-test'
+    });
     generatePromptReply.mockResolvedValue('Short course summary.\n\n- Gain practical skills\n- Review core concepts\n- Practice with guided lessons');
 
     const result = await generateCourseSummary({
@@ -40,9 +50,9 @@ describe('courseSummaryService', () => {
 
     expect(generatePromptReply).toHaveBeenCalledWith(expect.objectContaining({
       userId: 'user-1',
-      model: 'gpt-5.5'
+      model: 'anthropic/claude-3.5-sonnet'
     }));
-    expect(result.model).toBe('gpt-5.5');
+    expect(result.model).toBe('anthropic/claude-3.5-sonnet');
     expect(result.summary).toContain('Short course summary.');
   });
 

@@ -12,7 +12,8 @@ Use this checklist before deploying Edumy to production.
 
 - [ ] `CSRF_SECRET` — Separate secret for CSRF tokens (falls back to SESSION_SECRET)
 - [ ] `ADMIN_EMAILS` or `ADMIN_USER_IDS` — Admin access
-- [ ] `AI_API_KEY` + `AI_BASE_URL` — AI service
+- [ ] `USER_AI_KEY_ENCRYPTION_SECRET` — Encrypts user BYOK API keys at rest
+- [ ] Optional `ALLOW_GLOBAL_AI_FALLBACK=true` + `AI_API_KEY` + `AI_BASE_URL` + `AI_MODEL` — admin/dev AI fallback only
 - [ ] `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_KEY` + `CLOUDINARY_SECRET` — Image uploads
 - [ ] `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_CALLBACK_URL` — OAuth
 - [ ] `LOG_LEVEL=info` (default in production)
@@ -67,6 +68,7 @@ Use this checklist before deploying Edumy to production.
 
 - [ ] Logs output JSON in production (pino default)
 - [ ] No secrets logged (passwords, tokens, API keys)
+- [ ] User AI API keys are never returned to the client; only masked status is displayed
 - [ ] Log level appropriate (`info` or `warn`)
 
 ## Multi-Instance (if applicable)
@@ -92,7 +94,7 @@ Adjust if needed for expected traffic.
 
 - [ ] Login/register works
 - [ ] Course creation works
-- [ ] AI chat responds
+- [ ] AI chat responds after configuring user BYOK settings in `/ai`
 - [ ] File upload works (if Cloudinary configured)
 - [ ] Google OAuth works (if configured)
 - [ ] No 500 errors in logs
@@ -117,8 +119,8 @@ GET https://your-domain.com/health
 | HTTP status | `503` | Unhealthy — MongoDB down or critical dependency failed |
 | `dependencies.mongodb.status` | `"ok"` | MongoDB `readyState === 1` |
 | `dependencies.mongodb.status` | `"disconnected"` | MongoDB connection lost |
-| `dependencies.ai.status` | `"configured"` | `AI_API_KEY` or `AI_BASE_URL` is set |
-| `dependencies.ai.status` | `"not_configured"` | No AI credentials configured |
+| `dependencies.ai.status` | `"configured"` | Optional global AI fallback env is present |
+| `dependencies.ai.status` | `"not_configured"` | No global fallback env configured; users can still use BYOK settings |
 
 ### Recommended monitoring thresholds
 
@@ -131,6 +133,14 @@ GET https://your-domain.com/health
 - Call AI provider (no cost, no latency)
 - Expose secrets, API keys, or connection strings
 - Query database beyond `readyState` check
+
+## User BYOK AI
+
+- Users can configure any OpenAI-compatible provider with `baseUrl`, `apiKey`, and `model`.
+- Server-defined provider/model lists are not exposed to the UI.
+- Set `USER_AI_KEY_ENCRYPTION_SECRET` before accepting user API keys in production.
+- Generate the secret with `openssl rand -hex 32`.
+- Back up the database before changing or rotating this secret. If it is lost, existing encrypted user keys cannot be decrypted.
 
 ## Security Verification
 

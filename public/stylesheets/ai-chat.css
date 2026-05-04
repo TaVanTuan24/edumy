@@ -296,9 +296,23 @@ html[data-theme="dark"] .ai-settings-dialog {
     background: rgba(15, 27, 46, 0.98);
 }
 
+html[data-theme="dark"] .ai-settings-modal {
+    --ai-panel: #0f1b2e;
+    --ai-panel-soft: #16253a;
+    --ai-ink: #edf3fb;
+    --ai-muted: #a8b7cb;
+    --ai-line: rgba(148, 163, 184, 0.14);
+    --ai-line-strong: rgba(148, 163, 184, 0.2);
+    --ai-accent: #46e0b2;
+    --ai-accent-strong: #7ef0ca;
+    --ai-accent-soft: rgba(70, 224, 178, 0.16);
+    --ai-error: #fda29b;
+}
+
 html[data-theme="dark"] .ai-empty-state,
 html[data-theme="dark"] .ai-settings-form input,
-html[data-theme="dark"] .ai-model-picker select {
+html[data-theme="dark"] .ai-model-picker select,
+html[data-theme="dark"] .ai-model-picker input {
     background: var(--ai-panel-soft);
 }
 
@@ -390,6 +404,29 @@ html[data-theme="dark"] .ai-settings-form [data-reset-base-url],
 html[data-theme="dark"] .ai-settings-form [data-test-provider] {
     background: rgba(148, 163, 184, 0.1);
     color: #e2e8f0;
+}
+
+html[data-theme="dark"] #aiSettingsDeleteBtn {
+    border-color: rgba(248, 113, 113, 0.2);
+    background: rgba(180, 35, 24, 0.14);
+    color: #fda29b;
+}
+
+html[data-theme="dark"] #aiSettingsDeleteBtn:hover {
+    border-color: rgba(248, 113, 113, 0.34);
+    background: rgba(180, 35, 24, 0.22);
+}
+
+html[data-theme="dark"] #aiSettingsTestBtn {
+    border-color: rgba(148, 163, 184, 0.14);
+    background: rgba(148, 163, 184, 0.1);
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] #aiSettingsTestBtn:hover {
+    border-color: rgba(126, 240, 202, 0.24);
+    background: rgba(70, 224, 178, 0.12);
+    color: #7ef0ca;
 }
 
 html[data-theme="dark"] .ai-message-action {
@@ -617,7 +654,8 @@ html[data-theme="dark"] .ai-composer-hint {
     text-transform: uppercase;
 }
 
-.ai-model-picker select {
+.ai-model-picker select,
+.ai-model-picker input {
     min-width: 170px;
     max-width: 100%;
     min-height: 38px;
@@ -1216,6 +1254,16 @@ html[data-theme="dark"] .ai-composer-hint {
 }
 
 .ai-settings-modal {
+    --ai-panel: #ffffff;
+    --ai-panel-soft: #f9fbf7;
+    --ai-ink: #16231d;
+    --ai-muted: #63716a;
+    --ai-line: rgba(22, 35, 29, 0.12);
+    --ai-line-strong: rgba(22, 35, 29, 0.18);
+    --ai-accent: #0f766e;
+    --ai-accent-strong: #0a554f;
+    --ai-accent-soft: #e2f4ef;
+    --ai-error: #b42318;
     position: fixed;
     inset: 0;
     z-index: 2000;
@@ -1362,6 +1410,50 @@ html[data-theme="dark"] .ai-composer-hint {
     font-weight: 800;
 }
 
+#aiSettingsDeleteBtn,
+#aiSettingsTestBtn {
+    min-height: 42px;
+    border: 1px solid var(--ai-line);
+    border-radius: 10px;
+    padding: 0 14px;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+#aiSettingsDeleteBtn {
+    background: #fff8f6;
+    color: var(--ai-error);
+}
+
+#aiSettingsTestBtn {
+    background: rgba(240, 249, 255, 0.8);
+    color: var(--ai-ink);
+}
+
+#aiSettingsDeleteBtn:hover,
+#aiSettingsTestBtn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(24, 37, 31, 0.08);
+}
+
+#aiSettingsDeleteBtn:hover {
+    border-color: rgba(180, 35, 24, 0.28);
+    background: #fff1ef;
+}
+
+#aiSettingsTestBtn:hover {
+    border-color: rgba(15, 118, 110, 0.28);
+    background: rgba(224, 242, 254, 0.92);
+}
+
+#aiSettingsDeleteBtn:focus-visible,
+#aiSettingsTestBtn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+}
+
 .ai-settings-provider-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1383,6 +1475,36 @@ html[data-theme="dark"] .ai-composer-hint {
 .ai-settings-actions {
     display: flex;
     justify-content: flex-end;
+}
+
+.ai-settings-actions .ai-secondary-btn {
+    width: auto;
+    min-width: 148px;
+    min-height: 42px;
+    border: 1px solid var(--ai-accent);
+    background: linear-gradient(180deg, var(--ai-accent), var(--ai-accent-strong)) !important;
+    color: #ffffff !important;
+    padding: 0 16px;
+    font-size: 0.9rem;
+    opacity: 1;
+    box-shadow: 0 12px 26px rgba(15, 118, 110, 0.18);
+}
+
+.ai-settings-actions .ai-secondary-btn i {
+    font-size: 0.95em;
+    color: currentColor;
+}
+
+.ai-settings-actions .ai-secondary-btn:hover {
+    border-color: var(--ai-accent-strong);
+    background: linear-gradient(180deg, var(--ai-accent-strong), var(--ai-accent-strong)) !important;
+    color: #ffffff !important;
+    box-shadow: 0 14px 30px rgba(15, 118, 110, 0.22);
+}
+
+.ai-settings-actions .ai-secondary-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18), 0 12px 26px rgba(15, 118, 110, 0.18);
 }
 
 @keyframes aiRise {
@@ -1518,20 +1640,20 @@ html[data-theme="dark"] .ai-composer-hint {
         margin-left: 0;
     }
 
-    .ai-secondary-btn {
+    .ai-topbar-actions .ai-secondary-btn {
         width: 38px;
         padding: 0;
     }
 
-    .ai-secondary-btn i {
+    .ai-topbar-actions .ai-secondary-btn i {
         margin: 0;
     }
 
-    .ai-secondary-btn {
+    .ai-topbar-actions .ai-secondary-btn {
         font-size: 0;
     }
 
-    .ai-secondary-btn i {
+    .ai-topbar-actions .ai-secondary-btn i {
         font-size: 0.95rem;
     }
 
@@ -1588,7 +1710,8 @@ html[data-theme="dark"] .ai-composer-hint {
         flex-direction: column;
     }
 
-    .ai-model-picker select {
+    .ai-model-picker select,
+    .ai-model-picker input {
         width: 100%;
         min-width: 0;
     }

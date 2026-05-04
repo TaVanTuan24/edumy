@@ -14,13 +14,12 @@ const { buildLearnerDashboard } = require('../services/learnerDashboardService')
 const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
 const { findLessonContext } = require('../utils/lessonLocator');
 const { buildLessonAiContext, buildLessonAiPrompt } = require('../services/lessonAiContextService');
-const { generatePromptReply } = require('../services/ai/chatOrchestrator');
+const { generatePromptReply, normalizeAiModel } = require('../services/ai/chatOrchestrator');
 const {
   applyGeneratedCourseSummary,
   clearGeneratedCourseSummary,
   generateCourseSummary
 } = require('../services/ai/courseSummaryService');
-const { normalizeAiModel } = require('../config/ai');
 const { buildCourseSectionsFromPreview } = require('../services/youtube/youtubeCourseImportService');
 const {
   getCanonicalSections,
@@ -815,4 +814,3 @@ module.exports.askLessonAi = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to generate AI tutor response.' });
   }
 };
-

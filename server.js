@@ -21,7 +21,7 @@ const mongoStore = require('connect-mongo');
 const mongoose = require('mongoose');
 const { connectDB, closeDB } = require('./config/database');
 const passport = require('./config/passport');
-const { isAdminUser, sanitizeReturnTo } = require('./middleware');
+const { isAdminUser } = require('./middleware');
 const { wantsJson } = require('./utils/requestHelpers');
 const logger = require('./utils/logger');
 const serializeJsonForHtml = require('./utils/serializeJsonForHtml');
@@ -218,6 +218,45 @@ app.use(passport.session());
 
 const NOTIFICATION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+function normalizeCourseNotification(input) {
+  if (!input) return null;
+
+  const courseId = String(input.courseId || input._id || '').trim();
+  const title = String(input.title || input.courseTitle || '').trim();
+  const updatedAtValue = input.updatedAt ? new Date(input.updatedAt) : null;
+  const updatedAt = updatedAtValue && !Number.isNaN(updatedAtValue.getTime())
+    ? updatedAtValue
+    : null;
+
+  if (!courseId || !title) return null;
+
+  return {
+    courseId,
+    title,
+    courseTitle: title,
+    updatedAt,
+    updatedAtIso: updatedAt ? updatedAt.toISOString() : '',
+    url: `/courses/${courseId}`
+  };
+}
+
+function setCourseNotificationLocals(res, notifications) {
+  const normalized = (Array.isArray(notifications) ? notifications : [])
+    .map(normalizeCourseNotification)
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aTime = a.updatedAt ? a.updatedAt.getTime() : 0;
+      const bTime = b.updatedAt ? b.updatedAt.getTime() : 0;
+      return bTime - aTime;
+    });
+
+  res.locals.courseNotifications = normalized;
+  res.locals.notifications = normalized;
+  res.locals.updatedCourses = normalized;
+  res.locals.courseNotificationCount = normalized.length;
+  res.locals.notificationCount = normalized.length;
+}
+
 app.use(async (req, res, next) => {
   res.locals.currentUser = req.user;
   res.locals.isCurrentUserAdmin = isAdminUser(req.user);
@@ -230,8 +269,7 @@ app.use(async (req, res, next) => {
   res.locals.currentUrl = String(req.originalUrl || req.path || '');
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
-  res.locals.courseNotifications = [];
-  res.locals.courseNotificationCount = 0;
+  setCourseNotificationLocals(res, []);
 
   // Skip notification query for API requests, static assets, unauthenticated users, and non-GET methods
   const shouldFetchNotifications = req.user
@@ -248,11 +286,19 @@ app.use(async (req, res, next) => {
   // Check session cache first
   if (req.session && req.session.notificationCache) {
     const cached = req.session.notificationCache;
-    if (Date.now() - cached.generatedAt < NOTIFICATION_CACHE_TTL_MS) {
-      res.locals.courseNotifications = cached.notifications;
-      res.locals.courseNotificationCount = cached.count;
+    const cachedNotifications = Array.isArray(cached.notifications)
+      ? cached.notifications.map(normalizeCourseNotification).filter(Boolean)
+      : null;
+    const cachedCount = Number(cached.count);
+    const cacheIsFresh = Number(cached.generatedAt) && Date.now() - cached.generatedAt < NOTIFICATION_CACHE_TTL_MS;
+    const cacheHasConsistentPayload = cachedNotifications && Number.isFinite(cachedCount) && cachedCount === cachedNotifications.length;
+
+    if (cacheIsFresh && cacheHasConsistentPayload) {
+      setCourseNotificationLocals(res, cachedNotifications);
       return next();
     }
+
+    delete req.session.notificationCache;
   }
 
   try {
@@ -261,6 +307,7 @@ app.use(async (req, res, next) => {
     const user = await User.findById(req.user._id).select('enrolledCourses');
 
     if (!user || !Array.isArray(user.enrolledCourses)) {
+      setCourseNotificationLocals(res, []);
       return next();
     }
 
@@ -281,6 +328,7 @@ app.use(async (req, res, next) => {
       .filter((entry) => entry && entry.courseId);
 
     if (!enrolledEntries.length) {
+      setCourseNotificationLocals(res, []);
       return next();
     }
 
@@ -296,30 +344,28 @@ app.use(async (req, res, next) => {
         const lastSeen = entry.lastSeenUpdatedAt ? new Date(entry.lastSeenUpdatedAt) : null;
         if (!courseUpdatedAt) return null;
         if (lastSeen && courseUpdatedAt <= lastSeen) return null;
-        return {
+        return normalizeCourseNotification({
           courseId: course._id,
-          courseTitle: course.title,
+          title: course.title,
           updatedAt: courseUpdatedAt
-        };
+        });
       })
       .filter(Boolean)
       .sort((a, b) => b.updatedAt - a.updatedAt);
 
-    res.locals.courseNotifications = notifications;
-    res.locals.courseNotificationCount = notifications.length;
+    setCourseNotificationLocals(res, notifications);
 
     // Cache in session
     if (req.session) {
       req.session.notificationCache = {
         generatedAt: Date.now(),
-        notifications,
-        count: notifications.length
+        notifications: res.locals.courseNotifications,
+        count: res.locals.courseNotificationCount
       };
     }
   } catch (err) {
     logger.error({ err }, 'Error fetching course notifications');
-    res.locals.courseNotifications = [];
-    res.locals.courseNotificationCount = 0;
+    setCourseNotificationLocals(res, []);
   }
   next();
 });
@@ -348,10 +394,12 @@ app.get('/health', (_req, res) => {
   const mem = process.memoryUsage();
   const uptime = process.uptime();
 
-  const aiConfigured = Boolean(
-    String(process.env.AI_API_KEY || '').trim()
-    || String(process.env.AI_BASE_URL || '').trim()
-  );
+  const aiConfigured = String(process.env.ALLOW_GLOBAL_AI_FALLBACK || '').toLowerCase() === 'true'
+    && Boolean(
+      String(process.env.AI_API_KEY || '').trim()
+      && String(process.env.AI_BASE_URL || '').trim()
+      && String(process.env.AI_MODEL || '').trim()
+    );
 
   const status = mongoReady ? 'ok' : 'degraded';
   const httpStatus = mongoReady ? 200 : 503;

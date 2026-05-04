@@ -88,13 +88,32 @@ const noteSchema = Joi.object({
 });
 
 const aiChatMessageSchema = Joi.object({
-  message: Joi.string().trim().min(1).max(10000).required(),
-  model: Joi.string().trim().max(50).optional(),
+  message: Joi.string().trim().max(10000).allow('', null).optional(),
+  model: Joi.string().trim().max(200).allow('', null).optional(),
   chatId: Joi.string().trim().max(50).allow('', null).optional(),
   courseId: Joi.string().trim().max(50).allow('', null).optional(),
   question: Joi.string().trim().max(10000).allow('', null).optional(),
   lessonId: Joi.string().trim().max(50).allow('', null).optional(),
   context: Joi.object().allow(null).optional()
+}).custom((value, helpers) => {
+  const message = String(value.message || '').trim();
+  const question = String(value.question || '').trim();
+  if (!message && !question) {
+    return helpers.error('any.custom', { message: 'Message or question is required.' });
+  }
+  return value;
+});
+
+const aiUserSettingsSchema = Joi.object({
+  baseUrl: Joi.string().trim().uri({ scheme: ['http', 'https'] }).required(),
+  model: Joi.string().trim().min(1).max(200).required(),
+  apiKey: Joi.string().trim().max(5000).allow('', null).optional()
+});
+
+const aiUserSettingsTestSchema = Joi.object({
+  baseUrl: Joi.string().trim().uri({ scheme: ['http', 'https'] }).allow('', null).optional(),
+  model: Joi.string().trim().max(200).allow('', null).optional(),
+  apiKey: Joi.string().trim().max(5000).allow('', null).optional()
 });
 
 const aiQuizGenerateSchema = Joi.object({
@@ -144,6 +163,8 @@ module.exports = {
   courseUpdateSchema,
   noteSchema,
   aiChatMessageSchema,
+  aiUserSettingsSchema,
+  aiUserSettingsTestSchema,
   aiQuizGenerateSchema,
   aiSlideGenerateSchema,
   progressUpdateSchema,

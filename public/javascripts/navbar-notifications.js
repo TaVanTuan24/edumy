@@ -21,19 +21,25 @@
 
     if (!trigger || !badge) return;
 
-    trigger.addEventListener('show.bs.dropdown', function() {
+    trigger.addEventListener('shown.bs.dropdown', function() {
       if (hasMarkedRead) return;
-
-      hideBadge(badge);
       hasMarkedRead = true;
 
-      fetch('/api/notifications/read', {
+      var fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch.bind(window);
+      fetcher('/api/notifications/read', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
           'X-Requested-With': 'XMLHttpRequest'
         }
+      }).then(function(res) {
+        if (!res.ok) {
+          hasMarkedRead = false;
+          return;
+        }
+        hideBadge(badge);
       }).catch(function(err) {
+        hasMarkedRead = false;
         console.error('[Notification Read Error]', err);
       });
     });

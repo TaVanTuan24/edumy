@@ -2,13 +2,20 @@ const express = require("express")
 const router = express.Router()
 const User = require("../models/user")
 const aiChatController = require("../controllers/aiChatController")
-const { generatePromptReply, normalizeAiModel } = require("../services/ai/chatOrchestrator")
+const { generatePromptReply } = require("../services/ai/chatOrchestrator")
 const { aiConfig } = require("../config/ai")
 const { awardGamification } = require('../utils/gamification')
 const logger = require('../utils/logger')
 const aiCourseController = require('../controllers/aiCourseController')
 const { aiChatLimiter, aiSettingsLimiter, aiStreamLimiter } = require('../utils/rateLimiters')
-const { validate, aiChatMessageSchema, aiQuizGenerateSchema, aiSlideGenerateSchema } = require('../middleware/validate')
+const {
+    validate,
+    aiChatMessageSchema,
+    aiUserSettingsSchema,
+    aiUserSettingsTestSchema,
+    aiQuizGenerateSchema,
+    aiSlideGenerateSchema
+} = require('../middleware/validate')
 const {
     buildSlidePrompt,
     parseAiSlideResponse,
@@ -34,7 +41,11 @@ router.get("/models", aiChatController.listModels)
 
 router.get("/settings", aiChatController.getSettings)
 
-router.post("/settings", aiSettingsLimiter, aiChatController.saveSettings)
+router.post("/settings", aiSettingsLimiter, validate(aiUserSettingsSchema), aiChatController.saveSettings)
+
+router.delete("/settings", aiSettingsLimiter, aiChatController.deleteSettings)
+
+router.post("/settings/test", aiSettingsLimiter, validate(aiUserSettingsTestSchema), aiChatController.testSettings)
 
 router.delete("/settings/:provider", aiSettingsLimiter, aiChatController.clearSetting)
 
@@ -119,6 +130,7 @@ router.post("/generate-slide", validate(aiSlideGenerateSchema), async (req, res)
         })
 
         const result = await generateWithRetry(prompt, 3, {
+            userId: req.user && req.user._id,
             topic: trimmedPrompt,
             requestedCount: count,
             style: safeStyle,
@@ -139,6 +151,13 @@ router.post("/generate-slide", validate(aiSlideGenerateSchema), async (req, res)
         })
     } catch (err) {
         logger.error({ err }, 'AI Slide Error')
+        if (isAiConfigurationError(err)) {
+            return res.status(err.statusCode || 400).json({
+                success: false,
+                code: err.code,
+                error: err.publicMessage || 'Please configure your AI settings before generating slides.'
+            })
+        }
         const fallback = createFallbackResolvedSlides(req.body && req.body.prompt)
         res.status(200).json({
             success: true,
@@ -233,6 +252,7 @@ router.post("/generate-slide-refine", async (req, res) => {
         ].join('\n')
 
         const result = await generateWithRetry(refinePrompt, 2, {
+            userId: req.user && req.user._id,
             topic: promptTopic,
             requestedCount: 1,
             style: safeStyle,
@@ -245,6 +265,13 @@ router.post("/generate-slide-refine", async (req, res) => {
         })
     } catch (err) {
         logger.error({ err }, 'AI Slide Refine Error')
+        if (isAiConfigurationError(err)) {
+            return res.status(err.statusCode || 400).json({
+                success: false,
+                code: err.code,
+                error: err.publicMessage || 'Please configure your AI settings before refining slides.'
+            })
+        }
         return res.status(500).json({ success: false, error: 'Failed to refine slide' })
     }
 })
@@ -359,6 +386,7 @@ async function generateWithRetry(prompt, retries, options) {
             const raw = await callConfiguredAi({
                 prompt,
                 model: aiConfig.chatModel,
+                userId: options && options.userId,
                 temperature: 0.3,
                 topP: 0.9,
                 maxTokens: 2200
@@ -368,6 +396,9 @@ async function generateWithRetry(prompt, retries, options) {
                 return result
             }
         } catch (error) {
+            if (isAiConfigurationError(error)) {
+                throw error
+            }
             console.warn('AI Slide Retry', attempt + 1, error.message)
         }
     }
@@ -377,6 +408,10 @@ async function generateWithRetry(prompt, retries, options) {
         slides: createFallbackResolvedSlides(options && options.topic),
         examples: []
     }
+}
+
+function isAiConfigurationError(error) {
+    return Boolean(error && error.code === 'AI_CONFIG_REQUIRED')
 }
 
 module.exports = router

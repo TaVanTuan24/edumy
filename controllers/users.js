@@ -344,6 +344,9 @@ module.exports.markCourseNotificationsRead = async (req, res) => {
     });
 
     await user.save();
+    if (req.session && req.session.notificationCache) {
+        delete req.session.notificationCache;
+    }
     res.json({ success: true, updatedCount });
 };
 

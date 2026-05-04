@@ -1,18 +1,22 @@
 const crypto = require('crypto')
 
 const ALGORITHM = 'aes-256-gcm'
-const isProduction = process.env.NODE_ENV === 'production'
-const encryptionSecret = String(process.env.AI_KEY_ENCRYPTION_SECRET || '').trim()
 let warnedAboutEncryptionSecret = false
 
 function getEncryptionKey() {
+    const isProduction = process.env.NODE_ENV === 'production'
+    const encryptionSecret = String(process.env.USER_AI_KEY_ENCRYPTION_SECRET || process.env.AI_KEY_ENCRYPTION_SECRET || '').trim()
     const secret = encryptionSecret
         || process.env.SESSION_SECRET
         || 'dev-ai-key-encryption-secret-change-me'
 
-    if (isProduction && !encryptionSecret && !warnedAboutEncryptionSecret) {
+    if (isProduction && !encryptionSecret) {
+        throw new Error('USER_AI_KEY_ENCRYPTION_SECRET is required to encrypt user AI keys in production.')
+    }
+
+    if (!isProduction && !encryptionSecret && !warnedAboutEncryptionSecret) {
         warnedAboutEncryptionSecret = true
-        console.warn('[ai-settings] AI_KEY_ENCRYPTION_SECRET is not set in production. Falling back to SESSION_SECRET for BYOK key encryption. Set AI_KEY_ENCRYPTION_SECRET to avoid invalidating saved AI keys when SESSION_SECRET changes.')
+        console.warn('[ai-settings] USER_AI_KEY_ENCRYPTION_SECRET is not set. Falling back to SESSION_SECRET for local development.')
     }
 
     return crypto.createHash('sha256').update(String(secret)).digest()
@@ -58,7 +62,18 @@ function decryptKey(value) {
     }
 }
 
+function maskApiKey(value, last4Fallback = '') {
+    const plain = String(value || '').trim()
+    const last4 = plain ? plain.slice(-4) : String(last4Fallback || '').trim().slice(-4)
+    if (!last4) return ''
+
+    const prefixMatch = plain.match(/^([A-Za-z0-9]+)-/)
+    const prefix = prefixMatch ? `${prefixMatch[1]}-` : ''
+    return `${prefix}...${last4}`
+}
+
 module.exports = {
     encryptKey,
-    decryptKey
+    decryptKey,
+    maskApiKey
 }

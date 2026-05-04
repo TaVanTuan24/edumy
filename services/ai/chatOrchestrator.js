@@ -1,5 +1,5 @@
 const aiRouter = require('./aiRouter')
-const { normalizeAiModel, getModelOptions, aiConfig } = require('../../config/ai')
+const { aiConfig } = require('../../config/ai')
 
 async function generateChatReply({ model, messages, userId }) {
     const selectedModel = normalizeAiModel(model)
@@ -41,7 +41,15 @@ function buildConversationPrompt(messages) {
     return `${transcript}\n\nAssistant:`.trim()
 }
 
-function getAiErrorResponse(error, model) {
+function normalizeAiModel(model) {
+    return String(model || '').trim().slice(0, 200)
+}
+
+function getModelOptions() {
+    return []
+}
+
+function getAiErrorResponse(error, _model) {
     if (error && error.publicMessage) {
         return {
             code: error.code || 'AI_SERVICE_ERROR',
@@ -69,9 +77,7 @@ function getAiErrorResponse(error, model) {
     return {
         code: 'AI_CHAT_FAILED',
         statusCode: 500,
-        message: model === 'grok'
-            ? 'Grok could not process your request. Please try again or switch to another configured model.'
-            : 'Failed to process your request. Please try again.'
+        message: 'Failed to process your request. Please try again.'
     }
 }
 

@@ -14,7 +14,7 @@ const messageSchema = new mongoose.Schema({
     },
     model: {
         type: String,
-        default: process.env.AI_CHAT_MODEL || "gpt-5.5"
+        default: ''
     },
     status: {
         type: String,
@@ -56,7 +56,7 @@ const chatSchema = new mongoose.Schema({
 
     defaultModel: {
         type: String,
-        default: process.env.AI_CHAT_MODEL || "gpt-5.5"
+        default: ''
     },
 
     createdAt: {

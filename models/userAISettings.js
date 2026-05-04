@@ -40,6 +40,25 @@ const userAISettingsSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    baseUrl: {
+        type: String,
+        default: '',
+        trim: true
+    },
+    model: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 200
+    },
+    apiKeyEncrypted: {
+        type: String,
+        default: ''
+    },
+    apiKeyLast4: {
+        type: String,
+        default: ''
+    },
     lastUsedModel: {
         type: String,
         default: ''

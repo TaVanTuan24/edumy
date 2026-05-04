@@ -526,10 +526,11 @@ function normalizeQuizItems(items) {
     .filter((item) => item && item.question);
 }
 
-async function repairQuizFormat(rawOutput, numberOfQuestions) {
+async function repairQuizFormat(rawOutput, numberOfQuestions, userId) {
   const repairPrompt = `Convert the following content into VALID JSON only.\n\nRules:\n- Return ONLY a JSON array.\n- Exactly ${numberOfQuestions} items when possible.\n- Each item fields: question (string), options (array of 4 strings), correctAnswer (A/B/C/D), explanation (string), suggestedTimestamp (mm:ss).\n- Do not include markdown fences.\n\nContent to convert:\n${String(rawOutput || '').slice(0, 12000)}`;
 
   return generatePromptReply({
+    userId,
     model: aiConfig.chatModel,
     prompt: repairPrompt,
     options: {
@@ -668,6 +669,7 @@ module.exports.aiGenerateQuiz = async (req, res) => {
   let aiResponse;
   try {
     aiResponse = await generatePromptReply({
+      userId: req.user && req.user._id,
       model: aiConfig.chatModel,
       prompt,
       options: {
@@ -689,7 +691,7 @@ module.exports.aiGenerateQuiz = async (req, res) => {
 
   if (!normalizedQuiz.length) {
     try {
-      const repairedOutput = await repairQuizFormat(rawOutput, numberOfQuestions);
+      const repairedOutput = await repairQuizFormat(rawOutput, numberOfQuestions, req.user && req.user._id);
       const repairedParsed = parseQuizJson(repairedOutput);
       normalizedQuiz = normalizeQuizItems(repairedParsed);
     } catch {
