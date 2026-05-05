@@ -16,6 +16,7 @@ const { buildLessonDocs, buildTranscriptDocsForLesson, buildChunks, searchReleva
 const { buildCourseTutorPrompt } = require('../services/ai/aiPromptService');
 const aiCache = require('../services/ai/aiCacheService');
 const logger = require('../utils/logger');
+const { ANALYTICS_EVENTS, trackEventSafe } = require('../services/analyticsEventService');
 
 async function askAiTutor(prompt, model, userId) {
   return generatePromptReply({
@@ -82,10 +83,12 @@ async function answerCourseQuestion({ course, question, lessonId, context, model
  * POST /ai/chat (when courseId and question are provided)
  */
 async function handleCourseQuestion(req, res) {
+  const startedAt = Date.now();
+  let model = '';
   try {
     const userId = req.user._id;
     const { courseId, question, lessonId, context } = req.body || {};
-    const model = normalizeAiModel(req.body && req.body.model);
+    model = normalizeAiModel(req.body && req.body.model);
     const course = await Course.findById(courseId).select('author sections');
     if (!course) {
       return res.status(404).json({ error: 'Course not found' });
@@ -110,9 +113,38 @@ async function handleCourseQuestion(req, res) {
       await awardGamification(gamificationUser, { action: 'aiTutor' });
     }
 
+    trackEventSafe({
+      req,
+      eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+      course: courseId,
+      lessonId: lessonId || (context && context.lessonId),
+      metadata: {
+        messageLength: String(question || '').length,
+        chatId: '',
+        model,
+        providerType: 'user_byok',
+        success: true,
+        latencyMs: Date.now() - startedAt
+      }
+    });
+
     return res.json({ success: true, answer: response, model });
   } catch (err) {
     logger.error({ err }, 'AI Course Chat Error');
+    trackEventSafe({
+      req,
+      eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+      course: req.body && req.body.courseId,
+      lessonId: req.body && (req.body.lessonId || (req.body.context && req.body.context.lessonId)),
+      metadata: {
+        messageLength: String(req.body && req.body.question || '').length,
+        chatId: '',
+        model,
+        providerType: 'user_byok',
+        success: false,
+        latencyMs: Date.now() - startedAt
+      }
+    });
     if (err.publicMessage) {
       return res.status(err.statusCode || 503).json({ error: err.publicMessage });
     }

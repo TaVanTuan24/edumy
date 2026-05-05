@@ -7,6 +7,7 @@ const { encryptKey, decryptKey, maskApiKey } = require('../utils/apiKeyCrypto')
 const { logAuditEvent } = require('../utils/auditLogger')
 const logger = require('../utils/logger')
 const { getSafeBaseUrlHost } = require('../utils/validateAiBaseUrl')
+const { ANALYTICS_EVENTS, trackEventSafe } = require('../services/analyticsEventService')
 const { normalizeUserAiBaseUrl, testConnection } = require('../services/ai/userAiClient')
 const {
     generateChatReply,
@@ -36,6 +37,7 @@ async function sendMessage(req, res) {
     const rawMessage = req.body && req.body.message
     const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
     const model = normalizeAiModel(req.body && req.body.model)
+    const startedAt = Date.now()
     let chat = null
 
     try {
@@ -73,6 +75,18 @@ async function sendMessage(req, res) {
 
         await chat.save()
         await awardAiTutor(userId)
+        trackEventSafe({
+            req,
+            eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+            metadata: {
+                messageLength: message.length,
+                chatId: String(chat._id),
+                model,
+                providerType: 'user_byok',
+                success: true,
+                latencyMs: Date.now() - startedAt
+            }
+        })
 
         return res.json({
             success: true,
@@ -83,6 +97,18 @@ async function sendMessage(req, res) {
         })
     } catch (err) {
         logger.error({ err }, 'AI Chat Error')
+        trackEventSafe({
+            req,
+            eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+            metadata: {
+                messageLength: message.length,
+                chatId: chat && chat._id ? String(chat._id) : '',
+                model,
+                providerType: 'user_byok',
+                success: false,
+                latencyMs: Date.now() - startedAt
+            }
+        })
 
         if (err.statusCode && !err.publicMessage) {
             return res.status(err.statusCode).json({ error: err.message })
@@ -127,6 +153,7 @@ async function streamMessage(req, res) {
     const rawMessage = req.body && req.body.message
     const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
     const model = normalizeAiModel(req.body && req.body.model)
+    const startedAt = Date.now()
     let chat = null
     let aborted = false
     const abortController = new AbortController()
@@ -199,6 +226,19 @@ async function streamMessage(req, res) {
 
         await chat.save()
         await awardAiTutor(userId)
+        trackEventSafe({
+            req,
+            eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+            metadata: {
+                messageLength: message.length,
+                chatId: String(chat._id),
+                model,
+                providerType: 'user_byok',
+                success: true,
+                latencyMs: Date.now() - startedAt,
+                mode: 'stream'
+            }
+        })
 
         writeStreamEvent(res, 'done', {
             success: true,
@@ -211,6 +251,19 @@ async function streamMessage(req, res) {
     } catch (err) {
         logger.error({ err }, 'AI Chat Stream Error')
         if (aborted) return
+        trackEventSafe({
+            req,
+            eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+            metadata: {
+                messageLength: message.length,
+                chatId: chat && chat._id ? String(chat._id) : '',
+                model,
+                providerType: 'user_byok',
+                success: false,
+                latencyMs: Date.now() - startedAt,
+                mode: 'stream'
+            }
+        })
 
         const aiError = getAiErrorResponse(err, model)
         if (chat) {

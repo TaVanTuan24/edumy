@@ -6,6 +6,7 @@ const { summarizeCourseReviews } = require('../utils/courseReviews');
 const { isCourseCatalogVisible } = require('../utils/courseLifecycle');
 const { isAdminUser, userCanManageCourse } = require('../middleware');
 const { isCourseSummaryStale, readStoredCourseSummary } = require('../services/ai/courseSummaryService');
+const { ANALYTICS_EVENTS, trackEventSafe } = require('../services/analyticsEventService');
 
 module.exports.showExplore = async (req, res) => {
     const allCourses = await Course.find({}).populate('reviews');
@@ -94,6 +95,15 @@ module.exports.enrollCourse = async (req, res) => {
             enrolledAt: new Date()
         });
         await user.save();
+        trackEventSafe({
+            req,
+            eventType: ANALYTICS_EVENTS.COURSE_ENROLLED,
+            course: course._id,
+            metadata: {
+                courseTitle: course.title,
+                source: 'enroll_flow'
+            }
+        });
     }
 
     req.flash('success', 'Successfully enrolled!');

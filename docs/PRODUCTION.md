@@ -71,6 +71,27 @@ Use this checklist before deploying Edumy to production.
 - [ ] User AI API keys are never returned to the client; only masked status is displayed
 - [ ] Log level appropriate (`info` or `warn`)
 
+## Analytics Events
+
+- [ ] `ANALYTICS_ENABLED=true` unless intentionally disabled
+- [ ] `ANALYTICS_METADATA_MAX_BYTES` sized for production payloads (default `10240`)
+- [ ] `analyticsevents` collection exists after first tracked event
+- [ ] Indexes are present for `user + createdAt`, `course + eventType + createdAt`, and `eventType + createdAt`
+- [ ] No raw IP, cookies, Authorization headers, API keys, tokens, passwords, full AI prompts, full AI responses, or note content in metadata
+- [ ] Event volume is reviewed before adding a TTL index or archival job
+
+Tracked priority events:
+- `lesson_started`: lesson title/type and section/lesson indexes
+- `lesson_completed`: lesson title/type, section/lesson indexes, completion source
+- `video_progress`: video id, current time, duration, watched percent, playback rate, section/lesson indexes
+- `course_enrolled`: course title and enrollment source
+- `course_completed`: completion rate, completed/total lesson counts, completion timestamp
+- `quiz_attempt_started`: attempt id, question count, quiz type, section/lesson indexes
+- `quiz_question_answered`: attempt id, question index, selected answer index, correctness, time spent
+- `quiz_completed`: attempt id, score, total, percentage, duration, pass flag, attempt number
+- `ai_question_asked`: message length, chat id when available, model, provider type, success, latency
+- `notification_clicked`: notification type, course id/title, notification timestamp, destination URL
+
 ## Multi-Instance (if applicable)
 
 - [ ] Use external session store (MongoDB — already configured via `connect-mongo`)

@@ -10,6 +10,8 @@ const Discussion = require('../models/discussion');
 const { logAuditEvent } = require('../utils/auditLogger');
 const { wantsJson } = require('../utils/requestHelpers');
 const logger = require('../utils/logger');
+const AnalyticsEvent = require('../models/analyticsEvent');
+const { ANALYTICS_EVENTS, trackEventSafe } = require('../services/analyticsEventService');
 const { buildLearnerDashboard } = require('../services/learnerDashboardService');
 const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
 const { findLessonContext } = require('../utils/lessonLocator');
@@ -594,6 +596,46 @@ module.exports.updateProgress = async (req, res) => {
             await awardGamification(user, { action: 'courseComplete' });
           }
         }
+
+        trackEventSafe({
+          req,
+          eventType: ANALYTICS_EVENTS.LESSON_COMPLETED,
+          course: courseObjectId,
+          lessonId,
+          metadata: {
+            lessonTitle: progressDoc.lastLessonName || lessonName || '',
+            lessonType: progressDoc.lastLessonType || lessonType || '',
+            sectionIndex: progressDoc.lastSectionIndex,
+            lessonIndex: progressDoc.lastLessonIndex,
+            completionSource: hasVideo ? 'video_end' : 'manual'
+          }
+        });
+
+        if (progressDoc.completionRate === 100) {
+          (async () => {
+            const exists = await AnalyticsEvent.exists({
+              user: userId,
+              course: courseObjectId,
+              eventType: ANALYTICS_EVENTS.COURSE_COMPLETED
+            });
+
+            if (exists) return;
+
+            trackEventSafe({
+              req,
+              eventType: ANALYTICS_EVENTS.COURSE_COMPLETED,
+              course: courseObjectId,
+              metadata: {
+                completionRate: progressDoc.completionRate,
+                completedLessonsCount: progressDoc.completedLessons.length,
+                totalLessonsCount: totalLessons,
+                completedAt: progressDoc.lastAccessed ? progressDoc.lastAccessed.toISOString() : new Date().toISOString()
+              }
+            });
+          })().catch((err) => {
+            logger.warn({ err }, 'Course completion analytics check failed');
+          });
+        }
       }
     }
     res.json({ success: true });
@@ -606,7 +648,7 @@ module.exports.updateProgress = async (req, res) => {
 module.exports.saveQuizResult = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { quizId, score, total, lessonName, lessonType, sectionIndex, lessonIndex } = req.body;
+    const { quizId, score, total, attemptId, durationSeconds, passed, attemptNumber, lessonName, lessonType, sectionIndex, lessonIndex } = req.body;
     const userId = req.user._id;
 
     if (!quizId) {
@@ -654,6 +696,27 @@ module.exports.saveQuizResult = async (req, res) => {
 
     await progressDoc.save();
     await markUserLearningActivity(userId, progressDoc.lastAccessed);
+
+    trackEventSafe({
+      req,
+      eventType: ANALYTICS_EVENTS.QUIZ_COMPLETED,
+      course: courseObjectId,
+      lessonId: quizKey,
+      quizId: quizKey,
+      metadata: {
+        attemptId: attemptId || '',
+        score: nextScore,
+        total: nextTotal,
+        percentage: nextTotal > 0 ? Math.round((nextScore / nextTotal) * 100) : 0,
+        durationSeconds: Number.isFinite(Number(durationSeconds)) ? Number(durationSeconds) : null,
+        passed: typeof passed === 'boolean' ? passed : null,
+        attemptNumber: Number.isFinite(Number(attemptNumber)) ? Number(attemptNumber) : null,
+        lessonTitle: progressDoc.lastLessonName || lessonName || '',
+        lessonType: progressDoc.lastLessonType || lessonType || 'quiz',
+        sectionIndex: progressDoc.lastSectionIndex,
+        lessonIndex: progressDoc.lastLessonIndex
+      }
+    });
 
     res.json({ success: true });
   } catch (err) {
@@ -744,6 +807,8 @@ module.exports.getReviews = async (req, res) => {
 };
 
 module.exports.askLessonAi = async (req, res) => {
+  const startedAt = Date.now();
+  let selectedModel = '';
   try {
     const { courseId } = req.params;
     const { lessonId, sectionIndex, lessonIndex, action, question, model } = req.body || {};
@@ -767,7 +832,7 @@ module.exports.askLessonAi = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid lesson reference' });
     }
 
-    const selectedModel = normalizeAiModel(model);
+    selectedModel = normalizeAiModel(model);
     const prompt = buildLessonAiPrompt({
       context,
       action,
@@ -792,6 +857,22 @@ module.exports.askLessonAi = async (req, res) => {
       await awardGamification(profileUser, { action: 'aiTutor', meta: { lessonAction: safeAction } });
     }
 
+    trackEventSafe({
+      req,
+      eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+      course: courseId,
+      lessonId: context.lessonId || lessonId,
+      metadata: {
+        messageLength: String(question || '').length,
+        chatId: '',
+        model: selectedModel,
+        providerType: 'user_byok',
+        action: safeAction,
+        success: true,
+        latencyMs: Date.now() - startedAt
+      }
+    });
+
     return res.json({
       success: true,
       model: selectedModel,
@@ -805,6 +886,21 @@ module.exports.askLessonAi = async (req, res) => {
     });
   } catch (err) {
     logger.error({ err }, '[Lesson AI Error]');
+    trackEventSafe({
+      req,
+      eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
+      course: req.params && req.params.courseId,
+      lessonId: req.body && req.body.lessonId,
+      metadata: {
+        messageLength: String(req.body && req.body.question || '').length,
+        chatId: '',
+        model: selectedModel,
+        providerType: 'user_byok',
+        action: String(req.body && req.body.action || 'custom').trim().toLowerCase() || 'custom',
+        success: false,
+        latencyMs: Date.now() - startedAt
+      }
+    });
     if (err.publicMessage) {
       return res.status(err.statusCode || 503).json({ success: false, error: err.publicMessage });
     }

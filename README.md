@@ -142,6 +142,26 @@ Returns JSON with:
 
 Returns HTTP 200 when healthy, 503 when MongoDB is disconnected.
 
+## Analytics events
+
+Edumy records priority learning events in the `analyticsevents` MongoDB collection through `services/analyticsEventService.js` and `POST /analytics/events`.
+
+Tracked events:
+- `lesson_started`, `lesson_completed`, `video_progress`
+- `course_enrolled`, `course_completed`
+- `quiz_attempt_started`, `quiz_question_answered`, `quiz_completed`
+- `ai_question_asked`, `notification_clicked`
+
+Privacy/security rules:
+- Raw IP addresses, cookies, Authorization headers, API keys, passwords, tokens, full AI prompts, full AI responses, and note content are not stored.
+- Event metadata is sanitized recursively, sensitive keys are removed, long strings are truncated, and oversized metadata is reduced.
+- Analytics failures are logged and do not fail the main user request.
+
+Collection/index notes:
+- Model: `models/analyticsEvent.js`
+- Main indexes: `user + createdAt`, `course + eventType + createdAt`, and `eventType + createdAt`
+- Retention is not enforced yet; define a TTL/archival policy before high-volume production use.
+
 ## Admin access
 
 Configure admin users via environment variables:

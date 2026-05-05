@@ -72,7 +72,15 @@
                   const noticeTime = formatNotificationTime(notice.updatedAt || notice.updatedAtIso);
                 %>
                   <li>
-                    <a class="dropdown-item notification-item" href="<%= noticeUrl %>">
+                    <a
+                      class="dropdown-item notification-item"
+                      href="<%= noticeUrl %>"
+                      data-notification-item
+                      data-notification-type="course_updated"
+                      data-course-id="<%= notice.courseId || '' %>"
+                      data-course-title="<%= noticeTitle %>"
+                      data-notification-created-at="<%= notice.updatedAtIso || notice.updatedAt || '' %>"
+                    >
                       <strong><%= noticeTitle %></strong>
                       <span>Course has new updates<%= noticeTime ? ` - ${noticeTime}` : '' %></span>
                     </a>

@@ -7,6 +7,9 @@
   let quizData = [];
   let selectedAnswers = [];
   let submittedQuestions = [];
+  let currentQuizAttemptId = '';
+  let quizStartedAt = 0;
+  let questionStartedAt = 0;
   let currentSlideIndex = 0;
   let slideData = [];
   let currentSlideLesson = null;
@@ -819,6 +822,7 @@
     selectedAnswers = new Array(quizData.length).fill(-1);
     submittedQuestions = new Array(quizData.length).fill(false);
     quizAttemptCount = 0;
+    startQuizAttempt(lesson);
 
     if (typeof window.__updateContext === 'function') {
       window.__updateContext({
@@ -838,6 +842,8 @@
       showResult(lesson);
       return;
     }
+
+    questionStartedAt = Date.now();
 
     const options = Array.isArray(q.options) ? q.options : [];
     answered = Boolean(submittedQuestions[currentQuestionIndex]);
@@ -921,6 +927,8 @@
       score += 1;
     }
 
+    trackQuizQuestionAnswered(lesson, index, selectedMeta.isCorrect);
+
     answered = true;
     showQuestion(lesson);
   }
@@ -972,6 +980,7 @@
         answered = false;
         selectedAnswers = new Array(quizData.length).fill(-1);
         submittedQuestions = new Array(quizData.length).fill(false);
+        startQuizAttempt(lesson);
         showQuestion(lesson);
       });
     }
@@ -986,7 +995,7 @@
     const deps = getDeps();
     const course = deps.store.course || {};
     const quizId = lesson && lesson._id ? String(lesson._id) : '';
-    const reportKey = quizId + ':' + scoreValue + ':' + totalValue;
+    const reportKey = quizId + ':' + currentQuizAttemptId + ':' + scoreValue + ':' + totalValue;
 
     if (!quizId || reportKey === lastQuizReportKey) return;
     lastQuizReportKey = reportKey;
@@ -998,6 +1007,10 @@
         quizId: quizId,
         score: scoreValue,
         total: totalValue,
+        attemptId: currentQuizAttemptId,
+        durationSeconds: quizStartedAt ? Math.max(0, Math.round((Date.now() - quizStartedAt) / 1000)) : null,
+        passed: totalValue > 0 ? (scoreValue / totalValue) >= 0.8 : null,
+        attemptNumber: quizAttemptCount + 1,
         lessonName: lesson && lesson.title || '',
         lessonType: lesson && lesson.type || 'quiz',
         sectionIndex: lesson && lesson.sectionIndex,
@@ -1014,6 +1027,56 @@
       text: optionText,
       isCorrect: isOptionCorrect(option, optionText, question && question.correctAnswer)
     };
+  }
+
+  function startQuizAttempt(lesson) {
+    currentQuizAttemptId = createAttemptId();
+    quizStartedAt = Date.now();
+    questionStartedAt = quizStartedAt;
+
+    const deps = getDeps();
+    const course = deps.store.course || {};
+    if (!course._id || !lesson || typeof window.trackAnalyticsEvent !== 'function') return;
+
+    window.trackAnalyticsEvent('quiz_attempt_started', {
+      courseId: String(course._id),
+      lessonId: String(lesson._id || ''),
+      quizId: String(lesson._id || ''),
+      metadata: {
+        attemptId: currentQuizAttemptId,
+        questionCount: Array.isArray(quizData) ? quizData.length : 0,
+        quizType: String(lesson.type || 'quiz'),
+        sectionIndex: Number.isFinite(Number(lesson.sectionIndex)) ? Number(lesson.sectionIndex) : null,
+        lessonIndex: Number.isFinite(Number(lesson.lessonIndex)) ? Number(lesson.lessonIndex) : null
+      }
+    });
+  }
+
+  function trackQuizQuestionAnswered(lesson, selectedIndex, isCorrect) {
+    const deps = getDeps();
+    const course = deps.store.course || {};
+    if (!course._id || !lesson || typeof window.trackAnalyticsEvent !== 'function') return;
+
+    window.trackAnalyticsEvent('quiz_question_answered', {
+      courseId: String(course._id),
+      lessonId: String(lesson._id || ''),
+      quizId: String(lesson._id || ''),
+      metadata: {
+        attemptId: currentQuizAttemptId,
+        questionIndex: currentQuestionIndex,
+        selectedAnswer: Number(selectedIndex),
+        isCorrect: Boolean(isCorrect),
+        timeSpentSeconds: questionStartedAt ? Math.max(0, Math.round((Date.now() - questionStartedAt) / 1000)) : null,
+        changedAnswer: false
+      }
+    });
+  }
+
+  function createAttemptId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    return String(Date.now()) + '-' + Math.random().toString(36).slice(2, 10);
   }
 
   function getQuestionFeedback(question, selectedIndex, isAnswered) {
@@ -1508,6 +1571,9 @@
 
     html5TimeHandler = function() {
       updatePlaybackTimeBadge(Number(html5VideoPlayer.currentTime || 0), Number(html5VideoPlayer.duration || 0), 'html5');
+      if (typeof window.__trackVideoProgress === 'function') {
+        window.__trackVideoProgress(Number(html5VideoPlayer.currentTime || 0), Number(html5VideoPlayer.duration || 0));
+      }
       updateInteractiveDebug({
         provider: interactiveState.providerType || 'html5',
         currentTime: Number(html5VideoPlayer.currentTime || 0).toFixed(1),
@@ -1587,6 +1653,9 @@
 
       driveElapsedSeconds += deltaSec;
       updatePlaybackTimeBadge(driveElapsedSeconds, null, 'drive');
+      if (typeof window.__trackVideoProgress === 'function') {
+        window.__trackVideoProgress(driveElapsedSeconds, 0);
+      }
       updateInteractiveDebug({
         provider: interactiveState.providerType || 'drive-iframe',
         currentTime: driveElapsedSeconds.toFixed(1),
@@ -2017,6 +2086,9 @@
     }
 
     updatePlaybackTimeBadge(current, duration, 'yt');
+    if (typeof window.__trackVideoProgress === 'function') {
+      window.__trackVideoProgress(current, duration);
+    }
     checkInteractiveQuizTriggers(current);
     updateInteractiveDebug({
       provider: interactiveState.providerType || 'youtube',

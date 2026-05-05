@@ -45,6 +45,26 @@
     });
   }
 
+  function initNotificationClickTracking() {
+    document.querySelectorAll('[data-notification-item]').forEach(function(item) {
+      item.addEventListener('click', function() {
+        if (typeof window.trackAnalyticsEventBeacon !== 'function') return;
+
+        window.trackAnalyticsEventBeacon('notification_clicked', {
+          courseId: item.dataset.courseId || '',
+          metadata: {
+            notificationType: item.dataset.notificationType || 'course_updated',
+            courseId: item.dataset.courseId || '',
+            courseTitle: item.dataset.courseTitle || '',
+            notificationCreatedAt: item.dataset.notificationCreatedAt || '',
+            clickedAt: new Date().toISOString(),
+            destinationUrl: item.getAttribute('href') || ''
+          }
+        });
+      });
+    });
+  }
+
   function initMobileNavbar() {
     var navbar = document.getElementById('appNavbar');
     var toggle = document.getElementById('navbarToggle');
@@ -102,6 +122,7 @@
 
   document.addEventListener('DOMContentLoaded', function() {
     initNotificationRead();
+    initNotificationClickTracking();
     initMobileNavbar();
   });
 })();
