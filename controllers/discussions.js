@@ -1,8 +1,6 @@
 const Discussion = require('../models/discussion');
 const Course = require('../models/course');
-const { aiConfig } = require('../config/ai');
-const { generatePromptReply } = require('../services/ai/chatOrchestrator');
-const { getCanonicalSections, syncCourseContent } = require('../utils/courseContentAdapter');
+const { syncCourseContent } = require('../utils/courseContentAdapter');
 
 function normalizeTags(input) {
   const source = Array.isArray(input) ? input.join(',') : String(input || '');
@@ -44,116 +42,6 @@ function sortAnswers(answers, sortBy) {
     });
   }
   return source;
-}
-
-function getLessonDocs(course) {
-  const docs = [];
-  const sections = getCanonicalSections(course);
-
-  sections.forEach((section) => {
-    const sectionName = String(section && section.title || '');
-    const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
-
-    lessons.forEach((lesson) => {
-      const lessonId = String(lesson && lesson._id || '');
-      const title = String(lesson && lesson.title || '');
-      const type = String(lesson && lesson.type || 'video');
-
-      const chunks = [title, sectionName, type];
-
-      if (type === 'slide') {
-        const slides = Array.isArray(lesson && lesson.content && lesson.content.slides) ? lesson.content.slides : [];
-        slides.forEach((slide) => {
-          const elements = Array.isArray(slide && slide.elements) ? slide.elements : [];
-          elements.forEach((el) => {
-            if (el && el.type === 'text' && el.text) {
-              chunks.push(String(el.text));
-            }
-          });
-        });
-      }
-
-      if (type === 'quiz') {
-        const questions = Array.isArray(lesson && lesson.quiz)
-          ? lesson.quiz
-          : Array.isArray(lesson && lesson.content && lesson.content.questions)
-            ? lesson.content.questions
-            : [];
-
-        questions.forEach((q) => {
-          if (q && q.question) chunks.push(String(q.question));
-          const options = Array.isArray(q && q.options) ? q.options : [];
-          options.forEach((opt) => chunks.push(String(opt && (opt.text || opt) || '')));
-        });
-      }
-
-      if (type === 'video') {
-        if (lesson && lesson.description) chunks.push(String(lesson.description));
-      }
-
-      const content = chunks.join('\n').trim();
-      if (content) {
-        docs.push({ lessonId, content });
-      }
-    });
-  });
-
-  return docs;
-}
-
-function getRelevantContext(docs, question, lessonId) {
-  const query = String(question || '').toLowerCase();
-  const lessonScoped = lessonId ? docs.filter((d) => d.lessonId === lessonId) : [];
-  const source = lessonScoped.length ? lessonScoped : docs;
-  const scored = source
-    .map((entry) => {
-      const text = String(entry.content || '').toLowerCase();
-      let score = 0;
-      query.split(/\s+/).forEach((token) => {
-        if (token && text.includes(token)) score += 1;
-      });
-      return { entry, score };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map((item) => item.entry.content);
-
-  return scored;
-}
-
-async function generateContextualAnswer(course, discussion, lessonId, userId) {
-  const docs = getLessonDocs(course);
-  const relevant = getRelevantContext(docs, discussion.title + ' ' + discussion.body, lessonId);
-
-  const prompt = [
-    'You are a senior learning assistant.',
-    'Answer based ONLY on the course context below.',
-    'If context is not sufficient, clearly state what is missing.',
-    'Keep answer practical, structured, and helpful.',
-    '',
-    'Question Title:',
-    discussion.title,
-    '',
-    'Question Body:',
-    discussion.body,
-    '',
-    'Course Context:',
-    relevant.join('\n---\n') || 'No matching context found.',
-    '',
-    'Return answer in markdown format.'
-  ].join('\n');
-
-  return generatePromptReply({
-    userId,
-    model: aiConfig.chatModel,
-    prompt,
-    options: {
-      temperature: 0.2,
-      topP: 0.9,
-      maxTokens: 1400,
-      timeoutMs: aiConfig.providers.openai.timeoutMs
-    }
-  });
 }
 
 module.exports.listQuestions = async (req, res) => {
@@ -456,37 +344,3 @@ module.exports.deleteAnswer = async (req, res) => {
   return res.redirect(`/courses/${courseId}/discussions/${discussionId}`);
 };
 
-module.exports.generateAiAnswer = async (req, res) => {
-  try {
-    const { courseId, discussionId } = req.params;
-
-    const discussion = await Discussion.findOne({ _id: discussionId, course: courseId }).lean();
-    if (!discussion) {
-      return res.status(404).json({ success: false, error: 'Question not found' });
-    }
-
-    const course = await Course.findById(courseId).select('title sections').lean();
-    if (!course) {
-      return res.status(404).json({ success: false, error: 'Course not found' });
-    }
-
-    const aiAnswer = await generateContextualAnswer(course, discussion, discussion.lessonId, req.user && req.user._id);
-
-    res.json({
-      success: true,
-      answer: aiAnswer || 'I could not find enough context in this course to answer confidently.'
-    });
-  } catch (error) {
-    console.error('[Discussion AI Answer Error]', error.message);
-    if (error.publicMessage) {
-      return res.status(error.statusCode || 503).json({
-        success: false,
-        error: error.publicMessage
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate AI answer'
-    });
-  }
-};

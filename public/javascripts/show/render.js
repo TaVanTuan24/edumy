@@ -1727,7 +1727,7 @@
     url.searchParams.set('origin', window.location.origin);
     url.searchParams.set('rel', '0');
     url.searchParams.set('playsinline', '1');
-    url.searchParams.set('fs', '0');
+    url.searchParams.set('fs', '1');
     url.searchParams.set('modestbranding', '1');
     url.searchParams.set('iv_load_policy', '3');
     url.searchParams.set('showinfo', '0');
@@ -1969,6 +1969,7 @@
             modestbranding: 1,
             iv_load_policy: 3,
             showinfo: 0,
+            fs: 1,
             playsinline: 1
           },
           events: {
@@ -2231,7 +2232,9 @@
     iframe = document.createElement('iframe');
     iframe.id = 'videoIframe';
     iframe.src = '';
-    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    iframe.allowFullscreen = true;
+    iframe.setAttribute('allowfullscreen', '');
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
     container.appendChild(iframe);
     return iframe;
@@ -2239,8 +2242,9 @@
 
   function activateIframeElement(iframe) {
     if (!iframe) return;
-    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
-    iframe.removeAttribute('allowfullscreen');
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    iframe.allowFullscreen = true;
+    iframe.setAttribute('allowfullscreen', '');
     iframe.hidden = false;
     iframe.setAttribute('aria-hidden', 'false');
     iframe.style.display = 'block';
@@ -2269,7 +2273,7 @@
     video.playsInline = true;
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', 'true');
-    video.setAttribute('controlslist', 'nofullscreen noremoteplayback');
+    video.setAttribute('controlslist', 'noremoteplayback');
     video.disablePictureInPicture = true;
     video.disableRemotePlayback = true;
     video.style.width = '100%';
@@ -2285,7 +2289,7 @@
     video.hidden = false;
     video.setAttribute('aria-hidden', 'false');
     video.controls = true;
-    video.setAttribute('controlslist', 'nofullscreen noremoteplayback');
+    video.setAttribute('controlslist', 'noremoteplayback');
     video.disablePictureInPicture = true;
     video.disableRemotePlayback = true;
     video.style.display = 'block';

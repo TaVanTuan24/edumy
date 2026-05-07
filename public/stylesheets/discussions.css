@@ -203,19 +203,6 @@
   background: #bbf7d0;
 }
 
-.ai-answer-box {
-  border: 1px solid #c7d2fe;
-  background: color-mix(in srgb, #3b82f6 6%, var(--discussion-surface));
-}
-
-.ai-preview {
-  min-height: 68px;
-  border: 1px solid var(--discussion-border);
-  border-radius: 10px;
-  background: var(--discussion-surface);
-  padding: 10px 12px;
-}
-
 .btn i {
   margin-right: 6px;
 }

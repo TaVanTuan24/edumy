@@ -7,7 +7,7 @@ services:
       - "${PORT:-3000}:3000"
     environment:
       - NODE_ENV=development
-      - MONGO_URI=mongodb+srv://test:i9nd5Naci2k7H4qV@cluster0.spqkrqu.mongodb.net/?appName=Cluster0
+      - MONGO_URI=${MONGO_URI}
       - SESSION_SECRET=${SESSION_SECRET}
       - CSRF_SECRET=${CSRF_SECRET}
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}

@@ -25,6 +25,5 @@ router.delete('/:discussionId/answers/:answerId', catchAsync(discussions.deleteA
 router.post('/:discussionId/vote', catchAsync(discussions.voteQuestion));
 router.post('/:discussionId/answers/:answerId/vote', catchAsync(discussions.voteAnswer));
 router.post('/:discussionId/answers/:answerId/accept', catchAsync(discussions.acceptAnswer));
-router.post('/:discussionId/ai-answer', catchAsync(discussions.generateAiAnswer));
 
 module.exports = router;

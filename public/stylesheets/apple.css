@@ -1000,8 +1000,7 @@ input::placeholder {
 .lesson-pdf-toolbar,
 .course-tabs,
 .learning-section,
-.interactive-quiz-dialog,
-.ai-answer-box {
+.interactive-quiz-dialog {
     border-color: var(--apple-border) !important;
     border-radius: 18px !important;
 }
@@ -1132,8 +1131,7 @@ input::placeholder {
 
 .discussion-filter,
 .discussion-item,
-.discussion-item.answer.accepted,
-.ai-answer-box {
+.discussion-item.answer.accepted {
     background: linear-gradient(180deg, var(--apple-surface-strong), var(--apple-surface)) !important;
     border-color: var(--apple-border) !important;
     box-shadow: var(--apple-shadow-xs);

@@ -6,7 +6,6 @@
     bindVotes();
     bindAcceptAnswer();
     bindDeleteAnswer();
-    bindAiAnswerActions();
   }
 
   function renderMarkdownToHtml(markdownText) {
@@ -128,114 +127,6 @@
           });
       });
     });
-  }
-
-  function bindAiAnswerActions() {
-    const generateBtn = document.getElementById('generateAiAnswerBtn');
-    const postBtn = document.getElementById('postAiAnswerBtn');
-    const discardBtn = document.getElementById('discardAiAnswerBtn');
-    const editor = document.getElementById('aiAnswerEditor');
-    const preview = document.getElementById('aiAnswerPreview');
-    const status = document.getElementById('aiAnswerStatus');
-    const shell = document.querySelector('.discussion-shell');
-
-    if (!generateBtn || !editor || !status || !shell) return;
-
-    function syncPreview() {
-      if (!preview) return;
-      const value = String(editor.value || '').trim();
-      if (!value) {
-        preview.innerHTML = '<p class="text-muted mb-0">No AI answer yet.</p>';
-        return;
-      }
-      preview.innerHTML = renderMarkdownToHtml(value);
-    }
-
-    syncPreview();
-    editor.addEventListener('input', syncPreview);
-
-    const courseId = shell.dataset.courseId;
-    const discussionId = shell.dataset.discussionId;
-
-    generateBtn.addEventListener('click', function() {
-      generateBtn.disabled = true;
-      status.textContent = 'Generating AI answer...';
-
-      fetch('/courses/' + encodeURIComponent(courseId) + '/discussions/' + encodeURIComponent(discussionId) + '/ai-answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          if (!data || !data.success) {
-            status.textContent = (data && data.error) ? data.error : 'Failed to generate AI answer.';
-            return;
-          }
-
-          editor.value = data.answer || '';
-          syncPreview();
-          status.textContent = 'AI answer ready. Edit it if needed, then post or discard.';
-        })
-        .catch(function(err) {
-          console.error('[AI Answer Generate Error]', err);
-          status.textContent = 'Error generating AI answer.';
-        })
-        .finally(function() {
-          generateBtn.disabled = false;
-        });
-    });
-
-    if (postBtn) {
-      postBtn.addEventListener('click', function() {
-        const value = String(editor.value || '').trim();
-        if (!value) {
-          status.textContent = 'AI answer is empty.';
-          return;
-        }
-
-        postBtn.disabled = true;
-        status.textContent = 'Posting AI answer...';
-
-        fetch('/courses/' + encodeURIComponent(courseId) + '/discussions/' + encodeURIComponent(discussionId) + '/answers', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          body: JSON.stringify({ body: value })
-        })
-          .then(function(res) {
-            return res
-              .json()
-              .catch(function() { return null; })
-              .then(function(data) {
-                if (!res.ok || !data || !data.success) {
-                  const message = data && data.error ? data.error : 'Failed to post AI answer.';
-                  throw new Error(message);
-                }
-              });
-          })
-          .then(function() {
-            window.location.reload();
-          })
-          .catch(function(err) {
-            console.error('[AI Answer Post Error]', err);
-            status.textContent = err && err.message ? err.message : 'Failed to post AI answer.';
-          })
-          .finally(function() {
-            postBtn.disabled = false;
-          });
-      });
-    }
-
-    if (discardBtn) {
-      discardBtn.addEventListener('click', function() {
-        editor.value = '';
-        syncPreview();
-        status.textContent = 'AI answer discarded.';
-      });
-    }
   }
 
   function bindDeleteAnswer() {
