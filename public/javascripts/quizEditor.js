@@ -69,7 +69,7 @@
 
     function init() {
         if (els.quizTitleInput) {
-            els.quizTitleInput.value = quizData.name || quizData.title || 'Untitled Quiz';
+            els.quizTitleInput.value = getQuizDisplayName();
             els.quizTitleInput.readOnly = true;
         }
 
@@ -84,6 +84,21 @@
         } else {
             setSaveState('saved', 'Saved');
         }
+    }
+
+    function getQuizDisplayName() {
+        const candidates = [
+            quizData.name,
+            quizData.title,
+            quizData.displayTitle,
+            quizData.lessonTitle
+        ];
+
+        const title = candidates
+            .map(function (value) { return String(value || '').trim(); })
+            .find(Boolean);
+
+        return title || 'Untitled Quiz';
     }
 
     function bindEvents() {
@@ -434,9 +449,6 @@
                 ? 'question-row-card is-active'
                 : 'question-row-card';
             const warningCount = inspectQuestion(question).length;
-            const correctAnswer = Array.isArray(question.answers)
-                ? question.answers.find(function (answer) { return answer.isCorrect; })
-                : null;
             const shortQuestion = question.question || 'Untitled question';
 
             return '' +
@@ -448,7 +460,6 @@
                             `<div class="question-label">${escapeHtml(shortQuestion)}</div>` +
                             '<div class="question-meta-row">' +
                                 '<span class="question-type-badge">Multiple choice</span>' +
-                                `<span class="question-correct-preview">${escapeHtml(correctAnswer ? correctAnswer.text : 'No correct answer')}</span>` +
                                 (warningCount
                                     ? `<span class="question-warning-badge">${warningCount} warning${warningCount === 1 ? '' : 's'}</span>`
                                     : '<span class="question-ok-badge">Ready</span>') +

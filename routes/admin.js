@@ -11,7 +11,6 @@ const User = require('../models/user');
 const UserCourseProgress = require('../models/userCourseProgress');
 const Video = require('../models/video');
 const adminAnalyticsRoutes = require('./adminAnalytics');
-const grokSetupService = require('../services/ai/grokSetupService')
 const { adminActionLimiter } = require('../utils/rateLimiters')
 const { logAuditEvent } = require('../utils/auditLogger')
 const { getEffectiveCourseStatus, computeCourseReadiness, setCourseStatus, buildCourseStatusBadge } = require('../utils/courseLifecycle')
@@ -84,50 +83,6 @@ function normalizeImportedPreviewSections(sections) {
         }))
         .filter((section) => Array.isArray(section.videos) && section.videos.length > 0)
 }
-
-router.get('/ai/grok/status', async (_req, res) => {
-    res.json(await grokSetupService.getStatus())
-})
-
-router.post('/ai/grok/setup', async (_req, res) => {
-    try {
-        const setup = await grokSetupService.startSetup()
-        await recordAdminAudit(_req, 'admin_grok_setup_started', 'ai-provider', 'grok', {})
-        res.status(202).json({ success: true, setup })
-    } catch (error) {
-        res.status(400).json({ success: false, error: error.publicMessage || error.message })
-    }
-})
-
-router.post('/ai/grok/setup/complete', async (_req, res) => {
-    try {
-        const setup = await grokSetupService.completeLogin()
-        await recordAdminAudit(_req, 'admin_grok_setup_completed', 'ai-provider', 'grok', {})
-        res.json({ success: true, setup })
-    } catch (error) {
-        res.status(400).json({ success: false, error: error.publicMessage || error.message })
-    }
-})
-
-router.post('/ai/grok/enable', async (_req, res) => {
-    try {
-        const status = await grokSetupService.setEnabled(true)
-        await recordAdminAudit(_req, 'admin_grok_enabled', 'ai-provider', 'grok', {})
-        res.json({ success: true, status })
-    } catch (error) {
-        res.status(400).json({ success: false, error: error.publicMessage || error.message })
-    }
-})
-
-router.post('/ai/grok/disable', async (_req, res) => {
-    try {
-        const status = await grokSetupService.setEnabled(false)
-        await recordAdminAudit(_req, 'admin_grok_disabled', 'ai-provider', 'grok', {})
-        res.json({ success: true, status })
-    } catch (error) {
-        res.status(400).json({ success: false, error: error.publicMessage || error.message })
-    }
-})
 
 router.post('/youtube/import/preview', async (req, res) => {
     try {
@@ -1354,48 +1309,62 @@ router.get('/courses/:id/editor-new', async (req, res) => {
     res.render('admin/courseEditorNew', { course })
 
 })
-router.put('/course/:id/lesson/edit', async (req,res)=>{
+router.put('/course/:id/lesson/edit', async (req, res) => {
+    try {
+        const { sectionIndex, lessonIndex, name, url, interactiveQuizzes } = req.body
+        console.log('[CourseEditor] incoming lesson edit payload:', JSON.stringify({ sectionIndex, lessonIndex, name, url, interactiveQuizzesCount: Array.isArray(interactiveQuizzes) ? interactiveQuizzes.length : 0 }))
 
-const {sectionIndex,lessonIndex,name,url,interactiveQuizzes} = req.body
-console.log('[CourseEditor] incoming lesson edit payload:', JSON.stringify({ sectionIndex, lessonIndex, name, url, interactiveQuizzesCount: Array.isArray(interactiveQuizzes) ? interactiveQuizzes.length : 0 }))
+        const parsedSectionIndex = parseInt(sectionIndex, 10)
+        const parsedLessonIndex = parseInt(lessonIndex, 10)
+        const normalizedName = String(name || '').trim()
 
-const parsedSectionIndex = parseInt(sectionIndex, 10)
-const parsedLessonIndex = parseInt(lessonIndex, 10)
-const normalizedInteractiveQuizzes = normalizeInteractiveQuizPayload(interactiveQuizzes)
+        if (Number.isNaN(parsedSectionIndex) || Number.isNaN(parsedLessonIndex)) {
+            return res.status(400).json({ success: false, error: 'Invalid section or lesson index' })
+        }
 
-const course = await loadEditableCourse(req.params.id)
-if (!course) {
-    return res.status(404).send('course not found')
-}
+        if (!normalizedName) {
+            return res.status(400).json({ success: false, error: 'Lesson name is required' })
+        }
 
-const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
-if (!lesson) {
-    return res.status(404).send('lesson not found')
-}
+        const course = await loadEditableCourse(req.params.id)
+        if (!course) {
+            return res.status(404).json({ success: false, error: 'Course not found' })
+        }
 
-lesson.title = String(name || lesson.title || '').trim()
-if (lesson.type === 'video') {
-    lesson.videoUrl = String(url || '').trim()
-    lesson.preview = String(url || '').trim()
-}
-lesson.interactiveQuizzes = normalizedInteractiveQuizzes
-lesson.content = {
-    ...(lesson.content || {}),
-    ...(lesson.type === 'video' ? { videoUrl: String(url || '').trim() } : {}),
-    interactiveQuizzes: normalizedInteractiveQuizzes
-}
+        const lesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
+        if (!lesson) {
+            return res.status(404).json({ success: false, error: 'Lesson not found' })
+        }
 
-await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: true })
+        lesson.title = normalizedName
+        if (lesson.type === 'video') {
+            const normalizedUrl = String(url || '').trim()
+            const normalizedInteractiveQuizzes = normalizeInteractiveQuizPayload(interactiveQuizzes)
+            lesson.videoUrl = normalizedUrl
+            lesson.preview = normalizedUrl
+            lesson.interactiveQuizzes = normalizedInteractiveQuizzes
+            lesson.content = {
+                ...(lesson.content || {}),
+                videoUrl: normalizedUrl,
+                interactiveQuizzes: normalizedInteractiveQuizzes
+            }
+        }
 
-await saveEditableCourse(course)
-await recordAdminAudit(req, 'lesson_updated', 'lesson', String(lesson && lesson._id || ''), {
-    courseId: String(course._id),
-    title: lesson.title,
-    type: lesson.type
-})
+        await prepareLessonForWrite(lesson, { debug: true, allowDriveLookup: lesson.type === 'video' })
+        course.markModified('sections')
 
-res.send("updated")
+        await saveEditableCourse(course)
+        const savedLesson = course.sections?.[parsedSectionIndex]?.lessons?.[parsedLessonIndex] || lesson
+        await recordAdminAudit(req, 'lesson_updated', 'lesson', String(savedLesson && savedLesson._id || ''), {
+            courseId: String(course._id),
+            title: savedLesson.title,
+            type: savedLesson.type
+        })
 
+        return res.json({ success: true, lesson: savedLesson })
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message || 'Failed to update lesson' })
+    }
 })
 router.delete('/course/:id/lesson/delete', async (req, res) => {
 
@@ -1962,16 +1931,26 @@ router.get(
         }
 
         const quiz = getCanonicalLesson(course, Number(sectionIndex), Number(quizIndex))
+        const quizPlain = quiz && typeof quiz.toObject === 'function'
+            ? quiz.toObject()
+            : quiz
+        const quizTitle = String(
+            (quizPlain && (quizPlain.title || quizPlain.name))
+            || (quiz && (quiz.title || quiz.name))
+            || ''
+        ).trim()
         const quizForEditor = quiz
             ? {
-                ...quiz,
+                ...quizPlain,
+                title: quizTitle,
+                name: quizTitle,
                 questions: (
-                    Array.isArray(quiz.quiz)
-                        ? quiz.quiz
-                        : Array.isArray(quiz.questions)
-                            ? quiz.questions
-                            : Array.isArray(quiz.content && quiz.content.questions)
-                                ? quiz.content.questions
+                    Array.isArray(quizPlain && quizPlain.quiz)
+                        ? quizPlain.quiz
+                        : Array.isArray(quizPlain && quizPlain.questions)
+                            ? quizPlain.questions
+                            : Array.isArray(quizPlain && quizPlain.content && quizPlain.content.questions)
+                                ? quizPlain.content.questions
                                 : []
                 ).map((question) => buildEditorQuizQuestionResponse(question))
             }

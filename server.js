@@ -111,12 +111,46 @@ const vrCorsOptions = {
   credentials: false
 };
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use(limiter);
+function getNumericEnv(name, fallback) {
+  const rawValue = String(process.env[name] || '').trim();
+  if (!rawValue) return fallback;
+
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+const globalRateLimitWindowMs = Math.max(
+  1000,
+  getNumericEnv('GLOBAL_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000)
+);
+const globalRateLimitMax = Math.max(
+  0,
+  getNumericEnv('GLOBAL_RATE_LIMIT_MAX', isProduction ? 1200 : 0)
+);
+
+if (globalRateLimitMax > 0) {
+  const limiter = rateLimit({
+    windowMs: globalRateLimitWindowMs,
+    max: globalRateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS' || req.path === '/health',
+    handler: (req, res) => {
+      const message = 'Too many requests from this IP, please try again later.';
+
+      if (wantsJson(req)) {
+        return res.status(429).json({
+          success: false,
+          error: message,
+          code: 'GLOBAL_RATE_LIMITED'
+        });
+      }
+
+      return res.status(429).send(message);
+    }
+  });
+  app.use(limiter);
+}
 
 const store = mongoStore.create({
   mongoUrl: mongoUri,

@@ -102,7 +102,7 @@ Tracked priority events:
 ## Rate Limits
 
 Current defaults (in `utils/rateLimiters.js`):
-- Global: 100 req / 15 min per IP
+- Global: disabled in development, 1200 req / 15 min per IP in production (`GLOBAL_RATE_LIMIT_MAX`, `GLOBAL_RATE_LIMIT_WINDOW_MS`)
 - Login: 8 attempts / 15 min
 - Register: 6 attempts / 1 hour
 - AI Chat: 40 requests / 15 min
@@ -202,4 +202,4 @@ GET https://your-domain.com/health
 - [ ] Register: 6 attempts / 1 hour
 - [ ] AI Chat: 40 requests / 15 min
 - [ ] Upload: 20 requests / 15 min
-- [ ] Global: 100 requests / 15 min per IP
+- [ ] Global: disabled in development, 1200 requests / 15 min per IP in production

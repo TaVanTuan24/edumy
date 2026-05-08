@@ -265,8 +265,7 @@
 
 .question-type-badge,
 .question-ok-badge,
-.question-warning-badge,
-.question-correct-preview {
+.question-warning-badge {
     display: inline-flex;
     align-items: center;
     padding: 0.28rem 0.55rem;
@@ -288,14 +287,6 @@
 .question-warning-badge {
     background: rgba(217, 119, 6, 0.14);
     color: var(--qe-warning);
-}
-
-.question-correct-preview {
-    background: rgba(148, 163, 184, 0.12);
-    color: var(--qe-muted);
-    max-width: 100%;
-    white-space: normal;
-    overflow-wrap: anywhere;
 }
 
 .quiz-editor-page .question-row-actions {

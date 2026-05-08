@@ -901,7 +901,6 @@ input::placeholder {
 .streak-box,
 .discussion-item,
 .quiz-item,
-.grok-check,
 .kpi-card,
 .chart-card,
 .table-card,
@@ -1169,7 +1168,6 @@ input::placeholder {
 }
 
 .admin-stat-card,
-.admin-integration-card,
 .course-card.card,
 .top-bar,
 .sidebar,

@@ -1332,6 +1332,12 @@
     function loadLessonIntoEditor(sectionIndex, lessonIndex, type, itemId, itemName) {
         const placeholder = document.getElementById('editorPlaceholder');
         const editorContent = document.getElementById('editorContent');
+        const parsedSectionIndex = parseInt(sectionIndex, 10);
+        const parsedLessonIndex = parseInt(lessonIndex, 10);
+        const lessonState = !Number.isNaN(parsedSectionIndex) && !Number.isNaN(parsedLessonIndex)
+            ? courseData[parsedSectionIndex]?.lessons?.[parsedLessonIndex]
+            : null;
+        const lessonTitle = lessonState && lessonState.title ? lessonState.title : (itemName || '');
 
         if (placeholder) {
             placeholder.classList.add('d-none');
@@ -1341,15 +1347,15 @@
         }
         
         if (type === 'video') {
-            editorContent.innerHTML = buildVideoEditorHTML(sectionIndex, lessonIndex, itemId, itemName);
+            editorContent.innerHTML = buildVideoEditorHTML(sectionIndex, lessonIndex, itemId, lessonTitle);
             fetchVideoData(sectionIndex, lessonIndex);
             setupSaveLessonHandler();
         } else if (type === 'slide') {
-            editorContent.innerHTML = buildSlideEditorHTML(sectionIndex, lessonIndex, itemId, itemName);
+            editorContent.innerHTML = buildSlideEditorHTML(sectionIndex, lessonIndex, itemId, lessonTitle);
             fetchSlideData(sectionIndex, lessonIndex);
             setupSaveLessonHandler();
         } else if (type === 'quiz') {
-            editorContent.innerHTML = buildQuizEditorHTML(sectionIndex, lessonIndex, itemId, itemName);
+            editorContent.innerHTML = buildQuizEditorHTML(sectionIndex, lessonIndex, itemId, lessonTitle);
             setupSaveLessonHandler();
         }
     }
@@ -1369,7 +1375,7 @@
                     
                     <div class="mb-3">
                         <label class="form-label">Video Name</label>
-                        <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
+                        <input type="text" class="form-control" id="lesson-name" value="${escapeAttribute(itemName || '')}">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Video URL</label>
@@ -1403,7 +1409,7 @@
                     
                     <div class="mb-3">
                         <label class="form-label">Slide Name</label>
-                        <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
+                        <input type="text" class="form-control" id="lesson-name" value="${escapeAttribute(itemName || '')}">
                     </div>
                     <div class="mb-3">
                         <div class="small text-muted mb-2">Upload a PDF to use it as a lesson document. Learners will view it directly in the course player.</div>
@@ -1459,7 +1465,7 @@
                     
                     <div class="mb-3">
                         <label class="form-label">Quiz Name</label>
-                        <input type="text" class="form-control" id="lesson-name" value="${itemName || ''}">
+                        <input type="text" class="form-control" id="lesson-name" value="${escapeAttribute(itemName || '')}">
                     </div>
                     <div class="editor-card-actions">
                         <button class="btn btn-primary save-lesson-btn" type="button">
@@ -1957,32 +1963,83 @@
     async function saveLesson() {
         const sectionIndex = document.getElementById('lesson-section-index')?.value;
         const lessonIndex = document.getElementById('lesson-index')?.value;
-        const name = document.getElementById('lesson-name')?.value;
+        const name = String(document.getElementById('lesson-name')?.value || '').trim();
         const url = document.getElementById('lesson-url')?.value;
-        
+        const type = document.getElementById('lesson-type')?.value;
+        const saveBtn = document.querySelector('.save-lesson-btn');
+
+        if (!name) {
+            showToast('Lesson name cannot be empty.', 'warning');
+            return false;
+        }
+
         try {
+            if (saveBtn) saveBtn.disabled = true;
             const csrfFetch = typeof window.csrfFetch === 'function' ? window.csrfFetch.bind(window) : window.fetch.bind(window);
+            const body = {
+                sectionIndex: parseInt(sectionIndex, 10),
+                lessonIndex: parseInt(lessonIndex, 10),
+                name
+            };
+
+            if (type === 'video') {
+                body.url = url || '';
+                body.interactiveQuizzes = normalizeInteractiveQuizDraft(interactiveQuizDraft);
+            }
+
             const res = await csrfFetch(`/admin/course/${courseId}/lesson/edit`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({
-                    sectionIndex: parseInt(sectionIndex),
-                    lessonIndex: parseInt(lessonIndex),
-                    name: name,
-                    url: url,
-                    interactiveQuizzes: normalizeInteractiveQuizDraft(interactiveQuizDraft)
-                })
+                body: JSON.stringify(body)
             });
+            const contentType = res.headers.get('content-type') || '';
+            const data = contentType.includes('application/json') ? await res.json() : {};
             
             if (res.ok) {
+                if (data && data.lesson) {
+                    updateLessonStateAfterSave(parseInt(sectionIndex, 10), parseInt(lessonIndex, 10), data.lesson);
+                }
                 showToast('Saved successfully!', 'success');
-                location.reload();
+                return true;
             } else {
-                showToast('Failed to save', 'danger');
+                showToast(data.error || 'Failed to save', 'danger');
             }
         } catch (err) {
             showToast('Error occurred: ' + err.message, 'danger');
+        } finally {
+            if (saveBtn) saveBtn.disabled = false;
+        }
+
+        return false;
+    }
+
+    function updateLessonStateAfterSave(sectionIndex, lessonIndex, savedLesson) {
+        if (
+            Number.isNaN(sectionIndex) ||
+            Number.isNaN(lessonIndex) ||
+            !courseData[sectionIndex] ||
+            !Array.isArray(courseData[sectionIndex].lessons) ||
+            !courseData[sectionIndex].lessons[lessonIndex]
+        ) {
+            return;
+        }
+
+        const normalized = normalizeEditorLesson(savedLesson, lessonIndex);
+        courseData[sectionIndex].lessons[lessonIndex] = normalized;
+
+        const lessonEl = document.querySelector(
+            `.lesson-item[data-section-index="${sectionIndex}"][data-lesson-index="${lessonIndex}"]`
+        );
+        if (!lessonEl) return;
+
+        lessonEl.dataset.name = normalized.title || '';
+        lessonEl.dataset.type = normalizeLessonType(normalized.type);
+        lessonEl.dataset.url = normalized.preview || normalized.videoUrl || normalized.refId || '';
+
+        const titleEl = lessonEl.querySelector('.item-title');
+        if (titleEl) {
+            titleEl.textContent = getLessonDisplayTitle(normalized);
         }
     }
 
@@ -2472,7 +2529,12 @@
 
     // ==================== SAVE COURSE ====================
     function saveCourse() {
-        showToast('Course saved!', 'success');
+        if (document.getElementById('lesson-name')) {
+            saveLesson();
+            return;
+        }
+
+        showToast('No lesson is open to save.', 'warning');
     }
 
     // ==================== UTILITY ====================
