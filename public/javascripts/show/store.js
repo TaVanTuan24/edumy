@@ -25,7 +25,7 @@
     return String(value || '').trim();
   }
 
-  function initStore(coursePayload, completedVideosPayload) {
+  function initStore(coursePayload, completedVideosPayload, completedLessonsPayload) {
     store.course = coursePayload || {};
     store.sections = normalizeSections(store.course);
     store.lessons = flattenLessons(store.course);
@@ -40,7 +40,10 @@
       store.openSectionIndexes.add(0);
     }
 
-    hydrateProgress(Array.isArray(completedVideosPayload) ? completedVideosPayload : []);
+    hydrateProgress(
+      Array.isArray(completedVideosPayload) ? completedVideosPayload : [],
+      Array.isArray(completedLessonsPayload) ? completedLessonsPayload : []
+    );
   }
 
   function normalizeSections(course) {
@@ -101,8 +104,13 @@
     return result;
   }
 
-  function hydrateProgress(completedVideos) {
+  function hydrateProgress(completedVideos, completedLessons) {
     const localProgress = readJson(storageKey(STORAGE_SUFFIX.progress), {});
+    const completedLessonIds = new Set(
+      (Array.isArray(completedLessons) ? completedLessons : [])
+        .map(function(id) { return String(id || ''); })
+        .filter(Boolean)
+    );
     store.progress = {};
 
     store.lessons.forEach(function(lesson) {
@@ -111,7 +119,7 @@
       const backendDone = mediaKey && completedVideos.some(function(v) {
         return normalizeMediaKey(v) === mediaKey;
       });
-      store.progress[id] = !!(backendDone || localProgress[id]);
+      store.progress[id] = !!(completedLessonIds.has(id) || backendDone || localProgress[id]);
     });
   }
 

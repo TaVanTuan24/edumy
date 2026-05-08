@@ -36,6 +36,44 @@ function countCourseLessons(course) {
   }, 0);
 }
 
+function normalizeProgressMediaKey(value) {
+  return String(value || '').trim().split('?')[0];
+}
+
+function getLessonMediaKey(lesson) {
+  const content = lesson && typeof lesson.content === 'object' && lesson.content ? lesson.content : {};
+  return normalizeProgressMediaKey(
+    lesson && (lesson.preview || lesson.videoUrl || lesson.refId)
+    || content.videoUrl
+    || content.streamUrl
+    || content.url
+    || ''
+  );
+}
+
+function getCompletedLessonIdsFromLegacyVideos(course, completedVideos) {
+  const completedMediaKeys = new Set(
+    (Array.isArray(completedVideos) ? completedVideos : [])
+      .map(normalizeProgressMediaKey)
+      .filter(Boolean)
+  );
+
+  if (completedMediaKeys.size === 0) return [];
+
+  const ids = [];
+  for (const section of getCanonicalSections(course)) {
+    const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+    for (const lesson of lessons) {
+      const mediaKey = getLessonMediaKey(lesson);
+      if (mediaKey && completedMediaKeys.has(mediaKey)) {
+        ids.push(String(lesson && lesson._id || ''));
+      }
+    }
+  }
+
+  return ids.filter(Boolean);
+}
+
 
 function sanitizeCourseInput(rawCourse) {
   const source = rawCourse && typeof rawCourse === 'object' ? rawCourse : {};
@@ -337,10 +375,23 @@ module.exports.showCourses = async (req, res) => {
   syncCourseContent(course);
 
   let completedVideos = [];
+  let completedLessons = [];
   let gamification = null;
   if (req.user) {
-    const progress = await Progress.findOne({ user: req.user._id, course: course._id });
-    if (progress?.completedVideos) completedVideos = progress.completedVideos;
+    const [legacyProgress, progressDoc] = await Promise.all([
+      Progress.findOne({ user: req.user._id, course: course._id }).lean(),
+      UserCourseProgress.findOne({ user: req.user._id, course: course._id })
+        .select('completedLessons')
+        .lean()
+    ]);
+
+    if (legacyProgress?.completedVideos) completedVideos = legacyProgress.completedVideos;
+
+    const progressLessonIds = Array.isArray(progressDoc && progressDoc.completedLessons)
+      ? progressDoc.completedLessons.map((id) => String(id)).filter(Boolean)
+      : [];
+    const legacyLessonIds = getCompletedLessonIdsFromLegacyVideos(course, completedVideos);
+    completedLessons = Array.from(new Set([...progressLessonIds, ...legacyLessonIds]));
 
     const profileUser = await User.findById(req.user._id);
     if (profileUser) {
@@ -376,6 +427,7 @@ module.exports.showCourses = async (req, res) => {
   res.render('courses/show', {
     course,
     completedVideos,
+    completedLessons,
     sectionNotes,
     hasCourseUpdate: updateStatus.hadUpdate,
     gamification,

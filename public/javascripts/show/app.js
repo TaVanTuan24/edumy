@@ -33,7 +33,11 @@
       return;
     }
 
-    window.LearningStore.initStore(window.__COURSE__ || window.course || {}, window.completedVideos || []);
+    window.LearningStore.initStore(
+      window.__COURSE__ || window.course || {},
+      window.completedVideos || [],
+      window.completedLessons || []
+    );
 
     bindEvents();
     exposeLegacyHooks();
