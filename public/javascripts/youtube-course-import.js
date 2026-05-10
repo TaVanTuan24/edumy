@@ -262,10 +262,7 @@
         renderPreview();
         syncHiddenSections();
         ensureFormCsrf(hostForm);
-        setStatus(
-          'Preview ready' + (previewState.groupingModel ? ` • grouped with ${previewState.groupingModel}` : ' • grouped with fallback'),
-          'success'
-        );
+        setStatus(buildPreviewReadyMessage(previewState), 'success');
       } catch (error) {
         previewState = null;
         previewEl.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error.message || 'Failed to import playlist.') + '</div>';
@@ -281,6 +278,7 @@
         playlistTitle: String(preview && preview.playlistTitle || '').trim(),
         totalVideos: Number(preview && preview.totalVideos) || 0,
         warnings: Array.isArray(preview && preview.warnings) ? preview.warnings : [],
+        groupingStrategy: String(preview && preview.groupingStrategy || '').trim(),
         groupingModel: String(preview && preview.groupingModel || '').trim(),
         sections: (Array.isArray(preview && preview.sections) ? preview.sections : []).map(function(section, sectionIndex) {
           return {
@@ -304,6 +302,25 @@
           return section.videos.length > 0;
         })
       };
+    }
+
+    function buildPreviewReadyMessage(preview) {
+      const strategy = String(preview && preview.groupingStrategy || '').trim().toLowerCase();
+      const model = String(preview && preview.groupingModel || '').trim();
+
+      if (strategy === 'ai') {
+        return 'Preview ready' + (model ? ` - grouped with ${model}` : ' - grouped with AI');
+      }
+
+      if (strategy === 'fallback') {
+        return 'Preview ready - AI grouping failed, using deterministic fallback';
+      }
+
+      if (strategy === 'deterministic') {
+        return 'Preview ready - AI settings are not configured, using deterministic fallback';
+      }
+
+      return 'Preview ready';
     }
 
     function buildLoadingPreview() {
@@ -331,32 +348,32 @@
           return [
             '<section class="card border mb-3 youtube-import-section" data-section-index="' + sectionIndex + '">',
             '<div class="card-body">',
-            '<div class="d-flex justify-content-between align-items-center gap-2 mb-2">',
+            '<div class="youtube-import-section-head mb-2">',
             '<input type="text" class="form-control" data-section-title value="' + escapeAttribute(section.title) + '">',
-            '<button type="button" class="btn btn-outline-secondary btn-sm" data-add-section-before="' + sectionIndex + '">+ Section</button>',
+            '<button type="button" class="btn btn-outline-secondary btn-sm youtube-import-add-section-btn" data-add-section-before="' + sectionIndex + '">+ Section</button>',
             '</div>',
             '<div class="small text-muted mb-3">' + (section.description ? escapeHtml(section.description) : 'AI grouped section') + '</div>',
             '<div class="d-grid gap-2">',
             section.videos.map(function(video, videoIndex) {
               return [
                 '<article class="youtube-import-video-row border rounded p-2" data-video-index="' + videoIndex + '">',
-                '<div class="row g-2 align-items-center">',
-                '<div class="col-12 col-lg-2">',
+                '<div class="youtube-import-video-grid">',
+                '<div class="youtube-import-video-thumb">',
                 video.thumbnail ? '<img src="' + escapeAttribute(video.thumbnail) + '" alt="" class="img-fluid rounded">' : '',
                 '</div>',
-                '<div class="col-12 col-lg-6">',
+                '<div class="youtube-import-video-main">',
                 '<input type="text" class="form-control" data-video-title value="' + escapeAttribute(video.title) + '">',
                 '<div class="small text-muted mt-1">' + escapeHtml(video.durationFormatted || 'Duration unavailable') + '</div>',
                 '</div>',
-                '<div class="col-8 col-lg-3">',
+                '<div class="youtube-import-video-target">',
                 '<select class="form-select" data-video-section>',
                 previewState.sections.map(function(targetSection, targetIndex) {
                   return '<option value="' + targetIndex + '"' + (targetIndex === sectionIndex ? ' selected' : '') + '>' + escapeHtml(targetSection.title) + '</option>';
                 }).join(''),
                 '</select>',
                 '</div>',
-                '<div class="col-4 col-lg-1 d-grid">',
-                '<button type="button" class="btn btn-outline-danger btn-sm" data-remove-video>Remove</button>',
+                '<div class="youtube-import-video-actions">',
+                '<button type="button" class="btn btn-outline-danger btn-sm youtube-import-remove-btn" data-remove-video>Remove</button>',
                 '</div>',
                 '</div>',
                 '</article>'

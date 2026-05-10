@@ -207,19 +207,21 @@
               Start a lesson to build your recent activity timeline.
             </div>
           <% } else { %>
-            <div class="activity-timeline">
-              <% recentActivity.forEach((entry) => { %>
-                <article class="activity-item">
-                  <div class="activity-icon" aria-hidden="true">
-                    <% if (entry.type.includes('quiz')) { %><i class="fa-solid fa-circle-question"></i><% } else if (entry.type.includes('slide')) { %><i class="fa-regular fa-file-lines"></i><% } else if (entry.type.includes('video') || entry.type.includes('lesson')) { %><i class="fa-solid fa-play"></i><% } else { %><i class="fa-solid fa-circle"></i><% } %>
-                  </div>
-                  <div class="activity-copy">
-                    <strong><%= entry.label %></strong>
-                    <div class="small text-muted"><%= entry.courseTitle %><% if (entry.lessonName) { %> &bull; <%= stripFileExtension(entry.lessonName) %><% } %></div>
-                    <div class="small text-muted"><%= entry.createdAtLabel || new Date(entry.createdAt).toLocaleString() %></div>
-                  </div>
-                </article>
-              <% }) %>
+            <div class="dashboard-scroll-area dashboard-activity-scroll">
+              <div class="activity-timeline">
+                <% recentActivity.forEach((entry) => { %>
+                  <article class="activity-item">
+                    <div class="activity-icon" aria-hidden="true">
+                      <% if (entry.type.includes('quiz')) { %><i class="fa-solid fa-circle-question"></i><% } else if (entry.type.includes('slide')) { %><i class="fa-regular fa-file-lines"></i><% } else if (entry.type.includes('video') || entry.type.includes('lesson')) { %><i class="fa-solid fa-play"></i><% } else { %><i class="fa-solid fa-circle"></i><% } %>
+                    </div>
+                    <div class="activity-copy">
+                      <strong><%= entry.label %></strong>
+                      <div class="small text-muted"><%= entry.courseTitle %><% if (entry.lessonName) { %> &bull; <%= stripFileExtension(entry.lessonName) %><% } %></div>
+                      <div class="small text-muted"><%= entry.createdAtLabel || new Date(entry.createdAt).toLocaleString() %></div>
+                    </div>
+                  </article>
+                <% }) %>
+              </div>
             </div>
           <% } %>
         </section>

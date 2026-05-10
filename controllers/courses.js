@@ -37,7 +37,37 @@ function countCourseLessons(course) {
 }
 
 function normalizeProgressMediaKey(value) {
-  return String(value || '').trim().split('?')[0];
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw, 'https://example.com');
+    const host = String(parsed.hostname || '').toLowerCase();
+
+    if (host.includes('youtube.com') || host.includes('youtu.be')) {
+      if (host.includes('youtu.be')) {
+        const shortId = String(parsed.pathname || '').replace(/^\/+/, '').split('/')[0];
+        return shortId ? `youtube:${shortId}` : raw;
+      }
+
+      const videoId = parsed.searchParams.get('v')
+        || String(parsed.pathname || '').match(/\/shorts\/([^/?#]+)/i)?.[1]
+        || String(parsed.pathname || '').match(/\/embed\/([^/?#]+)/i)?.[1]
+        || '';
+      return videoId ? `youtube:${videoId}` : raw;
+    }
+
+    if (host.includes('drive.google.com')) {
+      const fileId = String(parsed.pathname || '').match(/\/file\/d\/([^/?#]+)/i)?.[1]
+        || parsed.searchParams.get('id')
+        || '';
+      return fileId ? `drive:${fileId}` : raw;
+    }
+
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return raw.split('?')[0];
+  }
 }
 
 function getLessonMediaKey(lesson) {
@@ -313,7 +343,7 @@ module.exports.createCourse = async (req, res) => {
     const folderId = match[1];
     try {
       const structure = await scanDriveStructure(folderId);
-      course.sections = structure.reverse();
+      course.sections = structure;
     } catch (err) {
       logger.error({ err }, "Google Drive scan error");
       req.flash('error', 'Could not scan Drive content. Please check the link.');
@@ -562,7 +592,7 @@ module.exports.updateProgress = async (req, res) => {
     const hasVideo = typeof video === 'string' && video.length > 0;
     if (!hasVideo && !hasLessonId) throw new Error('Missing video URL or invalid video URL format');
 
-    const videoLink = hasVideo ? video.split('?')[0] : '';
+    const videoLink = hasVideo ? normalizeProgressMediaKey(video) : '';
     const courseObjectId = new mongoose.Types.ObjectId(courseId);
 
     if (hasVideo) {
@@ -571,12 +601,12 @@ module.exports.updateProgress = async (req, res) => {
         progress = new Progress({ user: userId, course: courseObjectId, completedVideos: [] });
       }
 
-      const alreadyExists = progress.completedVideos.some(v => v.split('?')[0] === videoLink);
+      const alreadyExists = progress.completedVideos.some((value) => normalizeProgressMediaKey(value) === videoLink);
 
       if (completed === true || completed === 'true') {
         if (!alreadyExists) progress.completedVideos.push(videoLink);
       } else {
-        progress.completedVideos = progress.completedVideos.filter(v => v.split('?')[0] !== videoLink);
+        progress.completedVideos = progress.completedVideos.filter((value) => normalizeProgressMediaKey(value) !== videoLink);
       }
 
       await progress.save();

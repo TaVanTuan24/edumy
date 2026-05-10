@@ -1,4 +1,5 @@
 ﻿<% layout('/layouts/boilerplate')%>
+<link rel="stylesheet" href="/stylesheets/course-pages.css">
 <link rel="stylesheet" href="/stylesheets/stars.css">
 
 <div class="learning-root">
@@ -177,12 +178,12 @@
         <div class="learner-sidebar-card-head">
           <div>
             <h5>Learning Progress</h5>
-            <p><%= completedCount %> / <%= totalVideos %> lessons completed</p>
+            <p id="learningProgressLabel"><%= completedCount %> / <%= totalVideos %> lessons completed</p>
           </div>
-          <span class="app-badge app-badge-topic"><%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>%</span>
+          <span id="learningProgressPercent" class="app-badge app-badge-topic"><%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>%</span>
         </div>
         <div class="progress learner-progress-track">
-          <div class="progress-bar bg-success" role="progressbar" data-progress-width="<%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>"
+          <div id="learningProgressBar" class="progress-bar bg-success" role="progressbar" data-progress-width="<%= totalVideos ? Math.round(completedCount / totalVideos * 100) : 0 %>"
             aria-valuenow="<%= completedCount %>" aria-valuemin="0" aria-valuemax="<%= totalVideos %>"></div>
         </div>
       </section>
@@ -200,18 +201,33 @@
                 <% } %>
               </p>
             </div>
-            <span class="app-badge app-badge-xp" id="gmXpValue"><%= gm.totalXP %> XP</span>
+            <div class="learner-sidebar-card-tools">
+              <span class="app-badge app-badge-xp" id="gmXpValue"><%= gm.totalXP %> XP</span>
+              <button
+                type="button"
+                class="sidebar-collapse-btn"
+                id="gamificationCollapseBtn"
+                data-target="#learningGamificationBody"
+                aria-expanded="true"
+                aria-controls="learningGamificationBody"
+                aria-label="Collapse gamification panel"
+              >
+                <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <h6 class="mb-0">Level <span id="gmLevelValue"><%= gm.currentLevel %></span></h6>
-            <span class="small"><i class="fa-solid fa-fire text-danger me-1"></i>Streak: <strong id="gmStreakValue"><%= gm.currentStreak %></strong></span>
-          </div>
-          <div class="progress progress-thin mb-2">
-            <div id="gmLevelProgress" class="progress-bar bg-info" role="progressbar" data-progress-width="<%= gm.levelProgress.progressPercent || 0 %>"></div>
-          </div>
-          <div class="learner-sidebar-links">
-            <a href="/profile" class="btn btn-sm btn-outline-primary">Profile</a>
-            <a href="/leaderboard" class="btn btn-sm btn-outline-secondary">Leaderboard</a>
+          <div id="learningGamificationBody" class="sidebar-collapsible-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Level <span id="gmLevelValue"><%= gm.currentLevel %></span></h6>
+              <span class="small"><i class="fa-solid fa-fire text-danger me-1"></i>Streak: <strong id="gmStreakValue"><%= gm.currentStreak %></strong></span>
+            </div>
+            <div class="progress progress-thin mb-2">
+              <div id="gmLevelProgress" class="progress-bar bg-info" role="progressbar" data-progress-width="<%= gm.levelProgress.progressPercent || 0 %>"></div>
+            </div>
+            <div class="learner-sidebar-links">
+              <a href="/profile" class="btn btn-sm btn-outline-primary">Profile</a>
+              <a href="/leaderboard" class="btn btn-sm btn-outline-secondary">Leaderboard</a>
+            </div>
           </div>
         </div>
       </section>
@@ -224,11 +240,13 @@
               <p>Jump between lessons and keep your place.</p>
             </div>
           </div>
-          <div id="sectionsAccordion" class="sections-accordion">
-            <div class="app-loading-state" aria-hidden="true">
-              <div class="app-loading-line is-short"></div>
-              <div class="app-loading-line"></div>
-              <div class="app-loading-line"></div>
+          <div class="dashboard-scroll-area learning-sections-scroll">
+            <div id="sectionsAccordion" class="sections-accordion">
+              <div class="app-loading-state" aria-hidden="true">
+                <div class="app-loading-line is-short"></div>
+                <div class="app-loading-line"></div>
+                <div class="app-loading-line"></div>
+              </div>
             </div>
           </div>
         </section>

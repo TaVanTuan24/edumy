@@ -1,10 +1,12 @@
 const Course = require('../models/course');
 const User = require('../models/user');
+const Progress = require('../models/progress');
 const UserCourseProgress = require('../models/userCourseProgress');
 const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
 const { findLessonContext } = require('../utils/lessonLocator');
 const { stripFileExtension } = require('../utils/formatLessonName');
 const { getLessonContentMode } = require('../utils/lessonContentMode');
+const { getCanonicalSections } = require('../utils/courseContentAdapter');
 
 function formatRelativeDate(input) {
   if (!input) return 'No activity yet';
@@ -100,6 +102,74 @@ function buildWeakSpots(progressDocs, courseMap) {
   return weak.sort((a, b) => a.percent - b.percent).slice(0, 5);
 }
 
+function normalizeProgressMediaKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw, 'https://example.com');
+    const host = String(parsed.hostname || '').toLowerCase();
+
+    if (host.includes('youtube.com') || host.includes('youtu.be')) {
+      if (host.includes('youtu.be')) {
+        const shortId = String(parsed.pathname || '').replace(/^\/+/, '').split('/')[0];
+        return shortId ? `youtube:${shortId}` : raw;
+      }
+
+      const videoId = parsed.searchParams.get('v')
+        || String(parsed.pathname || '').match(/\/shorts\/([^/?#]+)/i)?.[1]
+        || String(parsed.pathname || '').match(/\/embed\/([^/?#]+)/i)?.[1]
+        || '';
+      return videoId ? `youtube:${videoId}` : raw;
+    }
+
+    if (host.includes('drive.google.com')) {
+      const fileId = String(parsed.pathname || '').match(/\/file\/d\/([^/?#]+)/i)?.[1]
+        || parsed.searchParams.get('id')
+        || '';
+      return fileId ? `drive:${fileId}` : raw;
+    }
+
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return raw.split('?')[0];
+  }
+}
+
+function getLessonMediaKey(lesson) {
+  const content = lesson && typeof lesson.content === 'object' && lesson.content ? lesson.content : {};
+  return normalizeProgressMediaKey(
+    lesson && (lesson.preview || lesson.videoUrl || lesson.refId)
+    || content.videoUrl
+    || content.streamUrl
+    || content.url
+    || ''
+  );
+}
+
+function getCompletedLessonIdsFromLegacyVideos(course, completedVideos) {
+  const completedMediaKeys = new Set(
+    (Array.isArray(completedVideos) ? completedVideos : [])
+      .map(normalizeProgressMediaKey)
+      .filter(Boolean)
+  );
+
+  if (completedMediaKeys.size === 0) return [];
+
+  const ids = [];
+  for (const section of getCanonicalSections(course)) {
+    const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+    for (const lesson of lessons) {
+      const mediaKey = getLessonMediaKey(lesson);
+      if (mediaKey && completedMediaKeys.has(mediaKey)) {
+        ids.push(String(lesson && lesson._id || ''));
+      }
+    }
+  }
+
+  return ids.filter(Boolean);
+}
+
 async function buildLearnerDashboard(userId) {
   const user = await User.findById(userId).select('enrolledCourses enrolledCourseIds gamification');
   if (!user) {
@@ -124,15 +194,27 @@ async function buildLearnerDashboard(userId) {
     .lean();
 
   const courseMap = new Map(courses.map((course) => [String(course._id), course]));
-  const progressDocs = await UserCourseProgress.find({ user: userId, course: { $in: enrolledIds } }).lean();
+  const [progressDocs, legacyProgressDocs] = await Promise.all([
+    UserCourseProgress.find({ user: userId, course: { $in: enrolledIds } }).lean(),
+    Progress.find({ user: userId, course: { $in: enrolledIds } }).lean()
+  ]);
   const progressMap = new Map(progressDocs.map((doc) => [String(doc.course), doc]));
+  const legacyProgressMap = new Map(legacyProgressDocs.map((doc) => [String(doc.course), doc]));
 
   const myCourses = courses.map((course) => {
     const progressDoc = progressMap.get(String(course._id));
-    const completedLessons = Array.isArray(progressDoc && progressDoc.completedLessons) ? progressDoc.completedLessons.length : 0;
-    const totalLessons = Number(course.totalLessonCount || 0) || 0;
+    const legacyProgressDoc = legacyProgressMap.get(String(course._id));
+    const progressLessonIds = Array.isArray(progressDoc && progressDoc.completedLessons)
+      ? progressDoc.completedLessons.map((id) => String(id)).filter(Boolean)
+      : [];
+    const legacyLessonIds = getCompletedLessonIdsFromLegacyVideos(course, legacyProgressDoc && legacyProgressDoc.completedVideos);
+    const completedLessons = Array.from(new Set([].concat(progressLessonIds, legacyLessonIds))).length;
+    const totalLessons = getCanonicalSections(course).reduce((sum, section) => {
+      const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+      return sum + lessons.length;
+    }, 0);
     const completionRate = progressDoc && progressDoc.completionRate != null
-      ? Number(progressDoc.completionRate)
+      ? Math.max(Number(progressDoc.completionRate) || 0, totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0)
       : (totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0);
     const status = getEffectiveCourseStatus(course);
     const lessonContext = progressDoc ? findLessonContext(course, {

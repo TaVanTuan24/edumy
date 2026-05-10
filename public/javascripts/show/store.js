@@ -105,7 +105,6 @@
   }
 
   function hydrateProgress(completedVideos, completedLessons) {
-    const localProgress = readJson(storageKey(STORAGE_SUFFIX.progress), {});
     const completedLessonIds = new Set(
       (Array.isArray(completedLessons) ? completedLessons : [])
         .map(function(id) { return String(id || ''); })
@@ -119,7 +118,7 @@
       const backendDone = mediaKey && completedVideos.some(function(v) {
         return normalizeMediaKey(v) === mediaKey;
       });
-      store.progress[id] = !!(completedLessonIds.has(id) || backendDone || localProgress[id]);
+      store.progress[id] = !!(completedLessonIds.has(id) || backendDone);
     });
   }
 
@@ -187,7 +186,38 @@
   }
 
   function normalizeMediaKey(url) {
-    return String(url || '').split('?')[0];
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+
+    try {
+      const parsed = new URL(raw, window.location.origin);
+      const host = String(parsed.hostname || '').toLowerCase();
+
+      if (host.includes('youtube.com') || host.includes('youtu.be')) {
+        if (host.includes('youtu.be')) {
+          const shortId = String(parsed.pathname || '').replace(/^\/+/, '').split('/')[0];
+          return shortId ? 'youtube:' + shortId : raw;
+        }
+
+        const shortsMatch = String(parsed.pathname || '').match(/\/shorts\/([^/?#]+)/i);
+        const embedMatch = String(parsed.pathname || '').match(/\/embed\/([^/?#]+)/i);
+        const videoId = parsed.searchParams.get('v')
+          || (shortsMatch && shortsMatch[1])
+          || (embedMatch && embedMatch[1])
+          || '';
+        return videoId ? 'youtube:' + videoId : raw;
+      }
+
+      if (host.includes('drive.google.com')) {
+        const fileMatch = String(parsed.pathname || '').match(/\/file\/d\/([^/?#]+)/i);
+        const fileId = (fileMatch && fileMatch[1]) || parsed.searchParams.get('id') || '';
+        return fileId ? 'drive:' + fileId : raw;
+      }
+
+      return parsed.origin + parsed.pathname;
+    } catch {
+      return raw.split('?')[0];
+    }
   }
 
   function escapeHtml(value) {

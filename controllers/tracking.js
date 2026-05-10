@@ -44,6 +44,18 @@ function normalizeLessonTracking(doc, lessonId, lessonType) {
   return entry;
 }
 
+function ensureRecentActivity(progressDoc) {
+  if (!Array.isArray(progressDoc.recentActivity)) {
+    progressDoc.recentActivity = [];
+  }
+}
+
+function ensureQuizResults(progressDoc) {
+  if (!Array.isArray(progressDoc.quizResults)) {
+    progressDoc.quizResults = [];
+  }
+}
+
 async function getOrCreateProgress(userId, courseId) {
   return UserCourseProgress.findOneAndUpdate(
     { user: userId, course: courseId },
@@ -53,7 +65,7 @@ async function getOrCreateProgress(userId, courseId) {
 }
 
 function appendRecentActivity(progressDoc, activity) {
-  progressDoc.recentActivity = Array.isArray(progressDoc.recentActivity) ? progressDoc.recentActivity : [];
+  ensureRecentActivity(progressDoc);
   progressDoc.recentActivity.push({
     type: String(activity && activity.type || 'activity'),
     label: String(activity && activity.label || 'Learning activity'),
@@ -110,6 +122,7 @@ module.exports.trackEvent = async (req, res) => {
     }
 
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
+    ensureRecentActivity(progressDoc);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType);
     const course = await Course.findById(courseId).select('sections');
 
@@ -186,6 +199,7 @@ module.exports.trackSlide = async (req, res) => {
     }
 
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
+    ensureRecentActivity(progressDoc);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType || 'slide');
     const course = await Course.findById(courseId).select('sections');
 
@@ -224,6 +238,8 @@ module.exports.trackQuiz = async (req, res) => {
     }
 
     const progressDoc = await getOrCreateProgress(req.user._id, courseId);
+    ensureRecentActivity(progressDoc);
+    ensureQuizResults(progressDoc);
     const entry = normalizeLessonTracking(progressDoc, lessonId, lessonType || 'quiz');
 
     const course = await Course.findById(courseId).select('sections').lean();

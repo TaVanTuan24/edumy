@@ -1472,15 +1472,112 @@ html[data-theme="dark"] .interactive-quiz-option.wrong {
     gap: 1rem;
 }
 
+.youtube-import-section {
+    border-color: color-mix(in srgb, var(--app-border) 92%, white 8%);
+    border-radius: 18px;
+}
+
+.youtube-import-section .card-body {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.youtube-import-section-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.youtube-import-add-section-btn {
+    min-width: 112px;
+    min-height: 44px;
+    white-space: nowrap;
+}
+
+.youtube-import-video-row {
+    border-color: color-mix(in srgb, var(--app-border) 90%, white 10%) !important;
+    background: color-mix(in srgb, var(--app-surface) 92%, white 8%);
+}
+
+.youtube-import-video-grid {
+    display: grid;
+    grid-template-columns: 168px minmax(0, 1.6fr) minmax(220px, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.youtube-import-video-thumb {
+    min-width: 0;
+}
+
 .youtube-import-video-row img {
     width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: cover;
 }
 
+.youtube-import-video-main,
+.youtube-import-video-target {
+    min-width: 0;
+}
+
+.youtube-import-video-main .form-control,
+.youtube-import-video-target .form-select {
+    min-height: 54px;
+}
+
+.youtube-import-video-main .form-control,
+.youtube-import-video-target .form-select,
+.youtube-import-section-head .form-control {
+    border-radius: 16px;
+}
+
+.youtube-import-video-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.youtube-import-remove-btn {
+    min-width: 96px;
+    min-height: 48px;
+    white-space: nowrap;
+}
+
 @media (max-width: 767px) {
     .course-thumbnail-preview-card {
         grid-template-columns: 1fr;
+    }
+
+    .youtube-import-section-head {
+        grid-template-columns: 1fr;
+    }
+
+    .youtube-import-add-section-btn {
+        width: 100%;
+    }
+
+    .youtube-import-video-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .youtube-import-video-thumb {
+        max-width: 220px;
+    }
+
+    .youtube-import-video-actions {
+        justify-content: stretch;
+    }
+
+    .youtube-import-remove-btn {
+        width: 100%;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+    .youtube-import-video-grid {
+        grid-template-columns: 148px minmax(0, 1fr) minmax(180px, 0.8fr) auto;
     }
 }
 

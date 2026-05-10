@@ -208,10 +208,11 @@
     container.innerHTML = html;
   }
 
-  function updateSidebarUI() {
+  function updateSidebarUI(options) {
     const deps = getDeps();
     const store = deps.store;
     const currentId = store.currentLesson ? String(store.currentLesson._id) : null;
+    const preserveCollapsedActiveSection = Boolean(options && options.preserveCollapsedActiveSection);
 
     document.querySelectorAll('.learning-section').forEach(function(sectionEl) {
       const index = Number(sectionEl.dataset.sectionIndex);
@@ -227,7 +228,7 @@
       if (currentId && String(el.dataset.id) === currentId) {
         el.classList.add('active');
         const parentSection = el.closest('.learning-section');
-        if (parentSection) {
+        if (parentSection && !preserveCollapsedActiveSection) {
           parentSection.classList.add('open');
           const parentIndex = Number(parentSection.dataset.sectionIndex);
           deps.setSectionOpen(parentIndex, true);
@@ -1864,6 +1865,14 @@
     return url.toString();
   }
 
+  function buildGoogleDriveViewUrl(fileId, resourceKey) {
+    const url = new URL('https://drive.google.com/file/d/' + encodeURIComponent(String(fileId || '')) + '/view');
+    if (resourceKey) {
+      url.searchParams.set('resourcekey', String(resourceKey));
+    }
+    return url.toString();
+  }
+
   function normalizeVideoEmbedUrl(inputUrl) {
     const raw = String(inputUrl || '').trim();
     if (!raw) return '';
@@ -1906,6 +1915,29 @@
       window.clearTimeout(timer);
       iframe.removeEventListener('load', onLoad);
     }, { once: true });
+  }
+
+  function renderGoogleDriveBlockedPanel(lesson, driveMeta, originalUrl) {
+    const deps = getDeps();
+    const lessonTitle = lesson && (lesson.displayTitle || deps.formatLessonTitle(lesson.title) || lesson.title);
+    const driveUrl = driveMeta ? buildGoogleDriveViewUrl(driveMeta.fileId, driveMeta.resourceKey) : '';
+    const sourceUrl = String(originalUrl || '').trim();
+    const openUrl = driveUrl || sourceUrl || '#';
+    const body = [
+      '<p class="text-muted mb-3">Google Drive has blocked this file from being embedded in the course player.</p>',
+      '<div class="d-flex flex-wrap gap-2">',
+      '<a class="btn btn-primary" target="_blank" rel="noopener noreferrer" href="' + openUrl + '">Open in Google Drive</a>',
+      sourceUrl && sourceUrl !== openUrl
+        ? '<a class="btn btn-outline-secondary" target="_blank" rel="noopener noreferrer" href="' + sourceUrl + '">Open source link</a>'
+        : '',
+      '</div>'
+    ].join('');
+
+    renderPanel('Lecture', lessonTitle, body, false);
+    setProviderNotice('Google Drive blocks this file from being embedded here. Use the Drive link above or switch the lesson to YouTube / direct MP4 for in-app playback.', 'warning');
+    stopDriveTimer();
+    setPlaybackTimeBadgeVisible(false);
+    setPlaybackState(false);
   }
 
   function getYouTubeId(url) {

@@ -1,7 +1,9 @@
 const { formatDuration } = require('../../utils/duration');
 const { generatePromptReply } = require('../ai/chatOrchestrator');
+const { loadUserAiConfig } = require('../ai/userAiClient');
 const { fetchPlaylistVideos } = require('./youtubePlaylistService');
 const { extractPlaylistId } = require('./youtubeUrlParser');
+const logger = require('../../utils/logger');
 
 function buildVideoLessons(videos) {
   return (Array.isArray(videos) ? videos : []).map((video, index) => ({
@@ -117,43 +119,84 @@ async function groupVideosIntoSections(videos, options = {}) {
   if (!safeVideos.length) return { sections: [], strategy: 'none', model: '' };
 
   const prompt = buildGroupingPrompt(String(options.playlistTitle || ''), safeVideos, options);
-  const attempts = [''];
+  let selectedModel = '';
+  let aiConfigAvailable = false;
+
+  try {
+    const runtimeConfig = await loadUserAiConfig(options.userId);
+    selectedModel = String(runtimeConfig && runtimeConfig.model || '').trim();
+    aiConfigAvailable = Boolean(selectedModel);
+  } catch (_error) {
+    aiConfigAvailable = false;
+  }
+
+  const attempts = selectedModel ? [selectedModel] : [''];
+
+  const requestVariants = [
+    { responseFormat: 'json_object', label: 'json_object' },
+    { responseFormat: '', label: 'plain_text' }
+  ];
 
   for (const model of attempts) {
-    try {
-      const raw = await generatePromptReply({
-        userId: options.userId,
-        model,
-        prompt,
-        options: {
-          temperature: 0.2,
-          topP: 0.9,
-          maxTokens: 1400,
-          timeoutMs: 120000
+    for (const variant of requestVariants) {
+      try {
+        const raw = await generatePromptReply({
+          userId: options.userId,
+          model,
+          prompt,
+          options: {
+            temperature: 0.2,
+            topP: 0.9,
+            maxTokens: 1400,
+            timeoutMs: 120000,
+            responseFormat: variant.responseFormat
+          }
+        });
+        const parsed = parseAiJson(raw);
+        const validated = validateGroupedSections(parsed, safeVideos.length);
+        if (validated) {
+          return {
+            sections: validated,
+            strategy: 'ai',
+            model: selectedModel || String(model || '').trim()
+          };
         }
-      });
-      const parsed = parseAiJson(raw);
-      const validated = validateGroupedSections(parsed, safeVideos.length);
-      if (validated) {
-        return {
-          sections: validated,
-          strategy: 'ai',
-          model
-        };
+      } catch (error) {
+        logger.warn({
+          err: error,
+          model: selectedModel || String(model || '').trim(),
+          requestVariant: variant.label,
+          playlistTitle: String(options.playlistTitle || '').slice(0, 200),
+          videoCount: safeVideos.length
+        }, '[youtube-import] AI section grouping attempt failed');
+        // Try the next request variant, then fallback.
       }
-    } catch (_error) {
-      // Try the next model, then deterministic fallback.
     }
   }
 
+  logger.warn({
+    model: selectedModel,
+    aiConfigAvailable,
+    playlistTitle: String(options.playlistTitle || '').slice(0, 200),
+    videoCount: safeVideos.length
+  }, '[youtube-import] falling back to deterministic section grouping');
+
   return {
     sections: deterministicSections(safeVideos),
-    strategy: 'deterministic',
-    model: ''
+    strategy: aiConfigAvailable ? 'fallback' : 'deterministic',
+    model: selectedModel
   };
 }
 
 function buildImportPreview({ playlist, sections, lessons, warnings, grouping }) {
+  const previewWarnings = Array.isArray(warnings) ? warnings.slice() : [];
+
+  if (grouping && grouping.strategy === 'fallback') {
+    previewWarnings.push('AI section grouping failed. A deterministic fallback grouping was used instead.');
+  } else if (grouping && grouping.strategy === 'deterministic') {
+    previewWarnings.push('AI settings are not configured. A deterministic fallback grouping was used instead.');
+  }
+
   const previewSections = sections.map((section, sectionIndex) => ({
     id: `section-${sectionIndex + 1}`,
     title: section.title || `Section ${sectionIndex + 1}`,
@@ -169,7 +212,7 @@ function buildImportPreview({ playlist, sections, lessons, warnings, grouping })
     playlistDescription: playlist.description,
     totalVideos: lessons.length,
     sections: previewSections,
-    warnings: Array.isArray(warnings) ? warnings : [],
+    warnings: previewWarnings,
     groupingStrategy: grouping.strategy,
     groupingModel: grouping.model
   };

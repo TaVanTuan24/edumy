@@ -188,13 +188,19 @@ function getChatCompletionsUrl(baseUrl) {
 }
 
 function buildPayload({ config, prompt, messages, options, stream }) {
-    return {
+    const payload = {
         model: config.model,
         messages: normalizeMessages(messages, prompt),
         temperature: typeof options.temperature === 'number' ? options.temperature : 0.7,
         max_tokens: options.maxTokens || 2048,
         stream
     }
+
+    if (!stream && options && options.responseFormat === 'json_object') {
+        payload.response_format = { type: 'json_object' }
+    }
+
+    return payload
 }
 
 function buildAxiosConfig({ config, options }) {
@@ -215,7 +221,20 @@ function buildAxiosConfig({ config, options }) {
 function extractChatCompletionText(data) {
     const choice = data && Array.isArray(data.choices) ? data.choices[0] : null
     const content = choice && choice.message && choice.message.content
-    return typeof content === 'string' ? content : ''
+    if (typeof content === 'string') return content
+    if (Array.isArray(content)) {
+        return content
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return ''
+                if (typeof entry.text === 'string') return entry.text
+                if (typeof entry.content === 'string') return entry.content
+                if (entry.type === 'text' && typeof entry.value === 'string') return entry.value
+                return ''
+            })
+            .join('')
+            .trim()
+    }
+    return ''
 }
 
 function extractFinishReason(data) {

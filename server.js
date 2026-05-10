@@ -227,6 +227,8 @@ app.use((req, res, next) => {
       workerSrc: ["'self'", "blob:"],
       frameSrc: [
         "'self'",
+        "https://accounts.google.com/",
+        "https://docs.google.com/",
         "https://drive.google.com/",
         "https://www.youtube.com",
         "https://www.youtube-nocookie.com",

@@ -11,6 +11,7 @@
   const startedLessons = new Set();
   const heartbeatIntervalMs = 30000;
   const activityGraceMs = 45000;
+  const gamificationCollapseStorageKey = 'learning:gamification-collapsed';
 
   window.currentContext = {
     lessonId: null,
@@ -44,6 +45,7 @@
     resumeLastContext();
     updateProgressUI();
     initializeTabs();
+    initializeSidebarCollapsibles();
     toggleNotesVisibility(false);
     bindTrackingFlush();
     bindActivityTracking();
@@ -113,10 +115,8 @@
         if (!itemEl) return;
 
         const lessonId = itemEl.dataset.id;
-        setLessonProgress(lessonId, checkbox.checked, true);
-        window.LearningRender.renderLessonList(window.LearningStore.store.currentSectionIndex);
-        window.LearningRender.updateSidebarUI();
-        updateProgressUI();
+        preserveOpenSections();
+        syncLessonProgressChange(lessonId, checkbox.checked);
       });
     }
 
@@ -141,6 +141,27 @@
 
     window.saveNote = saveNote;
     window.__learningMarkCurrent = markCurrentLessonCompleted;
+  }
+
+  function initializeSidebarCollapsibles() {
+    const btn = document.getElementById('gamificationCollapseBtn');
+    const body = document.getElementById('learningGamificationBody');
+    if (!btn || !body) return;
+
+    const savedState = localStorage.getItem(gamificationCollapseStorageKey) === 'true';
+    setSidebarCollapsedState(btn, body, savedState);
+
+    btn.addEventListener('click', function() {
+      const nextCollapsed = btn.getAttribute('aria-expanded') === 'true';
+      setSidebarCollapsedState(btn, body, nextCollapsed);
+      localStorage.setItem(gamificationCollapseStorageKey, String(nextCollapsed));
+    });
+  }
+
+  function setSidebarCollapsedState(button, body, collapsed) {
+    const isCollapsed = Boolean(collapsed);
+    button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    body.classList.toggle('is-collapsed', isCollapsed);
   }
 
   function resumeLastContext() {
@@ -235,10 +256,34 @@
     }
   }
 
+  function syncLessonProgressChange(lessonId, completed) {
+    const deps = window.LearningStore;
+    const previous = deps.isLessonCompleted(lessonId);
+
+    syncProgressBackendByLesson(lessonId, completed)
+      .then(function(success) {
+        if (!success) {
+          deps.setLessonProgress(lessonId, previous);
+        } else {
+          deps.setLessonProgress(lessonId, completed);
+        }
+
+        window.LearningRender.renderLessonList(window.LearningStore.store.currentSectionIndex);
+        window.LearningRender.updateSidebarUI({ preserveCollapsedActiveSection: true });
+        updateProgressUI();
+      })
+      .catch(function() {
+        deps.setLessonProgress(lessonId, previous);
+        window.LearningRender.renderLessonList(window.LearningStore.store.currentSectionIndex);
+        window.LearningRender.updateSidebarUI({ preserveCollapsedActiveSection: true });
+        updateProgressUI();
+      });
+  }
+
   function syncProgressBackend(videoUrl, completed, lessonId) {
     const course = window.LearningStore.store.course || {};
     const lesson = window.LearningStore.getLessonById(lessonId);
-    fetch('/courses/' + String(course._id || '') + '/progress', {
+    return fetch('/courses/' + String(course._id || '') + '/progress', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -251,25 +296,42 @@
         lessonIndex: lesson && lesson.lessonIndex
       })
     })
-      .then(function() {
+      .then(function(res) {
+        if (!res.ok) {
+          throw new Error('Progress sync failed');
+        }
+        return res.json().catch(function() {
+          return { success: true };
+        });
+      })
+      .then(function(payload) {
+        if (!payload || payload.success === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Progress sync failed');
+        }
         if (completed) {
           refreshGamificationUI();
         }
+        return true;
       })
       .catch(function(err) {
         console.error('[Progress Sync Error]', err);
+        return false;
       });
+  }
+
+  function syncProgressBackendByLesson(lessonId, completed) {
+    const lesson = window.LearningStore.getLessonById(lessonId);
+    const videoUrl = lesson && (lesson.preview || (lesson.content && lesson.content.videoUrl)) || '';
+    return syncProgressBackend(videoUrl, completed, lessonId);
   }
 
   function markCurrentLessonCompleted() {
     const current = window.LearningStore.store.currentLesson;
     if (!current) return;
 
-    setLessonProgress(current._id, true, true);
     trackEvent('completed', current, null);
-    window.LearningRender.renderLessonList(window.LearningStore.store.currentSectionIndex);
-    window.LearningRender.updateSidebarUI();
-    updateProgressUI();
+    preserveOpenSections();
+    syncLessonProgressChange(current._id, true);
   }
 
   function bindTrackingFlush() {
@@ -516,14 +578,25 @@
     const completed = deps.getCompletedCount();
     const percent = Math.round((completed / total) * 100);
 
-    const bar = document.querySelector('.progress-bar');
-    const label = document.querySelector('.text-success');
-    if (!bar || !label) return;
+    const bar = document.getElementById('learningProgressBar');
+    const label = document.getElementById('learningProgressLabel');
+    const badge = document.getElementById('learningProgressPercent');
+    if (!bar || !label || !badge) return;
 
     bar.style.width = percent + '%';
     bar.setAttribute('aria-valuenow', completed);
-    label.innerText = 'Learning progress: ' + completed + ' / ' + total + ' videos (' + percent + '%)';
+    label.innerText = completed + ' / ' + total + ' lessons completed';
+    badge.innerText = percent + '%';
     syncLearningStageHeader();
+  }
+
+  function preserveOpenSections() {
+    const deps = window.LearningStore;
+    document.querySelectorAll('.learning-section').forEach(function(sectionEl) {
+      const index = Number(sectionEl.dataset.sectionIndex);
+      if (!Number.isFinite(index)) return;
+      deps.setSectionOpen(index, sectionEl.classList.contains('open'));
+    });
   }
 
   function initializeTabs() {

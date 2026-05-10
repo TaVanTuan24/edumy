@@ -15,7 +15,8 @@ async function scanDriveStructure(folderId) {
     const res = await drive.files.list({
       q: `'${parentId}' in parents and trashed = false`,
       fields: 'files(id, name, mimeType, resourceKey, webViewLink)',
-      pageSize: 1000
+      pageSize: 1000,
+      orderBy: 'name_natural'
     });
 
     const lessons = [];
