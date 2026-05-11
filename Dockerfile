@@ -3,6 +3,9 @@ FROM node:20-alpine AS base
 
 WORKDIR /app
 
+# Install yt-dlp into the image so production does not depend on runtime GitHub downloads.
+RUN apk add --no-cache python3 yt-dlp
+
 # Copy dependency manifests first for better layer caching
 COPY package.json package-lock.json ./
 
@@ -20,6 +23,8 @@ USER edumy
 # Environment
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV VR_STREAM_YTDLP_PATH=/usr/bin/yt-dlp
+ENV VR_STREAM_SKIP_YTDLP_DOWNLOAD=true
 
 EXPOSE 3000
 

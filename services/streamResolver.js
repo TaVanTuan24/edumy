@@ -78,7 +78,26 @@ function isDirectPlayableUrl(parsedUrl) {
 function normalizeErrorDetails(err) {
   if (!err) return 'Unknown error';
   if (typeof err === 'string') return err;
+  if (Array.isArray(err)) {
+    return err.map((item) => normalizeErrorDetails(item)).join(' | ');
+  }
   if (err.message) return err.message;
+  if (err.stderr || err.stdout) {
+    return [err.stderr, err.stdout]
+      .filter((part) => typeof part === 'string' && part.trim().length > 0)
+      .join(' | ');
+  }
+  if (err.statusCode || err.statusMessage) {
+    return JSON.stringify({
+      statusCode: err.statusCode || null,
+      statusMessage: err.statusMessage || null
+    });
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    // Fall through to String(err) when serialization is not possible.
+  }
   return String(err);
 }
 
@@ -350,7 +369,8 @@ async function _resolveYouTubeViaYtDlpWrap(sourceUrl, preferredFormat, timeoutMs
     throw new Error('yt-dlp-wrap not installed');
   }
 
-  const ytDlpWrap = new YTDlpWrap.default();
+  const binaryPath = await ensureManagedYtDlpBinary(timeoutMs);
+  const ytDlpWrap = new YTDlpWrap.default(binaryPath);
   const output = await runWithTimeout(ytDlpWrap.execPromise(['-J', sourceUrl]), timeoutMs);
 
   let parsed;
