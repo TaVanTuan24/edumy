@@ -429,20 +429,11 @@ async function resolveYouTubeStream(sourceUrl, preferredFormat, timeoutMs, retri
 
   try {
     return await withRetries(
-      () => resolveYouTubeViaYtdlCore(normalizedSourceUrl, preferredFormat, timeoutMs),
+      () => resolveYouTubeViaManagedYtDlp(normalizedSourceUrl, preferredFormat, timeoutMs),
       retries
     );
   } catch (err) {
-    errors.push(buildResolverFailureDetail('ytdl-core', err));
-  }
-
-  try {
-    return await withRetries(
-      () => _resolveYouTubeViaYtDlpWrap(normalizedSourceUrl, preferredFormat, timeoutMs),
-      retries
-    );
-  } catch (err) {
-    errors.push(buildResolverFailureDetail('yt-dlp-wrap', err));
+    errors.push(buildResolverFailureDetail('yt-dlp-managed', err));
   }
 
   try {
@@ -456,11 +447,20 @@ async function resolveYouTubeStream(sourceUrl, preferredFormat, timeoutMs, retri
 
   try {
     return await withRetries(
-      () => resolveYouTubeViaManagedYtDlp(normalizedSourceUrl, preferredFormat, timeoutMs),
+      () => _resolveYouTubeViaYtDlpWrap(normalizedSourceUrl, preferredFormat, timeoutMs),
       retries
     );
   } catch (err) {
-    errors.push(buildResolverFailureDetail('yt-dlp-managed', err));
+    errors.push(buildResolverFailureDetail('yt-dlp-wrap', err));
+  }
+
+  try {
+    return await withRetries(
+      () => resolveYouTubeViaYtdlCore(normalizedSourceUrl, preferredFormat, timeoutMs),
+      retries
+    );
+  } catch (err) {
+    errors.push(buildResolverFailureDetail('ytdl-core', err));
   }
 
   throw new Error(errors.join(' | '));

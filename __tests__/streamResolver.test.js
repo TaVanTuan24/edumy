@@ -11,13 +11,29 @@ jest.mock('@distube/ytdl-core', () => ({
 }));
 
 describe('streamResolver', () => {
+  const originalSkipManagedDownload = process.env.VR_STREAM_SKIP_YTDLP_DOWNLOAD;
+
   beforeEach(() => {
     jest.resetModules();
     mockExecFile.mockReset();
     mockGetInfo.mockReset();
+    process.env.VR_STREAM_SKIP_YTDLP_DOWNLOAD = 'true';
+  });
+
+  afterAll(() => {
+    if (typeof originalSkipManagedDownload === 'undefined') {
+      delete process.env.VR_STREAM_SKIP_YTDLP_DOWNLOAD;
+      return;
+    }
+
+    process.env.VR_STREAM_SKIP_YTDLP_DOWNLOAD = originalSkipManagedDownload;
   });
 
   test('youtube resolve success via ytdl-core', async () => {
+    mockExecFile.mockImplementation((command, args, options, cb) => {
+      cb(new Error('spawn yt-dlp ENOENT'), '', '');
+    });
+
     mockGetInfo.mockResolvedValue({
       formats: [
         {
