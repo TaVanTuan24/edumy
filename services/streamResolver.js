@@ -304,6 +304,34 @@ function tryLoadYtDlpWrap() {
   }
 }
 
+function getYtDlpExecutableCandidates() {
+  const configuredPath = String(process.env.VR_STREAM_YTDLP_PATH || '').trim();
+  const candidates = [];
+
+  if (configuredPath) {
+    candidates.push(configuredPath);
+  }
+
+  candidates.push('yt-dlp');
+
+  if (process.platform !== 'win32') {
+    candidates.push('/usr/bin/yt-dlp', '/usr/local/bin/yt-dlp');
+  }
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+function getPythonYtDlpCandidates() {
+  const pythonCommands = process.platform === 'win32'
+    ? ['python', 'py']
+    : ['python3', 'python'];
+
+  return Array.from(new Set(pythonCommands)).map((command) => ({
+    command,
+    prefixArgs: ['-m', 'yt_dlp']
+  }));
+}
+
 function getDefaultYtDlpBinaryPath() {
   const extension = process.platform === 'win32' ? '.exe' : '';
   return path.join(os.tmpdir(), 'edumy-vr-stream', 'yt-dlp', `yt-dlp${extension}`);
@@ -389,11 +417,15 @@ async function _resolveYouTubeViaYtDlpWrap(sourceUrl, preferredFormat, timeoutMs
 }
 
 async function resolveYouTubeViaYtDlpDirectUrl(command, sourceUrl, preferredFormat, timeoutMs) {
+  return resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, [], sourceUrl, preferredFormat, timeoutMs);
+}
+
+async function resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, prefixArgs, sourceUrl, preferredFormat, timeoutMs) {
   const selector = preferredFormat === 'm3u8'
     ? 'best[protocol*=m3u8][vcodec!=none]/best[acodec!=none][vcodec!=none][ext=mp4]/best[acodec!=none][vcodec!=none]/best'
     : 'best[acodec!=none][vcodec!=none][ext=mp4]/best[acodec!=none][vcodec!=none]/best';
 
-  const output = await execFileAsync(command, ['-g', '--no-playlist', '--no-warnings', '-f', selector, sourceUrl], timeoutMs);
+  const output = await execFileAsync(command, [...prefixArgs, '-g', '--no-playlist', '--no-warnings', '-f', selector, sourceUrl], timeoutMs);
   const lines = String(output || '')
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -409,6 +441,61 @@ async function resolveYouTubeViaYtDlpDirectUrl(command, sourceUrl, preferredForm
 }
 
 async function resolveYouTubeViaYtDlp(sourceUrl, preferredFormat, timeoutMs) {
+  const executableCandidates = getYtDlpExecutableCandidates();
+  let lastError = null;
+
+  for (const command of executableCandidates) {
+    try {
+      const output = await execFileAsync(command, ['-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
+      let parsed;
+      try {
+        parsed = JSON.parse(output || '{}');
+      } catch (err) {
+        throw new Error(`yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
+      }
+      const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
+      if (!selected) {
+        return resolveYouTubeViaYtDlpDirectUrl(command, sourceUrl, preferredFormat, timeoutMs);
+      }
+
+      return selected;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('yt-dlp executable was not available');
+}
+
+async function resolveYouTubeViaPythonYtDlp(sourceUrl, preferredFormat, timeoutMs) {
+  let lastError = null;
+
+  for (const candidate of getPythonYtDlpCandidates()) {
+    const { command, prefixArgs } = candidate;
+    try {
+      const output = await execFileAsync(command, [...prefixArgs, '-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
+      let parsed;
+      try {
+        parsed = JSON.parse(output || '{}');
+      } catch (err) {
+        throw new Error(`python yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
+      }
+
+      const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
+      if (!selected) {
+        return resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, prefixArgs, sourceUrl, preferredFormat, timeoutMs);
+      }
+
+      return selected;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('python -m yt_dlp was not available');
+}
+
+async function resolveYouTubeViaYtDlpLegacyCommand(sourceUrl, preferredFormat, timeoutMs) {
   const output = await execFileAsync('yt-dlp', ['-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
   let parsed;
   try {
@@ -467,11 +554,29 @@ async function resolveYouTubeStream(sourceUrl, preferredFormat, timeoutMs, retri
 
   try {
     return await withRetries(
+      () => resolveYouTubeViaPythonYtDlp(normalizedSourceUrl, preferredFormat, timeoutMs),
+      retries
+    );
+  } catch (err) {
+    errors.push(buildResolverFailureDetail('python-yt-dlp', err));
+  }
+
+  try {
+    return await withRetries(
       () => _resolveYouTubeViaYtDlpWrap(normalizedSourceUrl, preferredFormat, timeoutMs),
       retries
     );
   } catch (err) {
     errors.push(buildResolverFailureDetail('yt-dlp-wrap', err));
+  }
+
+  try {
+    return await withRetries(
+      () => resolveYouTubeViaYtDlpLegacyCommand(normalizedSourceUrl, preferredFormat, timeoutMs),
+      retries
+    );
+  } catch (err) {
+    errors.push(buildResolverFailureDetail('yt-dlp-legacy', err));
   }
 
   try {
