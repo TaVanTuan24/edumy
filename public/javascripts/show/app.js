@@ -626,16 +626,39 @@
     sectionCard.style.display = isVisible ? 'block' : 'none';
   }
 
-  function submitReview() {
-    const deps = window.LearningStore;
-    const course = deps.store.course || {};
-    const ratingInput = document.getElementById('rating');
-    const commentInput = document.getElementById('comment');
-    const button = document.getElementById('reviewSubmitBtn');
+  var editingReviewId = null;
 
-    const rating = ratingInput ? Number(ratingInput.value) : 0;
-    const comment = commentInput ? commentInput.value.trim() : '';
-    const notify = typeof window.showAppToast === 'function'
+  function getCsrfToken() {
+    var el = document.querySelector('#reviewForm input[name="_csrf"]');
+    return el ? el.value : '';
+  }
+
+  function resetReviewForm() {
+    editingReviewId = null;
+    var ratingInput = document.getElementById('rating');
+    var commentInput = document.getElementById('comment');
+    var button = document.getElementById('reviewSubmitBtn');
+    if (ratingInput) ratingInput.value = '';
+    if (commentInput) commentInput.value = '';
+    if (button) {
+      button.textContent = 'Submit';
+      button.classList.remove('btn-warning');
+      button.classList.add('btn-primary');
+    }
+    var cancelBtn = document.getElementById('reviewCancelBtn');
+    if (cancelBtn) cancelBtn.classList.add('d-none');
+  }
+
+  function submitReview() {
+    var deps = window.LearningStore;
+    var course = deps.store.course || {};
+    var ratingInput = document.getElementById('rating');
+    var commentInput = document.getElementById('comment');
+    var button = document.getElementById('reviewSubmitBtn');
+
+    var rating = ratingInput ? Number(ratingInput.value) : 0;
+    var comment = commentInput ? commentInput.value.trim() : '';
+    var notify = typeof window.showAppToast === 'function'
       ? window.showAppToast
       : function(message) { window.alert(message); };
 
@@ -646,29 +669,120 @@
 
     if (button) button.disabled = true;
 
-    fetch('/courses/' + String(course._id || '') + '/review', {
-      method: 'POST',
+    var isEditing = !!editingReviewId;
+    var url = '/courses/' + String(course._id || '') + '/review';
+    var method = isEditing ? 'PUT' : 'POST';
+
+    fetch(url, {
+      method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rating: rating, comment: comment })
     })
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        if (!data || !data.success) {
-          throw new Error(data && data.error ? data.error : 'Review submit failed');
+      .then(function(res) {
+        return res.json().then(function(data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function(result) {
+        if (!result.data || !result.data.success) {
+          var errMsg = result.data && result.data.error ? result.data.error : 'Review submit failed';
+          throw new Error(errMsg);
         }
 
-        if (ratingInput) ratingInput.value = '';
-        if (commentInput) commentInput.value = '';
+        resetReviewForm();
         loadReviews(true);
+        notify(isEditing ? 'Review updated successfully!' : 'Review submitted successfully!', 'success');
       })
       .catch(function(err) {
         console.error('[Review Submit Error]', err);
-        notify('Failed to submit review.', 'danger');
+        notify(err.message || 'Failed to submit review.', 'danger');
       })
       .finally(function() {
         if (button) button.disabled = false;
       });
   }
+
+  function editReview(reviewId) {
+    var deps = window.LearningStore;
+    var store = deps.store;
+    var reviews = store._cachedReviews || [];
+    var review = null;
+
+    for (var i = 0; i < reviews.length; i++) {
+      if (reviews[i].isOwn) {
+        review = reviews[i];
+        break;
+      }
+    }
+
+    if (!review) return;
+
+    editingReviewId = reviewId || review.id;
+    var ratingInput = document.getElementById('rating');
+    var commentInput = document.getElementById('comment');
+    var button = document.getElementById('reviewSubmitBtn');
+
+    if (ratingInput) ratingInput.value = String(review.rating);
+    if (commentInput) commentInput.value = review.comment || '';
+    if (button) {
+      button.textContent = 'Update Review';
+      button.classList.remove('btn-primary');
+      button.classList.add('btn-warning');
+    }
+
+    var cancelBtn = document.getElementById('reviewCancelBtn');
+    if (!cancelBtn) {
+      var form = document.getElementById('reviewForm');
+      if (form) {
+        cancelBtn = document.createElement('button');
+        cancelBtn.id = 'reviewCancelBtn';
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'btn btn-outline-secondary mt-2';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', function() {
+          resetReviewForm();
+        });
+        form.appendChild(cancelBtn);
+      }
+    } else {
+      cancelBtn.classList.remove('d-none');
+    }
+
+    var ratingInputEl = document.getElementById('rating');
+    if (ratingInputEl) ratingInputEl.focus();
+  }
+
+  function deleteReview(reviewId) {
+    var deps = window.LearningStore;
+    var course = deps.store.course || {};
+    var notify = typeof window.showAppToast === 'function'
+      ? window.showAppToast
+      : function(message) { window.alert(message); };
+
+    if (!confirm('Are you sure you want to delete your review?')) return;
+
+    fetch('/courses/' + String(course._id || '') + '/review', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (!data || !data.success) {
+          throw new Error(data && data.error ? data.error : 'Delete failed');
+        }
+
+        resetReviewForm();
+        loadReviews(true);
+        notify('Review deleted successfully!', 'success');
+      })
+      .catch(function(err) {
+        console.error('[Review Delete Error]', err);
+        notify(err.message || 'Failed to delete review.', 'danger');
+      });
+  }
+
+  window.editReview = editReview;
+  window.deleteReview = deleteReview;
 
   function loadReviews(force) {
     if (!force && reviewsLoaded) return;
@@ -701,26 +815,62 @@
 
   function renderReviewList(list, reviews) {
     const deps = window.LearningStore;
+    const store = deps.store;
     const items = Array.isArray(reviews) ? reviews : [];
+
+    store._cachedReviews = items;
 
     if (!items.length) {
       list.innerHTML = '<p class="text-muted mb-0">No reviews yet.</p>';
+      toggleReviewForm(true);
       return;
     }
 
+    var hasOwnReview = false;
+
     list.innerHTML = items.map(function(review) {
-      const rating = Math.max(0, Math.min(5, Number(review.rating) || 0));
-      const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
-      const author = review.user ? String(review.user) : 'User';
-      const comment = review.comment ? deps.escapeHtml(review.comment) : '';
+      var rating = Math.max(0, Math.min(5, Number(review.rating) || 0));
+      var stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+      var author = review.user ? String(review.user) : 'User';
+      var comment = review.comment ? deps.escapeHtml(review.comment) : '';
+      var isOwn = !!review.isOwn;
+
+      if (isOwn) hasOwnReview = true;
+
+      var actionsHtml = '';
+      if (isOwn) {
+        actionsHtml = '' +
+          '<div class="review-actions mt-2">' +
+            '<button class="btn btn-sm btn-outline-primary me-1" onclick="editReview()" title="Edit review">' +
+              '<i class="fa-solid fa-pen-to-square"></i> Edit' +
+            '</button>' +
+            '<button class="btn btn-sm btn-outline-danger" onclick="deleteReview()" title="Delete review">' +
+              '<i class="fa-solid fa-trash"></i> Delete' +
+            '</button>' +
+          '</div>';
+      }
 
       return '' +
-        '<div class="review-item mb-3">' +
-          '<strong>' + stars + '</strong>' +
-          '<p class="mb-1">' + comment + '</p>' +
+        '<div class="review-item mb-3 p-2 border rounded">' +
+          '<div class="d-flex justify-content-between align-items-start">' +
+            '<div>' +
+              '<strong>' + stars + '</strong>' +
+              (isOwn ? ' <span class="badge bg-info">Your review</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<p class="mb-1 mt-1">' + comment + '</p>' +
           '<small class="text-muted">by ' + deps.escapeHtml(author) + '</small>' +
+          actionsHtml +
         '</div>';
     }).join('');
+
+    toggleReviewForm(!hasOwnReview);
+  }
+
+  function toggleReviewForm(showForm) {
+    var form = document.getElementById('reviewForm');
+    if (!form) return;
+    form.style.display = showForm ? '' : 'none';
   }
 
   function updateReviewSummary(summaryEl, averageRating, reviewCount) {

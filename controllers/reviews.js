@@ -12,6 +12,12 @@ module.exports.createReview = async (req, res) => {
         return res.redirect('/explore');
     }
 
+    const existingReview = await Review.findOne({ author: req.user._id, _id: { $in: course.reviews } });
+    if (existingReview) {
+        req.flash('error', 'You have already reviewed this course. You can edit your existing review instead.');
+        return res.redirect(`/explore/${course._id}/preview`);
+    }
+
     const rawReview = req.body && req.body.review && typeof req.body.review === 'object'
         ? req.body.review
         : {};
@@ -37,6 +43,11 @@ module.exports.createReview = async (req, res) => {
 
 module.exports.deleteReview = async (req, res) => {
     const { id, reviewId } = req.params;
+    const review = await Review.findById(reviewId);
+    if (!review || !review.author.equals(req.user._id)) {
+        req.flash('error', 'You do not have permission to do that!');
+        return res.redirect(`/explore/${id}/preview`);
+    }
     await Course.findByIdAndUpdate(id, { $pull: { reviews: reviewId } });
     await Review.findByIdAndDelete(reviewId);
     res.redirect(`/explore/${id}/preview`);

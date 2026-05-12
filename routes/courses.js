@@ -39,6 +39,8 @@ router.post('/:courseId/quiz-results', isLoggedIn, requireCourseAccess, validate
 router.post('/:courseId/lessons/ai', isLoggedIn, requireCourseAccess, aiChatLimiter, catchAsync(course.askLessonAi));
 router.post('/:id/ai-summary/regenerate', isLoggedIn, requireCourseManagement, aiChatLimiter, catchAsync(course.regenerateAiSummary));
 router.post('/:id/review', isLoggedIn, requireCourseAccess, validate(reviewCreateSchema), catchAsync(course.createReview));
+router.put('/:id/review', isLoggedIn, requireCourseAccess, validate(reviewCreateSchema), catchAsync(course.updateReview));
+router.delete('/:id/review', isLoggedIn, requireCourseAccess, catchAsync(course.deleteReview));
 router.get('/:id/reviews', isLoggedIn, requireCourseAccess, catchAsync(course.getReviews));
 
 module.exports = router;

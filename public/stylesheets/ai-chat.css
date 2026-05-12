@@ -30,14 +30,16 @@ html[data-theme="dark"] .ai-chat-shell {
     --ai-gold: #f3c96b;
     --ai-user: #12312d;
     --ai-error: #b42318;
-    width: min(100%, 1520px);
+    width: 100%;
+    max-width: 1520px;
     flex: 1 1 auto;
     min-width: 0;
-    min-height: calc(100dvh - 92px);
+    height: calc(100dvh - 72px);
     margin: 0 auto;
     display: grid;
     grid-template-columns: 300px minmax(0, 1fr);
     gap: 16px;
+    padding: 16px;
     background:
         radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 26%),
         radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.08), transparent 24%),
@@ -45,6 +47,7 @@ html[data-theme="dark"] .ai-chat-shell {
     color: var(--ai-ink);
     overflow: hidden;
     position: relative;
+    box-sizing: border-box;
 }
 
 html[data-theme="dark"] .ai-chat-page {
@@ -76,6 +79,7 @@ html[data-theme="dark"] .ai-chat-page {
     border-radius: 26px;
     overflow: hidden;
     min-height: 0;
+    max-height: 100%;
     box-shadow: 0 24px 60px rgba(7, 12, 24, 0.16);
 }
 
@@ -189,6 +193,25 @@ html[data-theme="dark"] .ai-history-empty small {
     gap: 7px;
     overflow-y: auto;
     padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.ai-history-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ai-history-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ai-history-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.ai-history-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
 }
 
 .ai-history-item {

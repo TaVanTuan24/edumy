@@ -844,8 +844,18 @@ module.exports.createReview = async (req, res) => {
     }
 
     course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+
+    const userId = req.user && req.user._id;
+    const existingIndex = course.reviewEntries.findIndex(
+      (r) => String(r.user) === String(userId)
+    );
+
+    if (existingIndex !== -1) {
+      return res.status(409).json({ success: false, error: 'You have already reviewed this course. You can edit your existing review instead.' });
+    }
+
     course.reviewEntries.push({
-      user: req.user && req.user._id,
+      user: userId,
       rating: rating,
       comment: comment
     });
@@ -854,6 +864,73 @@ module.exports.createReview = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     logger.error({ err }, '[Review Create Error]');
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+module.exports.updateReview = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    const rating = Number(req.body.rating);
+    const comment = String(req.body.comment || '').trim();
+
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, error: 'Invalid rating' });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
+    course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+
+    const userId = req.user && req.user._id;
+    const existingIndex = course.reviewEntries.findIndex(
+      (r) => String(r.user) === String(userId)
+    );
+
+    if (existingIndex === -1) {
+      return res.status(404).json({ success: false, error: 'You have not reviewed this course yet.' });
+    }
+
+    course.reviewEntries[existingIndex].rating = rating;
+    course.reviewEntries[existingIndex].comment = comment;
+    course.reviewEntries[existingIndex].createdAt = new Date();
+
+    await course.save();
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, '[Review Update Error]');
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+module.exports.deleteReview = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    const course = await Course.findById(courseId);
+
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
+    course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+
+    const userId = req.user && req.user._id;
+    const existingIndex = course.reviewEntries.findIndex(
+      (r) => String(r.user) === String(userId)
+    );
+
+    if (existingIndex === -1) {
+      return res.status(404).json({ success: false, error: 'You have not reviewed this course yet.' });
+    }
+
+    course.reviewEntries.splice(existingIndex, 1);
+    await course.save();
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, '[Review Delete Error]');
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -871,13 +948,18 @@ module.exports.getReviews = async (req, res) => {
     const total = reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0);
     const avg = reviews.length ? total / reviews.length : 0;
 
+    const currentUserId = req.user ? String(req.user._id) : '';
+
     res.json({
       success: true,
       reviews: reviews.map((r) => ({
+        id: String(r._id || ''),
+        userId: r.user ? String(r.user._id || r.user) : '',
         user: r.user && r.user.username ? r.user.username : '',
         rating: r.rating,
         comment: r.comment,
-        createdAt: r.createdAt
+        createdAt: r.createdAt,
+        isOwn: r.user ? String(r.user._id || r.user) === currentUserId : false
       })),
       averageRating: avg,
       reviewCount: reviews.length

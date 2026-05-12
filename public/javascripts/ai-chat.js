@@ -135,7 +135,7 @@
     const assistant = addStreamingMessage('Thinking');
 
     try {
-      await streamAssistant('/ai/chat/stream', {
+      await requestAssistant('/ai/chat', {
         message: text,
         chatId: state.currentChat,
         model: selectedModel()
@@ -166,7 +166,7 @@
     const assistant = addStreamingMessage('Regenerating');
 
     try {
-      await streamAssistant('/ai/' + encodeURIComponent(state.currentChat) + '/regenerate/stream', {
+      await requestAssistant('/ai/' + encodeURIComponent(state.currentChat) + '/regenerate', {
         model: selectedModel()
       }, assistant);
       await loadChats();
@@ -192,112 +192,19 @@
     }
   }
 
-  async function streamAssistant(url, payload, assistant) {
+  async function requestAssistant(url, payload, assistant) {
     const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
-    });
-
-    if (!res.ok) {
-      const data = await safeJson(res);
-      throw new Error(data.error || 'AI request failed.');
-    }
-
-    if (!res.body || typeof res.body.getReader !== 'function') {
-      await fallbackAssistant(payload, assistant);
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let completed = false;
-
-    while (true) {
-      const result = await reader.read();
-      if (result.done) break;
-
-      buffer += decoder.decode(result.value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop() || '';
-
-      events.forEach(function(block) {
-        completed = handleStreamEvent(block, assistant) || completed;
-      });
-    }
-
-    if (buffer.trim()) {
-      completed = handleStreamEvent(buffer, assistant) || completed;
-    }
-
-    if (!completed) {
-      throw new Error('AI stream ended before the response completed.');
-    }
-  }
-
-  async function fallbackAssistant(payload, assistant) {
-    const fallbackUrl = state.currentChat && !payload.message
-      ? '/ai/' + encodeURIComponent(state.currentChat) + '/regenerate'
-      : '/ai/chat';
-    const res = await fetch(fallbackUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {})
     });
     const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'AI request failed.');
-    if (data.chatId) state.currentChat = String(data.chatId);
-    if (data.title) els.title.textContent = data.title;
+    handleStreamMeta(data, assistant);
     finalizeStreamingMessage(assistant, data.reply || '', {
       status: 'ok',
       model: data.model || selectedModel()
     });
-  }
-
-  function parseStreamEvent(block) {
-    const lines = String(block || '').split('\n');
-    let event = 'message';
-    let data = '';
-
-    lines.forEach(function(line) {
-      if (line.indexOf('event:') === 0) {
-        event = line.slice(6).trim();
-      } else if (line.indexOf('data:') === 0) {
-        data += line.slice(5).trim();
-      }
-    });
-
-    if (!data) return null;
-
-    try {
-      return { event: event, data: JSON.parse(data) };
-    } catch {
-      return null;
-    }
-  }
-
-  function handleStreamEvent(block, assistant) {
-    const parsed = parseStreamEvent(block);
-    if (!parsed) return false;
-    if (parsed.event === 'meta') {
-      handleStreamMeta(parsed.data, assistant);
-    }
-    if (parsed.event === 'chunk') {
-      appendStreamingToken(assistant, parsed.data.token || '');
-    }
-    if (parsed.event === 'done') {
-      handleStreamMeta(parsed.data, assistant);
-      finalizeStreamingMessage(assistant, parsed.data.reply || assistant.raw || '', {
-        status: 'ok',
-        model: parsed.data.model || selectedModel()
-      });
-      return true;
-    }
-    if (parsed.event === 'error') {
-      throw new Error(parsed.data.error || 'AI request failed.');
-    }
-    return false;
   }
 
   function handleStreamMeta(data, assistant) {
@@ -529,16 +436,6 @@
     return assistant;
   }
 
-  function appendStreamingToken(assistant, token) {
-    if (!token) return;
-    assistant.raw += token;
-    revealStreamingText(assistant);
-    pulseStreamingChunk(assistant);
-    if (state.shouldAutoScroll) {
-      scrollToBottom();
-    }
-  }
-
   function finalizeStreamingMessage(assistant, text, options) {
     const settings = options || {};
     const waitMs = getTypingDelay(assistant);
@@ -559,7 +456,6 @@
     assistant.wrap.classList.remove('is-streaming', 'is-thinking');
     assistant.wrap.classList.toggle('is-error', settings.status === 'error');
     assistant.body.innerHTML = renderMarkdown(assistant.raw);
-    assistant.body.classList.remove('is-stream-chunk');
     decorateRenderedMessage(assistant.body);
     els.messages.classList.remove('is-streaming-active');
 
@@ -578,32 +474,6 @@
     if (state.shouldAutoScroll) {
       scrollToBottom();
     }
-  }
-
-  function revealStreamingText(assistant) {
-    const waitMs = getTypingDelay(assistant);
-    if (waitMs > 0) {
-      if (!assistant.revealTimer) {
-        assistant.revealTimer = window.setTimeout(function() {
-          assistant.revealTimer = null;
-          revealStreamingText(assistant);
-        }, waitMs);
-      }
-      return;
-    }
-
-    assistant.wrap.classList.remove('is-thinking');
-    assistant.body.textContent = assistant.raw;
-  }
-
-  function pulseStreamingChunk(assistant) {
-    if (!assistant || !assistant.body) return;
-    assistant.body.classList.remove('is-stream-chunk');
-    window.requestAnimationFrame(function() {
-      if (assistant.body) {
-        assistant.body.classList.add('is-stream-chunk');
-      }
-    });
   }
 
   function getTypingDelay(assistant) {

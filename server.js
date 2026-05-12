@@ -91,7 +91,21 @@ app.use(methodOverride('_method'));
 app.use(express.static(path.join(__dirname, 'public')))
 
 app.use(morgan('combined'));
-app.use(compression());
+app.use(compression({
+  filter: (req, res) => {
+    // Do not compress Server-Sent Events (SSE) streams – buffering breaks real-time streaming
+    // Check request path for SSE endpoints since Content-Type is not yet set at filter time
+    const requestPath = String(req.path || req.originalUrl || '');
+    if (/\/(stream|regenerate\/stream)/i.test(requestPath)) {
+      return false;
+    }
+    const contentType = res.getHeader('Content-Type') || '';
+    if (typeof contentType === 'string' && contentType.includes('text/event-stream')) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 
 app.use(cors({
   origin: isProduction

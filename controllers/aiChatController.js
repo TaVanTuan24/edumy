@@ -11,7 +11,6 @@ const { ANALYTICS_EVENTS, trackEventSafe } = require('../services/analyticsEvent
 const { normalizeUserAiBaseUrl, testConnection } = require('../services/ai/userAiClient')
 const {
     generateChatReply,
-    generateChatReplyStream,
     getAiErrorResponse,
     normalizeAiModel
 } = require('../services/ai/chatOrchestrator')
@@ -149,149 +148,11 @@ async function sendMessage(req, res) {
 }
 
 async function streamMessage(req, res) {
-    const userId = req.user._id
-    const rawMessage = req.body && req.body.message
-    const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
-    const model = normalizeAiModel(req.body && req.body.model)
-    const startedAt = Date.now()
-    let chat = null
-    let aborted = false
-    const abortController = new AbortController()
-
-    if (!message) {
-        return res.status(400).json({ error: 'Message is required' })
-    }
-
-    if (message.length > 10000) {
-        return res.status(400).json({ error: 'Message too long (max 10000 characters)' })
-    }
-
-    prepareStream(res)
-
-    req.on('aborted', () => {
-        aborted = true
-        abortController.abort()
+    res.status(410).json({
+        success: false,
+        code: 'AI_STREAM_DISABLED',
+        error: 'AI streaming has been disabled for this deployment.'
     })
-    res.on('close', () => {
-        if (!res.writableEnded) {
-            aborted = true
-            abortController.abort()
-        }
-    })
-
-    try {
-        chat = await findOrCreateChat({
-            userId,
-            chatId: req.body && req.body.chatId,
-            titleSeed: message,
-            model
-        })
-
-        chat.defaultModel = model
-        chat.messages.push({
-            role: 'user',
-            content: message,
-            model,
-            status: 'ok'
-        })
-
-        writeStreamEvent(res, 'meta', {
-            chatId: chat._id,
-            title: chat.title,
-            model,
-            mode: 'stream'
-        })
-
-        const reply = await generateChatReplyStream({
-            userId,
-            model,
-            messages: chat.messages,
-            signal: abortController.signal,
-            onToken: (token) => {
-                if (!aborted) writeStreamEvent(res, 'chunk', { token })
-            },
-            onEvent: (event) => {
-                if (!aborted) writeStreamEvent(res, 'ai', event)
-            }
-        })
-
-        if (aborted) return
-
-        chat.messages.push({
-            role: 'assistant',
-            content: reply,
-            model,
-            status: 'ok'
-        })
-
-        await chat.save()
-        await awardAiTutor(userId)
-        trackEventSafe({
-            req,
-            eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
-            metadata: {
-                messageLength: message.length,
-                chatId: String(chat._id),
-                model,
-                providerType: 'user_byok',
-                success: true,
-                latencyMs: Date.now() - startedAt,
-                mode: 'stream'
-            }
-        })
-
-        writeStreamEvent(res, 'done', {
-            success: true,
-            reply,
-            model,
-            chatId: chat._id,
-            title: chat.title
-        })
-        res.end()
-    } catch (err) {
-        logger.error({ err }, 'AI Chat Stream Error')
-        if (aborted) return
-        trackEventSafe({
-            req,
-            eventType: ANALYTICS_EVENTS.AI_QUESTION_ASKED,
-            metadata: {
-                messageLength: message.length,
-                chatId: chat && chat._id ? String(chat._id) : '',
-                model,
-                providerType: 'user_byok',
-                success: false,
-                latencyMs: Date.now() - startedAt,
-                mode: 'stream'
-            }
-        })
-
-        const aiError = getAiErrorResponse(err, model)
-        if (chat) {
-            chat.messages.push({
-                role: 'assistant',
-                content: aiError.message,
-                model,
-                status: 'error',
-                error: {
-                    code: aiError.code,
-                    message: err && err.message ? err.message : aiError.message
-                }
-            })
-            await chat.save().catch((saveError) => {
-                logger.error({ err: saveError }, 'AI Chat Stream Error Save Failed')
-            })
-        }
-
-        writeStreamEvent(res, 'error', {
-            success: false,
-            error: aiError.message,
-            code: aiError.code,
-            model,
-            chatId: chat && chat._id,
-            title: chat && chat.title
-        })
-        res.end()
-    }
 }
 
 async function regenerateLast(req, res) {
@@ -352,103 +213,11 @@ async function regenerateLast(req, res) {
 }
 
 async function streamRegenerateLast(req, res) {
-    const model = normalizeAiModel(req.body && req.body.model)
-    let aborted = false
-    const abortController = new AbortController()
-
-    if (!mongoose.isValidObjectId(req.params.id)) {
-        prepareStream(res)
-        writeStreamEvent(res, 'error', { error: 'Invalid chat ID', code: 'INVALID_CHAT_ID' })
-        return res.end()
-    }
-
-    prepareStream(res)
-
-    req.on('aborted', () => {
-        aborted = true
-        abortController.abort()
+    res.status(410).json({
+        success: false,
+        code: 'AI_STREAM_DISABLED',
+        error: 'AI streaming has been disabled for this deployment.'
     })
-    res.on('close', () => {
-        if (!res.writableEnded) {
-            aborted = true
-            abortController.abort()
-        }
-    })
-
-    try {
-        const chat = await Chat.findOne({
-            _id: req.params.id,
-            userId: req.user._id
-        })
-
-        if (!chat) {
-            writeStreamEvent(res, 'error', { error: 'Chat not found', code: 'CHAT_NOT_FOUND' })
-            return res.end()
-        }
-
-        const lastMessage = chat.messages[chat.messages.length - 1]
-        if (lastMessage && lastMessage.role === 'assistant') {
-            chat.messages.pop()
-        }
-
-        const lastUser = [...chat.messages].reverse().find((msg) => msg.role === 'user')
-        if (!lastUser) {
-            writeStreamEvent(res, 'error', { error: 'No user message to regenerate', code: 'NO_USER_MESSAGE' })
-            return res.end()
-        }
-
-        chat.defaultModel = model
-        writeStreamEvent(res, 'meta', {
-            chatId: chat._id,
-            title: chat.title,
-            model,
-            mode: 'stream'
-        })
-
-        const reply = await generateChatReplyStream({
-            userId: req.user._id,
-            model,
-            messages: chat.messages,
-            signal: abortController.signal,
-            onToken: (token) => {
-                if (!aborted) writeStreamEvent(res, 'chunk', { token })
-            },
-            onEvent: (event) => {
-                if (!aborted) writeStreamEvent(res, 'ai', event)
-            }
-        })
-
-        if (aborted) return
-
-        chat.messages.push({
-            role: 'assistant',
-            content: reply,
-            model,
-            status: 'ok'
-        })
-
-        await chat.save()
-
-        writeStreamEvent(res, 'done', {
-            success: true,
-            reply,
-            model,
-            chatId: chat._id,
-            title: chat.title
-        })
-        res.end()
-    } catch (err) {
-        logger.error({ err }, 'AI Regenerate Stream Error')
-        if (aborted) return
-        const aiError = getAiErrorResponse(err, model)
-        writeStreamEvent(res, 'error', {
-            success: false,
-            error: aiError.message,
-            code: aiError.code,
-            model
-        })
-        res.end()
-    }
 }
 
 async function listChats(req, res) {
@@ -799,27 +568,6 @@ function mapUserAiTestFailure(error) {
     return {
         statusCode: error && error.statusCode ? error.statusCode : 503,
         body: payload
-    }
-}
-
-function prepareStream(res) {
-    res.status(200)
-    res.set({
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no'
-    })
-    if (typeof res.flushHeaders === 'function') {
-        res.flushHeaders()
-    }
-}
-
-function writeStreamEvent(res, event, data) {
-    res.write(`event: ${event}\n`)
-    res.write(`data: ${JSON.stringify(data || {})}\n\n`)
-    if (typeof res.flush === 'function') {
-        res.flush()
     }
 }
 

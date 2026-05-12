@@ -7,7 +7,7 @@ const { aiConfig } = require("../config/ai")
 const { awardGamification } = require('../utils/gamification')
 const logger = require('../utils/logger')
 const aiCourseController = require('../controllers/aiCourseController')
-const { aiChatLimiter, aiSettingsLimiter, aiStreamLimiter } = require('../utils/rateLimiters')
+const { aiChatLimiter, aiSettingsLimiter } = require('../utils/rateLimiters')
 const {
     validate,
     aiChatMessageSchema,
@@ -53,8 +53,7 @@ router.delete("/settings/:provider/base-url", aiSettingsLimiter, aiChatControlle
 
 router.post("/settings/:provider/test", aiSettingsLimiter, aiChatController.testProviderConnection)
 
-// Stream message - creates new chat or appends to existing conversation
-router.post("/chat/stream", aiStreamLimiter, validate(aiChatMessageSchema), aiChatController.streamMessage)
+router.post("/chat/stream", validate(aiChatMessageSchema), aiChatController.streamMessage)
 
 // Send message - creates new chat or appends to existing
 router.post("/chat", aiChatLimiter, validate(aiChatMessageSchema), async (req, res, next) => {
