@@ -1,6 +1,4 @@
 const aiRouter = require('./aiRouter')
-const { aiConfig } = require('../../config/ai')
-
 async function generateChatReply({ model, messages, userId }) {
     const selectedModel = normalizeAiModel(model)
     const prompt = buildConversationPrompt(messages)
@@ -45,10 +43,6 @@ function normalizeAiModel(model) {
     return String(model || '').trim().slice(0, 200)
 }
 
-function getModelOptions() {
-    return []
-}
-
 function getAiErrorResponse(error, _model) {
     if (error && error.publicMessage) {
         return {
@@ -82,8 +76,6 @@ function getAiErrorResponse(error, _model) {
 }
 
 module.exports = {
-    aiConfig,
-    getModelOptions,
     normalizeAiModel,
     generateChatReply,
     generateChatReplyStream,

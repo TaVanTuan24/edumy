@@ -7,6 +7,7 @@ const path = require('path');
 let ytDlpWrapModule = null;
 let ytDlpBinaryPathCache = null;
 let ytDlpDownloadPromise = null;
+let pythonYtDlpBootstrapPromise = null;
 
 const DIRECT_EXTENSIONS = ['.m3u8', '.mp4', '.mov', '.m4v', '.webm'];
 const YOUTUBE_HOSTS = new Set([
@@ -332,6 +333,64 @@ function getPythonYtDlpCandidates() {
   }));
 }
 
+function getPythonVenvRoot() {
+  return path.join(os.tmpdir(), 'edumy-vr-stream', 'python-venv');
+}
+
+function getPythonVenvExecutablePaths() {
+  const root = getPythonVenvRoot();
+  if (process.platform === 'win32') {
+    return {
+      python: path.join(root, 'Scripts', 'python.exe'),
+      ytDlp: path.join(root, 'Scripts', 'yt-dlp.exe')
+    };
+  }
+
+  return {
+    python: path.join(root, 'bin', 'python3'),
+    ytDlp: path.join(root, 'bin', 'yt-dlp')
+  };
+}
+
+async function ensurePythonYtDlpVirtualEnv(timeoutMs) {
+  const paths = getPythonVenvExecutablePaths();
+  if (fs.existsSync(paths.ytDlp)) {
+    return paths;
+  }
+
+  if (!pythonYtDlpBootstrapPromise) {
+    pythonYtDlpBootstrapPromise = (async () => {
+      const root = getPythonVenvRoot();
+      fs.mkdirSync(root, { recursive: true });
+
+      const pythonBootstrapCandidates = process.platform === 'win32'
+        ? ['python', 'py']
+        : ['python3', 'python'];
+
+      let bootstrapError = null;
+      for (const pythonCommand of pythonBootstrapCandidates) {
+        try {
+          await execFileAsync(pythonCommand, ['-m', 'venv', root], Math.max(timeoutMs, 20000));
+          const venvPython = getPythonVenvExecutablePaths().python;
+          await execFileAsync(venvPython, ['-m', 'pip', 'install', '--upgrade', 'pip', 'yt-dlp'], Math.max(timeoutMs * 2, 30000));
+          if (!fs.existsSync(getPythonVenvExecutablePaths().ytDlp)) {
+            throw new Error('yt-dlp was not installed into the Python virtual environment');
+          }
+          return getPythonVenvExecutablePaths();
+        } catch (err) {
+          bootstrapError = err;
+        }
+      }
+
+      throw bootstrapError || new Error('Unable to bootstrap Python virtual environment for yt-dlp');
+    })().finally(() => {
+      pythonYtDlpBootstrapPromise = null;
+    });
+  }
+
+  return pythonYtDlpBootstrapPromise;
+}
+
 function getDefaultYtDlpBinaryPath() {
   const extension = process.platform === 'win32' ? '.exe' : '';
   return path.join(os.tmpdir(), 'edumy-vr-stream', 'yt-dlp', `yt-dlp${extension}`);
@@ -490,6 +549,26 @@ async function resolveYouTubeViaPythonYtDlp(sourceUrl, preferredFormat, timeoutM
     } catch (err) {
       lastError = err;
     }
+  }
+
+  try {
+    const paths = await ensurePythonYtDlpVirtualEnv(timeoutMs);
+    const output = await execFileAsync(paths.python, ['-m', 'yt_dlp', '-J', '--no-playlist', '--no-warnings', sourceUrl], Math.max(timeoutMs * 2, 30000));
+    let parsed;
+    try {
+      parsed = JSON.parse(output || '{}');
+    } catch (err) {
+      throw new Error(`python venv yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
+    }
+
+    const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
+    if (!selected) {
+      return resolveYouTubeViaYtDlpDirectUrlWithPrefix(paths.python, ['-m', 'yt_dlp'], sourceUrl, preferredFormat, Math.max(timeoutMs * 2, 30000));
+    }
+
+    return selected;
+  } catch (err) {
+    lastError = err;
   }
 
   throw lastError || new Error('python -m yt_dlp was not available');

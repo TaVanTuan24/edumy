@@ -895,6 +895,135 @@ module.exports.updateVrCourseProgress = async (req, res) => {
   }
 };
 
+module.exports.saveVrQuizResult = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const {
+      quizId,
+      score,
+      total,
+      attemptId,
+      durationSeconds,
+      passed,
+      attemptNumber,
+      lessonName,
+      lessonType,
+      sectionIndex,
+      lessonIndex
+    } = req.body || {};
+
+    if (!mongoose.isValidObjectId(courseId)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    if (typeof quizId !== 'string' || !quizId.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payload: quizId is required'
+      });
+    }
+
+    const parsedScore = Number(score);
+    const parsedTotal = Number(total);
+    if (!Number.isFinite(parsedScore) || parsedScore < 0 || !Number.isFinite(parsedTotal) || parsedTotal < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payload: score and total must be non-negative numbers'
+      });
+    }
+
+    const [user, course] = await Promise.all([
+      User.findById(req.user && req.user._id)
+        .select('enrolledCourses enrolledCourseIds')
+        .lean(),
+      Course.findById(courseId)
+        .select('sections')
+        .lean()
+    ]);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    if (!course || !isUserEnrolledInCourse(user, courseId)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or user not enrolled'
+      });
+    }
+
+    const quizKey = quizId.trim();
+    const progressDoc = await UserCourseProgress.findOneAndUpdate(
+      { user: req.user._id, course: courseId },
+      { $setOnInsert: { user: req.user._id, course: courseId } },
+      { new: true, upsert: true }
+    );
+
+    const existingIndex = Array.isArray(progressDoc.quizResults)
+      ? progressDoc.quizResults.findIndex((entry) => String(entry.quizId) === quizKey)
+      : -1;
+
+    if (existingIndex >= 0) {
+      progressDoc.quizResults[existingIndex].score = parsedScore;
+      progressDoc.quizResults[existingIndex].total = parsedTotal;
+    } else {
+      progressDoc.quizResults.push({
+        quizId: quizKey,
+        score: parsedScore,
+        total: parsedTotal
+      });
+    }
+
+    progressDoc.lastAccessed = new Date();
+    progressDoc.lastLessonId = quizKey;
+    progressDoc.lastLessonName = String(lessonName || '').trim();
+    progressDoc.lastLessonType = String(lessonType || 'quiz').trim().toLowerCase();
+    progressDoc.lastSectionIndex = Number.isInteger(Number(sectionIndex)) ? Number(sectionIndex) : null;
+    progressDoc.lastLessonIndex = Number.isInteger(Number(lessonIndex)) ? Number(lessonIndex) : null;
+
+    progressDoc.recentActivity = Array.isArray(progressDoc.recentActivity) ? progressDoc.recentActivity : [];
+    progressDoc.recentActivity.push({
+      type: 'quiz-result',
+      label: `Completed quiz ${progressDoc.lastLessonName || ''}`.trim(),
+      lessonId: quizKey,
+      lessonName: progressDoc.lastLessonName,
+      lessonType: progressDoc.lastLessonType,
+      sectionIndex: progressDoc.lastSectionIndex,
+      lessonIndex: progressDoc.lastLessonIndex,
+      createdAt: progressDoc.lastAccessed
+    });
+    progressDoc.recentActivity = progressDoc.recentActivity.slice(-20);
+
+    await progressDoc.save();
+
+    return res.json({
+      success: true,
+      data: {
+        courseId: String(courseId),
+        quizId: quizKey,
+        score: parsedScore,
+        total: parsedTotal,
+        attemptId: String(attemptId || ''),
+        durationSeconds: Number.isFinite(Number(durationSeconds)) ? Number(durationSeconds) : 0,
+        passed: typeof passed === 'boolean' ? passed : (parsedTotal > 0 ? parsedScore >= Math.ceil(parsedTotal * 0.7) : false),
+        attemptNumber: Number.isInteger(Number(attemptNumber)) ? Number(attemptNumber) : 1
+      }
+    });
+  } catch (err) {
+    console.error('[VR quiz result save error]', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server Error'
+    });
+  }
+};
+
 function buildStreamError(code, message, details) {
   return {
     success: false,

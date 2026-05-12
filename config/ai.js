@@ -1,8 +1,5 @@
 const path = require('path')
 
-const MODEL_OPTIONS = []
-const SUPPORTED_MODELS = []
-
 function readBoolean(value, fallback) {
     if (value === undefined || value === null || value === '') return fallback
     return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase())
@@ -45,30 +42,7 @@ function normalizeAiModel(model) {
     return String(model || '').trim().slice(0, 200)
 }
 
-function getModelOptions() {
-    return []
-}
-
-function getModelConfig(model) {
-    return {
-        id: normalizeAiModel(model),
-        apiModel: normalizeAiModel(model),
-        providerKey: 'user-defined',
-        requiresKey: 'apiKeyEncrypted'
-    }
-}
-
-function setGrokEnabled(enabled) {
-    aiConfig.grok.enabled = Boolean(enabled)
-    process.env.GROK_ENABLED = enabled ? 'true' : 'false'
-}
-
 module.exports = {
     aiConfig,
-    SUPPORTED_MODELS,
-    MODEL_OPTIONS,
-    normalizeAiModel,
-    getModelOptions,
-    getModelConfig,
-    setGrokEnabled
+    normalizeAiModel
 }

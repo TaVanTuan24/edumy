@@ -67,6 +67,7 @@ router.get('/get-token', requireSessionForToken, catchAsync(async (req, res) => 
 router.get('/courses', isVRAuthenticated, catchAsync(vrController.getVrCourses));
 router.get('/courses/:courseId/lessons', isVRAuthenticated, catchAsync(vrController.getVrCourseLessons));
 router.post('/courses/:courseId/progress', isVRAuthenticated, catchAsync(vrController.updateVrCourseProgress));
+router.post('/courses/:courseId/quiz-results', isVRAuthenticated, catchAsync(vrController.saveVrQuizResult));
 router.post('/stream/resolve', streamResolveLimiter, isVRAuthenticated, validateStreamRequest, catchAsync(vrController.resolveVrStream));
 router.get('/stream/proxy', streamProxyLimiter, catchAsync(vrController.proxyVrStream));
 
