@@ -2,23 +2,13 @@ const mongoose = require('mongoose');
 const Video = require('../models/video');
 const Transcript = require('../models/Transcript');
 const ExpressError = require('../utils/ExpressError');
+const logger = require('../utils/logger');
 const { aiConfig } = require('../config/ai');
 const { generatePromptReply } = require('../services/ai/chatOrchestrator');
+const { fetchTranscript: fetchTranscriptRobust, checkYtdlpAvailability } = require('../services/youtube/transcriptService');
 
-let fetchTranscriptFn = null;
-
-async function getFetchTranscript() {
-  if (fetchTranscriptFn) return fetchTranscriptFn;
-
-  const ytModule = await import('youtube-transcript/dist/youtube-transcript.esm.js');
-  fetchTranscriptFn = ytModule && ytModule.fetchTranscript;
-
-  if (typeof fetchTranscriptFn !== 'function') {
-    throw new ExpressError('Failed to initialize YouTube transcript provider', 500);
-  }
-
-  return fetchTranscriptFn;
-}
+// Check yt-dlp availability at startup (non-blocking)
+checkYtdlpAvailability().catch(() => {});
 
 function extractYouTubeId(input) {
   const raw = String(input || '').trim();
@@ -576,30 +566,47 @@ module.exports.fetchAndSaveTranscript = async (req, res) => {
 
   let transcriptRows;
   try {
-    const fetchTranscript = await getFetchTranscript();
-    transcriptRows = await fetchTranscript(youtubeVideoId);
+    transcriptRows = await fetchTranscriptRobust(youtubeVideoId);
   } catch (err) {
     const rawMessage = normalizeExternalErrorMessage(err, 'Failed to fetch transcript from YouTube');
     const lower = rawMessage.toLowerCase();
 
-    if (lower.includes('transcript is disabled')) {
-      throw new ExpressError('Transcript is disabled for this YouTube video', 422);
+    logger.error({
+      videoId,
+      youtubeVideoId,
+      error: rawMessage,
+    }, '[Transcript] fetchAndSaveTranscript failed');
+
+    // The service already produces clean, actionable error messages.
+    // Map to appropriate HTTP status codes without overriding the message.
+    if (lower.includes('blocked') || lower.includes('proxy') || lower.includes('cookies')) {
+      throw new ExpressError(rawMessage, 422);
     }
 
-    if (lower.includes('no transcripts are available')) {
-      throw new ExpressError('No transcript is available for this YouTube video', 422);
+    if (lower.includes('not installed') || lower.includes('enoent')) {
+      throw new ExpressError('Transcript extraction tool is not available on this server. Contact administrator.', 503);
     }
 
-    if (lower.includes('too many requests') || lower.includes('captcha')) {
-      throw new ExpressError('YouTube is rate-limiting transcript requests. Please try again later.', 429);
+    if (lower.includes('timed out')) {
+      throw new ExpressError(rawMessage, 504);
     }
 
-    if (lower.includes('impossible to retrieve youtube video id')) {
-      throw new ExpressError('Invalid YouTube video URL/ID for transcript generation', 400);
+    if (lower.includes('no transcripts') || lower.includes('not have captions')) {
+      throw new ExpressError(rawMessage, 422);
     }
 
-    throw new ExpressError(`Failed to fetch transcript: ${rawMessage}`, 502);
+    if (lower.includes('too many requests') || lower.includes('captcha') || lower.includes('rate-limit')) {
+      throw new ExpressError(rawMessage, 429);
+    }
+
+    throw new ExpressError(rawMessage, 502);
   }
+
+  logger.info({
+    videoId,
+    youtubeVideoId,
+    segments: (Array.isArray(transcriptRows) ? transcriptRows : []).length,
+  }, '[Transcript] fetchAndSaveTranscript success');
   const transcriptSource = Array.isArray(transcriptRows) ? transcriptRows : [];
   const sourceScale = getTranscriptTimeScale(transcriptSource);
 

@@ -4,7 +4,8 @@ FROM node:20-alpine AS base
 WORKDIR /app
 
 # Install yt-dlp into the image so production does not depend on runtime GitHub downloads.
-RUN apk add --no-cache python3 yt-dlp
+# Alpine community repo provides yt-dlp as a package.
+RUN apk add --no-cache python3 py3-pip yt-dlp && yt-dlp --version
 
 # Copy dependency manifests first for better layer caching
 COPY package.json package-lock.json ./

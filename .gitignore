@@ -65,3 +65,5 @@ uploads/
 
 node_modules
 /.continue/
+
+AGENT.md
