@@ -547,6 +547,54 @@ function normalizeExternalErrorMessage(err, fallback) {
   return fallback;
 }
 
+module.exports.transcriptStatus = async (req, res) => {
+  const { videoId } = req.params;
+
+  if (!mongoose.isValidObjectId(videoId)) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_VIDEO_ID',
+      message: 'Invalid video ID.',
+    });
+  }
+
+  const video = await Video.findById(videoId).select('_id transcripts');
+  if (!video) {
+    return res.status(404).json({
+      success: false,
+      code: 'VIDEO_NOT_FOUND',
+      message: 'Video not found.',
+    });
+  }
+
+  // Prefer counting Transcript documents directly for accuracy
+  const segmentCount = await Transcript.countDocuments({ videoId: video._id });
+
+  if (segmentCount === 0) {
+    return res.json({
+      success: true,
+      videoId: String(video._id),
+      hasTranscript: false,
+      segmentCount: 0,
+    });
+  }
+
+  // Query first and last segment by offset for metadata
+  const [firstSegment, lastSegment] = await Promise.all([
+    Transcript.findOne({ videoId: video._id }).sort({ offset: 1 }).select('offset').lean(),
+    Transcript.findOne({ videoId: video._id }).sort({ offset: -1 }).select('offset duration').lean(),
+  ]);
+
+  return res.json({
+    success: true,
+    videoId: String(video._id),
+    hasTranscript: true,
+    segmentCount,
+    firstOffset: Number(firstSegment && firstSegment.offset) || 0,
+    lastOffset: Number(lastSegment && lastSegment.offset) || 0,
+  });
+};
+
 module.exports.fetchAndSaveTranscript = async (req, res) => {
   const { videoId } = req.params;
 

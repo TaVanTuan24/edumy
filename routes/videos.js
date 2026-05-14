@@ -6,6 +6,7 @@ const catchAsync = require('../utils/catchAsync');
 const transcriptController = require('../controllers/transcript');
 const { adminActionLimiter } = require('../utils/rateLimiters');
 
+router.get('/:videoId/transcript-status', isLoggedIn, isAdmin, catchAsync(transcriptController.transcriptStatus));
 router.post('/:videoId/transcript', isLoggedIn, isAdmin, adminActionLimiter, catchAsync(transcriptController.fetchAndSaveTranscript));
 router.post('/:videoId/ai-quiz', isLoggedIn, isAdmin, adminActionLimiter, catchAsync(transcriptController.aiGenerateQuiz));
 

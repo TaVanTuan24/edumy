@@ -28,7 +28,12 @@
     dragStartY: 0,
     iconStartX: 0,
     iconStartY: 0,
-    quizSavePending: false
+    quizSavePending: false,
+    hasTranscript: false,
+    transcriptSegmentCount: 0,
+    isCheckingTranscript: false,
+    isFetchingTranscript: false,
+    isGeneratingAiQuiz: false
   };
 
   function init() {
@@ -57,13 +62,150 @@
     bindPositionInputs();
     bindOverlayMarker();
     bindPreviewHotspot();
+    bindFetchTranscript();
     bindAiAutoQuiz();
     syncMarkerFromInputs();
     renderQuizList();
+    checkTranscriptStatus();
   }
 
+  // ---------------------------------------------------------------
+  // Transcript status helpers
+  // ---------------------------------------------------------------
+
+  function setTranscriptStatus(message, variant) {
+    var statusEl = document.getElementById('transcriptStatus');
+    if (!statusEl) return;
+
+    statusEl.textContent = String(message || '');
+
+    // Reset classes
+    statusEl.className = 'badge';
+
+    switch (variant) {
+      case 'success':
+        statusEl.classList.add('bg-success');
+        break;
+      case 'warning':
+        statusEl.classList.add('bg-warning', 'text-dark');
+        break;
+      case 'danger':
+        statusEl.classList.add('bg-danger');
+        break;
+      case 'info':
+        statusEl.classList.add('bg-info', 'text-dark');
+        break;
+      default:
+        statusEl.classList.add('bg-secondary');
+    }
+  }
+
+  function updateTranscriptButtons() {
+    var fetchBtn = document.getElementById('fetchTranscriptBtn');
+    var generateBtn = document.getElementById('aiAutoQuizBtn');
+
+    if (fetchBtn) {
+      fetchBtn.disabled = !state.videoId || state.isFetchingTranscript || state.isCheckingTranscript;
+    }
+
+    if (generateBtn) {
+      generateBtn.disabled = !state.hasTranscript || state.isGeneratingAiQuiz || state.isFetchingTranscript || state.isCheckingTranscript;
+    }
+  }
+
+  async function checkTranscriptStatus() {
+    if (!state.videoId) {
+      setTranscriptStatus('No video', 'warning');
+      updateTranscriptButtons();
+      return;
+    }
+
+    state.isCheckingTranscript = true;
+    updateTranscriptButtons();
+    setTranscriptStatus('Checking...', 'secondary');
+
+    try {
+      var res = await fetch('/videos/' + encodeURIComponent(state.videoId) + '/transcript-status', {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+
+      var data = await parseApiResponse(res);
+
+      if (!res.ok || !data || !data.success) {
+        throw new Error(data && data.message ? data.message : 'Could not check transcript status.');
+      }
+
+      if (data.hasTranscript) {
+        state.hasTranscript = true;
+        state.transcriptSegmentCount = data.segmentCount || 0;
+        setTranscriptStatus('Available (' + state.transcriptSegmentCount + ' segments)', 'success');
+      } else {
+        state.hasTranscript = false;
+        state.transcriptSegmentCount = 0;
+        setTranscriptStatus('No transcript saved', 'warning');
+      }
+    } catch (err) {
+      console.error('[Transcript Status Error]', err);
+      setTranscriptStatus('Check failed', 'danger');
+    } finally {
+      state.isCheckingTranscript = false;
+      updateTranscriptButtons();
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Fetch Transcript button
+  // ---------------------------------------------------------------
+
+  function bindFetchTranscript() {
+    var fetchBtn = document.getElementById('fetchTranscriptBtn');
+    if (!fetchBtn) return;
+
+    fetchBtn.addEventListener('click', async function() {
+      if (!state.videoId) {
+        setTranscriptStatus('No video', 'danger');
+        return;
+      }
+
+      state.isFetchingTranscript = true;
+      updateTranscriptButtons();
+      setTranscriptStatus('Fetching...', 'info');
+      setAiStatus('');
+
+      try {
+        var res = await fetch('/videos/' + encodeURIComponent(state.videoId) + '/transcript', {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' }
+        });
+
+        var data = await parseApiResponse(res);
+
+        if (!res.ok || !data || !data.success) {
+          throw new Error(data && data.message ? data.message : 'Failed to fetch transcript from YouTube.');
+        }
+
+        state.hasTranscript = true;
+        state.transcriptSegmentCount = data.count || 0;
+        setTranscriptStatus('Available (' + state.transcriptSegmentCount + ' segments)', 'success');
+        setAiStatus('Transcript fetched and saved. You can now generate AI quiz.');
+      } catch (err) {
+        console.error('[Fetch Transcript Error]', err);
+        setTranscriptStatus('Fetch failed', 'danger');
+        setAiStatus(err && err.message ? err.message : 'Failed to fetch transcript from YouTube.', true);
+      } finally {
+        state.isFetchingTranscript = false;
+        updateTranscriptButtons();
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // AI Quiz Generation (refactored — no longer fetches transcript)
+  // ---------------------------------------------------------------
+
   function bindAiAutoQuiz() {
-    const aiBtn = document.getElementById('aiAutoQuizBtn');
+    var aiBtn = document.getElementById('aiAutoQuizBtn');
     if (!aiBtn) return;
 
     aiBtn.addEventListener('click', async function() {
@@ -72,31 +214,24 @@
         return;
       }
 
-      const countInput = document.getElementById('aiAutoQuizCount');
-      const count = Math.min(Math.max(parseInt(countInput && countInput.value, 10) || 5, 1), 15);
-      const strictModeEl = document.getElementById('aiAutoQuizStrictMode');
-      const strictMode = Boolean(strictModeEl && strictModeEl.checked);
+      if (!state.hasTranscript) {
+        setAiStatus('No transcript saved. Please fetch transcript first.', true);
+        return;
+      }
 
+      var countInput = document.getElementById('aiAutoQuizCount');
+      var count = Math.min(Math.max(parseInt(countInput && countInput.value, 10) || 5, 1), 15);
+      var strictModeEl = document.getElementById('aiAutoQuizStrictMode');
+      var strictMode = Boolean(strictModeEl && strictModeEl.checked);
+
+      state.isGeneratingAiQuiz = true;
+      updateTranscriptButtons();
       aiBtn.disabled = true;
 
       try {
-        setAiStatus('Fetching transcript from YouTube...');
+        setAiStatus('Generating quiz with AI...');
 
-        const transcriptRes = await fetch(`/videos/${encodeURIComponent(state.videoId)}/transcript`, {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json'
-          }
-        });
-
-        const transcriptData = await parseApiResponse(transcriptRes);
-        if (!transcriptRes.ok || !transcriptData || !transcriptData.success) {
-          throw new Error(transcriptData && transcriptData.message ? transcriptData.message : 'Could not create transcript.');
-        }
-
-        setAiStatus('Transcript saved. Generating quiz with AI...');
-
-        const quizRes = await fetch(`/videos/${encodeURIComponent(state.videoId)}/ai-quiz`, {
+        var quizRes = await fetch('/videos/' + encodeURIComponent(state.videoId) + '/ai-quiz', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -105,12 +240,12 @@
           body: JSON.stringify({ numberOfQuestions: count, strictMode: strictMode })
         });
 
-        const quizData = await parseApiResponse(quizRes);
+        var quizData = await parseApiResponse(quizRes);
         if (!quizRes.ok || !quizData || !quizData.success) {
           throw new Error(quizData && quizData.message ? quizData.message : 'Could not generate quiz with AI.');
         }
 
-        const generated = Array.isArray(quizData.quiz) ? quizData.quiz : [];
+        var generated = Array.isArray(quizData.quiz) ? quizData.quiz : [];
         if (!generated.length) {
           throw new Error('AI did not return valid questions.');
         }
@@ -118,8 +253,8 @@
         console.log('[AI Quiz Generated]', generated);
 
         state.quizzes = normalizeQuizzes(generated.map(function(entry, index) {
-          const letter = String(entry && entry.correctAnswer || 'A').trim().toUpperCase();
-          const letterMap = { A: 0, B: 1, C: 2, D: 3 };
+          var letter = String(entry && entry.correctAnswer || 'A').trim().toUpperCase();
+          var letterMap = { A: 0, B: 1, C: 2, D: 3 };
 
           return {
             triggerTimeSec: parseSuggestedTimestamp(entry && entry.suggestedTimestamp),
@@ -135,13 +270,14 @@
           };
         }));
 
-        setAiStatus(`Generated ${generated.length} questions${strictMode ? ' (strict mode)' : ''}. Saving to video settings...`);
+        setAiStatus('Generated ' + generated.length + ' questions' + (strictMode ? ' (strict mode)' : '') + '. Saving to video settings...');
         persistQuizzes();
       } catch (err) {
         console.error('[AI Auto Quiz Error]', err);
         setAiStatus(err && err.message ? err.message : 'An error occurred while generating the AI quiz.', true);
       } finally {
-        aiBtn.disabled = false;
+        state.isGeneratingAiQuiz = false;
+        updateTranscriptButtons();
       }
     });
   }
