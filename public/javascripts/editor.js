@@ -1389,6 +1389,12 @@
                             <i class="fa-solid fa-clock me-1"></i> Advanced Video Settings
                         </a>
                     </div>
+
+                    <hr class="my-3">
+                    <div id="reflection-editor-root" class="reflection-editor-section"
+                         data-course-id="${courseId}"
+                         data-section-index="${sectionIndex}"
+                         data-lesson-index="${lessonIndex}"></div>
                 </div>
             </div>
         `;

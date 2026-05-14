@@ -166,6 +166,10 @@
         </div>
       </div>
     </section>
+
+    <!-- Reflection / Exit Ticket root (used by reflection.js for courseId) -->
+    <div id="reflection-learner-root" data-course-id="<%= course._id %>" style="display:none"></div>
+
   </main>
 
   <aside class="learning-sidebar">
@@ -350,6 +354,93 @@
   </div>
 </div>
 
+<!-- Reflection / Exit Ticket Modal -->
+<style>
+  .reflection-gate-modal { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .reflection-gate-modal[hidden] { display: none !important; }
+  .reflection-gate-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.55); }
+  .reflection-gate-shell { position: relative; z-index: 1; display: flex; align-items: stretch; justify-content: center; gap: 0; width: min(900px, 96vw); max-height: min(820px, 92vh); }
+  .reflection-gate-modal.note-open .reflection-gate-shell { width: min(1180px, 96vw); gap: 22px; }
+  .reflection-gate-dialog { position: relative; width: min(900px, 96vw); max-height: min(820px, 92vh); background: #fff; border-radius: 18px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .reflection-gate-modal.note-open .reflection-gate-dialog { width: min(760px, 58vw); }
+  .reflection-gate-note-panel { width: min(420px, 34vw); max-height: min(820px, 92vh); background: #fff; border-radius: 18px; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .reflection-gate-note-panel[hidden] { display: none !important; }
+  .reflection-gate-note-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid #e5e7eb; }
+  .reflection-gate-note-header h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+  .reflection-gate-note-content { padding: 18px 20px; overflow-y: auto; flex: 1; }
+  .reflection-gate-header { display: flex; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; border-bottom: 1px solid #e5e7eb; }
+  .reflection-gate-header h2 { margin: 0; font-size: 1.35rem; font-weight: 700; }
+  .reflection-gate-header p { margin: 4px 0 0; font-size: 0.88rem; color: #64748b; }
+  .reflection-gate-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #94a3b8; padding: 4px 8px; border-radius: 8px; line-height: 1; }
+  .reflection-gate-close:hover { background: #f1f5f9; color: #475569; }
+  .reflection-gate-body { padding: 24px 28px; overflow-y: auto; flex: 1; }
+  .reflection-gate-prompt { padding: 16px; border-radius: 14px; background: #f8fafc; border: 1px solid #e5e7eb; margin-bottom: 18px; }
+  .reflection-gate-prompt h3 { margin: 0 0 8px; font-size: 0.92rem; font-weight: 600; color: #334155; }
+  .reflection-gate-prompt p { margin: 0; font-size: 0.95rem; line-height: 1.6; color: #1e293b; }
+  .reflection-gate-purpose { font-size: 0.82rem; color: #64748b; margin: 8px 0 0; font-style: italic; }
+  .reflection-gate-body label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.92rem; }
+  #reflectionGateAnswer { width: 100%; min-height: 220px; resize: vertical; padding: 14px 16px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 15px; line-height: 1.6; font-family: inherit; }
+  #reflectionGateAnswer:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+  .reflection-gate-min-hint { font-size: 0.82rem; color: #94a3b8; margin: 8px 0 0; }
+  .reflection-gate-error { color: #dc2626; font-size: 0.88rem; margin: 8px 0 0; padding: 8px 12px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca; }
+  .reflection-gate-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 28px 24px; border-top: 1px solid #e5e7eb; }
+  .reflection-gate-footer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .reflection-gate-footer .btn { border-radius: 10px; font-weight: 600; padding: 10px 20px; }
+  body.reflection-modal-open { overflow: hidden; }
+  @media (max-width: 900px) { .reflection-gate-modal.note-open .reflection-gate-shell { flex-direction: column; width: min(720px, 96vw); overflow-y: auto; } .reflection-gate-modal.note-open .reflection-gate-dialog { width: 100%; max-height: none; } .reflection-gate-note-panel { width: 100%; max-height: none; min-height: 280px; } }
+  @media (max-width: 640px) { .reflection-gate-modal { padding: 12px; align-items: stretch; } .reflection-gate-shell { width: 100%; max-height: 96vh; } .reflection-gate-dialog { width: 100%; max-height: 96vh; border-radius: 14px; } .reflection-gate-footer { flex-direction: column; align-items: stretch; } .reflection-gate-footer-actions, #reflectionGateOpenNoteBtn { width: 100%; } .reflection-gate-footer-actions button { flex: 1; } }
+</style>
+<div id="reflectionGateModal" class="reflection-gate-modal" hidden>
+  <div class="reflection-gate-backdrop" id="reflectionGateBackdrop"></div>
+
+  <div class="reflection-gate-shell">
+    <div class="reflection-gate-dialog" role="dialog" aria-modal="true" aria-labelledby="reflectionGateTitle">
+      <div class="reflection-gate-header">
+        <div>
+          <h2 id="reflectionGateTitle">Reflection / Exit Ticket</h2>
+          <p id="reflectionGateSubtitle">Please complete this reflection before marking the lesson as complete.</p>
+        </div>
+        <button type="button" id="reflectionGateCloseBtn" class="reflection-gate-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="reflection-gate-body">
+        <div class="reflection-gate-prompt">
+          <h3><i class="fa-solid fa-pen-to-square me-1"></i>Prompt</h3>
+          <p id="reflectionGatePrompt"></p>
+          <p id="reflectionGatePurpose" class="reflection-gate-purpose"></p>
+        </div>
+        <label for="reflectionGateAnswer">Your Reflection</label>
+        <textarea id="reflectionGateAnswer" placeholder="Write your reflection here..."></textarea>
+        <p id="reflectionGateMinLength" class="reflection-gate-min-hint"></p>
+        <div id="reflectionGateError" class="reflection-gate-error" hidden></div>
+      </div>
+      <div class="reflection-gate-footer">
+        <button type="button" id="reflectionGateOpenNoteBtn" class="btn btn-outline-secondary btn-sm">
+          <i class="fa-solid fa-note-sticky me-1"></i><span id="reflectionGateOpenNoteLabel">Open Note</span>
+        </button>
+        <div class="reflection-gate-footer-actions">
+          <button id="reflectionGateCancelBtn" type="button" class="btn btn-outline-secondary">Cancel</button>
+          <button id="reflectionGateSkipBtn" type="button" class="btn btn-outline-warning" hidden>
+            <i class="fa-solid fa-forward me-1"></i>Skip Reflection
+          </button>
+          <button id="reflectionGateSubmitBtn" type="button" class="btn btn-primary">
+            <i class="fa-solid fa-paper-plane me-1"></i>Submit Reflection
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <aside id="reflectionGateNotePanel" class="reflection-gate-note-panel" hidden>
+      <div class="reflection-gate-note-header">
+        <h3><i class="fa-solid fa-note-sticky me-1"></i>Lesson Notes</h3>
+        <button type="button" id="reflectionGateCloseNoteBtn" class="reflection-gate-close" aria-label="Close notes">&times;</button>
+      </div>
+      <div id="reflectionGateNoteContent" class="reflection-gate-note-content">
+        <p class="text-muted small">Loading notes...</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
 <!-- Declare variables and load JS -->
 <script nonce="<%= cspNonce %>">
   window.__COURSE__ = <%- serializeJson(course) %>;
@@ -370,6 +461,7 @@
 <script src="/javascripts/show/render.js" defer></script>
 <script src="/javascripts/show/app.js" defer></script>
 <script src="/javascripts/show/aiChat.js" defer></script>
+<script src="/javascripts/show/reflection.js" defer></script>
 <script nonce="<%= cspNonce %>">
   (function() {
     const notice = document.getElementById('courseStatusNotice');

@@ -243,6 +243,15 @@
     window.LearningRender.updateSidebarUI();
     syncLearningStageHeader();
     window.dispatchEvent(new CustomEvent('lessonchange', { detail: { lessonId: activeLessonId } }));
+
+    // Expose current lesson context for other scripts (e.g., ReflectionGate)
+    window.EdumyLessonContext = {
+      courseId: String((deps.store.course && deps.store.course._id) || ''),
+      lessonId: activeLessonId,
+      sectionIndex: lesson.sectionIndex,
+      lessonIndex: lesson.lessonIndex,
+      lesson: lesson
+    };
   }
 
   function setLessonProgress(lessonId, completed, syncBackend) {

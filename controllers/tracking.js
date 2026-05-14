@@ -1,6 +1,7 @@
 const UserCourseProgress = require('../models/userCourseProgress');
 const User = require('../models/user');
 const Course = require('../models/course');
+const Reflection = require('../models/Reflection');
 const { awardGamification, recordLearningActivity } = require('../utils/gamification');
 const { getCanonicalSections } = require('../utils/courseContentAdapter');
 const { findLessonContext } = require('../utils/lessonLocator');
@@ -128,6 +129,39 @@ module.exports.trackEvent = async (req, res) => {
 
     if (['play', 'pause', 'seek'].includes(eventType)) {
       entry.interactions[eventType] = Number(entry.interactions[eventType] || 0) + 1;
+    }
+
+    // Server-side reflection guard: block completion if required reflection is missing
+    if (eventType === 'completed' && course) {
+      const sections = getCanonicalSections(course);
+      let lessonReflection = null;
+
+      for (const section of sections) {
+        const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+        for (const lesson of lessons) {
+          if (String(lesson && lesson._id || '') === String(lessonId)) {
+            lessonReflection = lesson.reflection || null;
+            break;
+          }
+        }
+        if (lessonReflection) break;
+      }
+
+      if (lessonReflection && lessonReflection.enabled && lessonReflection.required) {
+        const existingSubmission = await Reflection.findOne({
+          user: req.user._id,
+          course: courseId,
+          lessonId: String(lessonId)
+        });
+
+        if (!existingSubmission || !existingSubmission.answer) {
+          return res.status(403).json({
+            success: false,
+            error: 'Reflection is required before completing this lesson.',
+            code: 'REFLECTION_REQUIRED'
+          });
+        }
+      }
     }
 
     if (eventType === 'completed') {

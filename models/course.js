@@ -57,6 +57,51 @@ const _slideElementSchema = new Schema({
     }
 }, { _id: false })
 
+// Reflection / Exit Ticket schema
+const reflectionConfigSchema = new Schema({
+    enabled: {
+        type: Boolean,
+        default: false
+    },
+    title: {
+        type: String,
+        default: 'Exit Ticket',
+        trim: true
+    },
+    prompt: {
+        type: String,
+        default: '',
+        trim: true
+    },
+    purpose: {
+        type: String,
+        default: '',
+        trim: true
+    },
+    required: {
+        type: Boolean,
+        default: false
+    },
+    minLength: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+    rubric: {
+        good: { type: String, default: '' },
+        partial: { type: String, default: '' },
+        weak: { type: String, default: '' }
+    },
+    webOnly: {
+        type: Boolean,
+        default: true
+    },
+    createdByAI: {
+        type: Boolean,
+        default: false
+    }
+}, { _id: false })
+
 // Quiz question schema
 const quizQuestionSchema = new Schema({
     question: {
@@ -175,6 +220,10 @@ const lessonSchema = new Schema({
     interactiveQuizzes: {
         type: [interactiveVideoQuizSchema],
         default: []
+    },
+    reflection: {
+        type: reflectionConfigSchema,
+        default: () => ({})
     },
     order: {
         type: Number,

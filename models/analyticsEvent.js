@@ -10,7 +10,8 @@ const ANALYTICS_EVENT_TYPES = [
   'quiz_question_answered',
   'quiz_completed',
   'ai_question_asked',
-  'notification_clicked'
+  'notification_clicked',
+  'reflection_submitted'
 ];
 
 const analyticsEventSchema = new mongoose.Schema({

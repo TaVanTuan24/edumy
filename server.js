@@ -43,6 +43,7 @@ const analyticsRoutes = require('./routes/analytics');
 const discussionRoutes = require('./routes/discussions');
 const vrRoutes = require('./routes/vr');
 const vrAuthRoutes = require('./routes/vrAuth');
+const reflectionRoutes = require('./routes/reflections');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const appVersion = require('./package.json').version || 'unknown';
@@ -436,6 +437,7 @@ app.use('/analytics', analyticsRoutes);
 app.use('/courses/:courseId/discussions', discussionRoutes);
 app.use('/api/vr', cors(vrCorsOptions), vrRoutes);
 app.use('/api/vr-auth', cors(vrCorsOptions), vrAuthRoutes);
+app.use('/courses', reflectionRoutes);
 
 app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'images', 'picture.png'));
