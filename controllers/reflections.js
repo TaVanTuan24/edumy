@@ -414,6 +414,114 @@ module.exports.getLessonReflection = async (req, res) => {
   });
 };
 
+// ---- Admin: Get all reflections for a specific learner in a course ----
+
+module.exports.getLearnerReflections = async (req, res) => {
+  const { courseId, userId } = req.params;
+
+  if (!mongoose.isValidObjectId(courseId)) {
+    return res.status(400).json({ success: false, error: 'Invalid course ID' });
+  }
+  if (!mongoose.isValidObjectId(userId)) {
+    return res.status(400).json({ success: false, error: 'Invalid user ID' });
+  }
+
+  const course = await Course.findById(courseId).select('sections');
+  if (!course) {
+    return res.status(404).json({ success: false, error: 'Course not found' });
+  }
+
+  // Collect all lessons with reflection enabled
+  const reflectionLessons = [];
+  const sections = Array.isArray(course.sections) ? course.sections : [];
+
+  for (let si = 0; si < sections.length; si++) {
+    const section = sections[si];
+    if (!section || !Array.isArray(section.lessons)) continue;
+    for (let li = 0; li < section.lessons.length; li++) {
+      const lesson = section.lessons[li];
+      if (!lesson) continue;
+      const ref = lesson.reflection;
+      if (ref && ref.enabled) {
+        reflectionLessons.push({
+          lessonId: String(lesson._id || ''),
+          sectionIndex: si,
+          lessonIndex: li,
+          sectionTitle: section.title || 'Section ' + (si + 1),
+          lessonTitle: lesson.title || 'Lesson ' + (li + 1),
+          title: ref.title || 'Exit Ticket',
+          prompt: ref.prompt || '',
+          purpose: ref.purpose || '',
+          required: Boolean(ref.required),
+          minLength: ref.minLength || 0,
+          rubric: ref.rubric || {}
+        });
+      }
+    }
+  }
+
+  if (!reflectionLessons.length) {
+    return res.json({ success: true, hasReflectionLessons: false, reflections: [] });
+  }
+
+  // Fetch all submissions by this user for this course
+  const submissions = await Reflection.find({
+    course: courseId,
+    user: userId
+  }).lean();
+
+  // Build a map of lessonId -> submission (take latest if multiple)
+  const submissionMap = {};
+  for (const sub of submissions) {
+    const key = String(sub.lessonId || '');
+    if (!key) continue;
+    // Keep the latest submission (submissions are not sorted, compare createdAt)
+    if (!submissionMap[key] || new Date(sub.createdAt) > new Date(submissionMap[key].createdAt)) {
+      submissionMap[key] = sub;
+    }
+  }
+
+  // Also build a fallback map using sectionIndex-lessonIndex key
+  const submissionMapByIndex = {};
+  for (const sub of submissions) {
+    const key = String(sub.sectionIndex) + '-' + String(sub.lessonIndex);
+    if (!submissionMapByIndex[key] || new Date(sub.createdAt) > new Date(submissionMapByIndex[key].createdAt)) {
+      submissionMapByIndex[key] = sub;
+    }
+  }
+
+  // Match submissions to lessons
+  const reflections = reflectionLessons.map(function(rl) {
+    let sub = submissionMap[rl.lessonId] || null;
+    // Fallback: try matching by sectionIndex-lessonIndex
+    if (!sub) {
+      const indexKey = rl.sectionIndex + '-' + rl.lessonIndex;
+      sub = submissionMapByIndex[indexKey] || null;
+    }
+
+    return {
+      lessonId: rl.lessonId,
+      sectionIndex: rl.sectionIndex,
+      lessonIndex: rl.lessonIndex,
+      sectionTitle: rl.sectionTitle,
+      lessonTitle: rl.lessonTitle,
+      title: rl.title,
+      prompt: rl.prompt,
+      purpose: rl.purpose,
+      required: rl.required,
+      minLength: rl.minLength,
+      submitted: Boolean(sub),
+      answer: sub ? (sub.answer || '') : '',
+      wordCount: sub ? (sub.wordCount || 0) : 0,
+      characterCount: sub ? (sub.characterCount || 0) : 0,
+      submittedAt: sub ? sub.createdAt : null,
+      updatedAt: sub ? sub.updatedAt : null
+    };
+  });
+
+  return res.json({ success: true, hasReflectionLessons: true, reflections });
+};
+
 // ---- Learner: Submit reflection ----
 
 module.exports.submitReflection = async (req, res) => {

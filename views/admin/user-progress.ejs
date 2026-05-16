@@ -73,4 +73,129 @@
             <% } %>
         </div>
     </div>
+
+    <!-- Reflection / Exit Ticket Analytics -->
+    <div class="table-card mt-4" id="learnerReflectionCard"
+         data-course-id="<%= course._id %>"
+         data-user-id="<%= progress.user ? progress.user._id : '' %>">
+        <div class="table-toolbar">
+            <div>
+                <h5 class="mb-1"><i class="fa-solid fa-pen-to-square me-2"></i>Reflection / Exit Ticket Analytics</h5>
+                <p class="text-muted small mb-0">Review this learner's reflection responses submitted after lesson completion.</p>
+            </div>
+        </div>
+        <div id="learner-reflection-details" style="padding: 16px 24px 24px;">
+            <div class="text-muted small">Loading reflection data...</div>
+        </div>
+    </div>
 </div>
+
+<script nonce="<%= cspNonce %>">
+    (function() {
+        var card = document.getElementById('learnerReflectionCard');
+        if (!card) return;
+        var courseId = card.getAttribute('data-course-id');
+        var userId = card.getAttribute('data-user-id');
+        var container = document.getElementById('learner-reflection-details');
+        if (!courseId || !userId || !container) return;
+
+        // XSS-safe HTML escaping
+        function esc(str) {
+            return String(str || '')
+                .replace(/&/g, '\x26amp;')
+                .replace(/</g, '\x26lt;')
+                .replace(/>/g, '\x26gt;')
+                .replace(/"/g, '\x26quot;');
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '\u2014';
+            try {
+                var d = new Date(dateStr);
+                return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return String(dateStr);
+            }
+        }
+
+        fetch('/courses/' + encodeURIComponent(courseId) + '/learners/' + encodeURIComponent(userId) + '/reflections', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (!data || !data.success) {
+                container.innerHTML = '<div class="reflection-empty-state"><i class="fa-solid fa-circle-exclamation me-2"></i>Failed to load reflection data.</div>';
+                return;
+            }
+            if (!data.hasReflectionLessons || !data.reflections || !data.reflections.length) {
+                container.innerHTML = '<div class="reflection-empty-state"><i class="fa-solid fa-circle-info me-2"></i>No Reflection / Exit Ticket lessons have been configured for this course.</div>';
+                return;
+            }
+            renderReflections(data.reflections);
+        })
+        .catch(function(err) {
+            container.innerHTML = '<div class="reflection-empty-state"><i class="fa-solid fa-circle-exclamation me-2"></i>Error loading reflections: ' + esc(err.message) + '</div>';
+        });
+
+        function renderReflections(reflections) {
+            var submittedCount = 0;
+            for (var i = 0; i < reflections.length; i++) {
+                if (reflections[i].submitted) submittedCount++;
+            }
+
+            var html = '';
+            // Summary stats
+            html += '<div class="reflection-summary-stats">';
+            html += '<div class="reflection-stat-item"><span class="reflection-stat-value">' + reflections.length + '</span><span class="reflection-stat-label">Reflection Lessons</span></div>';
+            html += '<div class="reflection-stat-item"><span class="reflection-stat-value">' + submittedCount + '</span><span class="reflection-stat-label">Submitted</span></div>';
+            html += '<div class="reflection-stat-item"><span class="reflection-stat-value">' + (reflections.length - submittedCount) + '</span><span class="reflection-stat-label">Not Submitted</span></div>';
+            html += '</div>';
+
+            for (var j = 0; j < reflections.length; j++) {
+                var r = reflections[j];
+                var statusClass = r.submitted ? 'reflection-status-submitted' : 'reflection-status-not-submitted';
+                var statusLabel = r.submitted ? 'Submitted' : 'Not submitted';
+
+                html += '<div class="reflection-detail-card">';
+                html += '<div class="reflection-detail-header">';
+                html += '<div class="reflection-detail-title">';
+                html += '<span class="reflection-lesson-path">' + esc(r.sectionTitle) + ' / ' + esc(r.lessonTitle) + '</span>';
+                html += '<h6 class="reflection-card-title">' + esc(r.title || 'Exit Ticket') + '</h6>';
+                html += '</div>';
+                html += '<span class="reflection-status-badge ' + statusClass + '">' + statusLabel + '</span>';
+                html += '</div>';
+
+                html += '<div class="reflection-meta">';
+                if (r.required) html += '<span class="reflection-meta-tag"><i class="fa-solid fa-asterisk"></i> Required</span>';
+                if (r.minLength > 0) html += '<span class="reflection-meta-tag"><i class="fa-solid fa-text-width"></i> Min ' + r.minLength + ' chars</span>';
+                html += '</div>';
+
+                if (r.prompt) {
+                    html += '<div class="reflection-prompt">';
+                    html += '<div class="reflection-prompt-label"><i class="fa-solid fa-pen-to-square me-1"></i>Prompt</div>';
+                    html += '<p>' + esc(r.prompt) + '</p>';
+                    if (r.purpose) html += '<p class="reflection-purpose">' + esc(r.purpose) + '</p>';
+                    html += '</div>';
+                }
+
+                if (r.submitted) {
+                    html += '<div class="reflection-answer">';
+                    html += '<div class="reflection-answer-label"><i class="fa-solid fa-message me-1"></i>Answer</div>';
+                    html += '<div class="reflection-answer-text">' + esc(r.answer) + '</div>';
+                    html += '<div class="reflection-answer-meta">';
+                    html += '<span><strong>' + (r.wordCount || 0) + '</strong> words</span>';
+                    html += '<span><strong>' + (r.characterCount || 0) + '</strong> characters</span>';
+                    if (r.submittedAt) html += '<span>Submitted: ' + formatDate(r.submittedAt) + '</span>';
+                    if (r.updatedAt && r.updatedAt !== r.submittedAt) html += '<span>Updated: ' + formatDate(r.updatedAt) + '</span>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+        }
+    })();
+</script>

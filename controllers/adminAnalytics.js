@@ -1,6 +1,6 @@
 const Course = require('../models/course');
 const UserCourseProgress = require('../models/userCourseProgress');
-const { getCourseAnalytics, countTotalLessons, buildLessonTitleMap } = require('../services/analyticsService');
+const { getCourseAnalytics, countTotalLessons, buildLessonTitleMap, getReflectionAnalytics } = require('../services/analyticsService');
 
 module.exports.renderDashboard = async (req, res) => {
     try {
@@ -14,6 +14,7 @@ module.exports.renderDashboard = async (req, res) => {
         }
 
         const analytics = await getCourseAnalytics(courseId, timeRange);
+        analytics.reflections = await getReflectionAnalytics(courseId, timeRange);
         
         // Provide JSON if requested via AJAX, otherwise render View
         if (req.xhr || req.headers.accept.indexOf('json') > -1) {

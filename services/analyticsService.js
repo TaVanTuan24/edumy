@@ -278,8 +278,97 @@ async function getCourseAnalytics(courseId, timeRange = 'all') {
     };
 }
 
+async function getReflectionAnalytics(courseId, timeRange = 'all') {
+    const course = await Course.findById(courseId).select('sections');
+    if (!course) return { lessonsWithReflection: 0, totalSubmissions: 0, learnersSubmitted: 0, averageWordCount: 0, lessons: [] };
+
+    const Reflection = require('../models/Reflection');
+    const startDate = getDateFromRange(timeRange);
+
+    // Find lessons with reflection enabled
+    const sections = getCanonicalSections(course);
+    const reflectionLessons = [];
+    for (let si = 0; si < sections.length; si++) {
+        const section = sections[si];
+        const lessons = Array.isArray(section && section.lessons) ? section.lessons : [];
+        for (let li = 0; li < lessons.length; li++) {
+            const lesson = lessons[li];
+            const ref = lesson && lesson.reflection;
+            const enabled = ref && (
+                ref.enabled === true ||
+                ref.enabled === 'true' ||
+                (ref.enabled === undefined && !!ref.prompt)
+            );
+            if (enabled) {
+                reflectionLessons.push({
+                    sectionIndex: si,
+                    lessonIndex: li,
+                    lessonId: String(lesson._id || ''),
+                    sectionTitle: section.title || 'Untitled Section',
+                    lessonTitle: lesson.title || 'Untitled Lesson',
+                    prompt: ref.prompt || '',
+                    required: Boolean(ref.required),
+                    minLength: ref.minLength || 0
+                });
+            }
+        }
+    }
+
+    if (!reflectionLessons.length) {
+        return { lessonsWithReflection: 0, totalSubmissions: 0, learnersSubmitted: 0, averageWordCount: 0, lessons: [] };
+    }
+
+    // Fetch all reflections for this course
+    const lessonIds = reflectionLessons.map(l => l.lessonId);
+    const query = { course: courseId, lessonId: { $in: lessonIds } };
+    if (timeRange !== 'all') {
+        query.createdAt = { $gte: startDate };
+    }
+
+    const allSubmissions = await Reflection.find(query).lean();
+
+    // Group submissions by lessonId
+    const submissionsByLesson = {};
+    for (const sub of allSubmissions) {
+        const key = String(sub.lessonId);
+        if (!submissionsByLesson[key]) submissionsByLesson[key] = [];
+        submissionsByLesson[key].push(sub);
+    }
+
+    // Aggregate per-lesson stats
+    let totalWordCount = 0;
+    const uniqueLearners = new Set();
+    const lessons = reflectionLessons.map(rl => {
+        const subs = submissionsByLesson[rl.lessonId] || [];
+        const learnerIds = new Set(subs.map(s => String(s.user)));
+        const wordCountSum = subs.reduce((sum, s) => sum + (s.wordCount || 0), 0);
+        const avgWc = subs.length > 0 ? Math.round(wordCountSum / subs.length) : 0;
+        const latest = subs.length > 0 ? subs.reduce((max, s) => new Date(s.createdAt) > new Date(max) ? s.createdAt : max, subs[0].createdAt) : null;
+
+        subs.forEach(s => uniqueLearners.add(String(s.user)));
+        totalWordCount += wordCountSum;
+
+        return {
+            ...rl,
+            submissionCount: subs.length,
+            learnerCount: learnerIds.size,
+            averageWordCount: avgWc,
+            latestSubmissionAt: latest
+        };
+    });
+
+    return {
+        lessonsWithReflection: reflectionLessons.length,
+        totalSubmissions: allSubmissions.length,
+        learnersSubmitted: uniqueLearners.size,
+        averageWordCount: allSubmissions.length > 0 ? Math.round(totalWordCount / allSubmissions.length) : 0,
+        lessons
+    };
+}
+
 module.exports = {
     getCourseAnalytics,
     countTotalLessons,
-    buildLessonTitleMap
+    buildLessonTitleMap,
+    getReflectionAnalytics
 };

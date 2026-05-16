@@ -53,6 +53,14 @@ router.post(
   catchAsync(reflectionsController.generateAiSummary)
 );
 
+// Get all reflections for a specific learner in a course (admin)
+router.get(
+  '/:courseId/learners/:userId/reflections',
+  isLoggedIn,
+  isAdmin,
+  catchAsync(reflectionsController.getLearnerReflections)
+);
+
 // ==================== Learner routes ====================
 // Learner must be logged in and have course access
 

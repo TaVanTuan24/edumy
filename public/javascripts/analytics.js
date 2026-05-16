@@ -274,4 +274,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    // Helper: XSS-safe HTML escaping
+    function esc(str) {
+        return String(str || '')
+            .replace(/&/g, '\x26amp;')
+            .replace(/</g, '\x26lt;')
+            .replace(/>/g, '\x26gt;')
+            .replace(/"/g, '\x26quot;');
+    }
 });

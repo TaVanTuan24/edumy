@@ -84,22 +84,6 @@
       + '    </button>'
       + '    <span id="reflectionStatus" class="small text-muted"></span>'
       + '  </div>'
-      + '  <hr class="my-3">'
-      + '  <div class="mb-2">'
-      + '    <div class="d-flex align-items-center gap-2 mb-2">'
-      + '      <button id="reflectionViewSubmissionsBtn" class="btn btn-sm btn-outline-secondary" type="button">'
-      + '        <i class="fa-solid fa-list me-1"></i>View Submissions'
-      + '      </button>'
-      + '      <button id="reflectionAiSummaryBtn" class="btn btn-sm btn-outline-info" type="button">'
-      + '        <i class="fa-solid fa-chart-simple me-1"></i>AI Summary'
-      + '      </button>'
-      + '      <span id="reflectionSubmissionsStatus" class="small text-muted"></span>'
-      + '    </div>'
-      + '    <div id="reflectionSubmissionsPanel" style="display: none;">'
-      + '      <div id="reflectionSubmissionsList"></div>'
-      + '    </div>'
-      + '    <div id="reflectionSummaryResult" style="display: none;"></div>'
-      + '  </div>'
       + '</div>';
   }
 
