@@ -1703,6 +1703,9 @@ html[data-theme="dark"] .interactive-quiz-option.wrong {
 
 .interactive-quiz-body {
     padding: 14px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .interactive-quiz-question {
@@ -1997,6 +2000,7 @@ html[data-theme="dark"] .interactive-quiz-option.wrong {
     .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-body {
         max-height: min(24vh, 150px);
         padding: 8px 10px;
+        overflow-y: auto;
     }
 
     .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-question {
@@ -2066,6 +2070,7 @@ html[data-theme="dark"] .interactive-quiz-option.wrong {
     .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-body {
         max-height: min(24vh, 110px);
         padding: 7px 9px;
+        overflow-y: auto;
     }
 
     .interactive-quiz-modal.inline-quiz-mode.is-mobile .interactive-quiz-option {

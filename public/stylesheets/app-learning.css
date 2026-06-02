@@ -1060,6 +1060,9 @@ html[data-theme="dark"] .lesson-pdf-viewer {
     box-shadow: 0 24px 64px rgba(15, 23, 42, 0.35);
     overflow: hidden;
     border: 1px solid #dbe2ea;
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
 }
 
 .interactive-quiz-head {
@@ -1074,6 +1077,9 @@ html[data-theme="dark"] .lesson-pdf-viewer {
 
 .interactive-quiz-body {
     padding: 14px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .interactive-quiz-question {
@@ -1167,6 +1173,9 @@ html[data-theme="dark"] .lesson-pdf-viewer {
     width: 100%;
     border-radius: 12px;
     box-shadow: 0 16px 34px rgba(15, 23, 42, 0.32);
+    max-height: min(calc(56.25vw - 60px), calc(100vh - 160px));
+    display: flex;
+    flex-direction: column;
 }
 
 .interactive-quiz-modal.inline-quiz-mode .interactive-quiz-head {
@@ -1176,6 +1185,8 @@ html[data-theme="dark"] .lesson-pdf-viewer {
 .interactive-quiz-modal.inline-quiz-mode .interactive-quiz-body {
     padding: 10px 12px;
     overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .interactive-quiz-modal.inline-quiz-mode .interactive-quiz-question {
