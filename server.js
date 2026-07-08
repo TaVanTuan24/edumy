@@ -85,13 +85,29 @@ app.engine('ejs', ejsMate)
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'))
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// Baseline security headers. CSP is applied separately below with a per-request nonce.
+// The cross-origin isolation headers are disabled to avoid breaking third-party embeds
+// (YouTube/Google iframes) and the VR client loading resources cross-origin.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
+  referrerPolicy: { policy: 'same-origin' },
+  hsts: isProduction ? { maxAge: 15552000, includeSubDomains: true } : false
+}));
+
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 app.use(methodOverride('_method'));
 app.use(express.static(path.join(__dirname, 'public')))
 
-app.use(morgan('combined'));
+// Route HTTP access logs through the structured (pino) logger for consistency.
+app.use(morgan(isProduction ? 'combined' : 'dev', {
+  skip: (req) => req.path === '/health',
+  stream: { write: (message) => logger.info(message.trim()) }
+}));
 app.use(compression({
   filter: (req, res) => {
     // Do not compress Server-Sent Events (SSE) streams – buffering breaks real-time streaming
@@ -234,9 +250,12 @@ app.use((req, res, next) => {
       upgradeInsecureRequests: null,
       defaultSrc: ["'self'", "https://drive.google.com/"],
       connectSrc: ["'self'", ...connectSrcUrls],
-      // Nonce takes precedence; 'unsafe-inline' kept as fallback for older browsers that ignore nonce
-      scriptSrc: ["'self'", `'nonce-${nonce}'`, "'unsafe-inline'", ...scriptSrcUrls],
-      scriptSrcAttr: ["'unsafe-inline'"],
+      // Per-request nonce authorizes inline <script> blocks. No 'unsafe-inline' so injected
+      // scripts without the nonce are blocked. JSON data islands (type="application/json")
+      // are not executed and are unaffected by this directive.
+      scriptSrc: ["'self'", `'nonce-${nonce}'`, ...scriptSrcUrls],
+      // Inline event handlers (onclick=, onload=, ...) are not used in templates; block them.
+      scriptSrcAttr: ["'none'"],
       // 'unsafe-inline' required for styleSrc due to Bootstrap inline styles and CDN component styles
       styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls],
       workerSrc: ["'self'", "blob:"],
@@ -356,7 +375,7 @@ app.use(async (req, res, next) => {
   try {
     const User = require('./models/user');
     const Course = require('./models/course');
-    const user = await User.findById(req.user._id).select('enrolledCourses');
+    const user = await User.findById(req.user._id).select('enrolledCourses').lean();
 
     if (!user || !Array.isArray(user.enrolledCourses)) {
       setCourseNotificationLocals(res, []);
@@ -385,7 +404,7 @@ app.use(async (req, res, next) => {
     }
 
     const enrolledIds = enrolledEntries.map((entry) => entry.courseId);
-    const courses = await Course.find({ _id: { $in: enrolledIds } }).select('title updatedAt');
+    const courses = await Course.find({ _id: { $in: enrolledIds } }).select('title updatedAt').lean();
     const courseMap = new Map(courses.map((course) => [String(course._id), course]));
 
     const notifications = enrolledEntries
@@ -516,6 +535,12 @@ app.use((err, req, res, _next) => {
   }
 
   if (!err.message) err.message = 'Oh No, Something Went Wrong!';
+
+  // Log server-side failures centrally so handlers no longer each need a try/catch just to log.
+  // 4xx are expected client errors and are left unlogged to avoid noise.
+  if (statusCode >= 500) {
+    logger.error({ err, path: req.path, method: req.method }, 'Unhandled request error');
+  }
 
   if (wantsJson(req)) {
     return res.status(statusCode).json({

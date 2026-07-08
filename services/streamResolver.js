@@ -1,5 +1,6 @@
 const { URL } = require('url');
 const { execFile } = require('child_process');
+const net = require('net');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -31,6 +32,64 @@ function safeUrlParse(rawUrl) {
   } catch {
     return null;
   }
+}
+
+function isPrivateIPv4(ip) {
+  const parts = ip.split('.').map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [a, b] = parts;
+  if (a === 0) return true; // "this" network
+  if (a === 10) return true; // private
+  if (a === 127) return true; // loopback
+  if (a === 169 && b === 254) return true; // link-local incl. cloud metadata 169.254.169.254
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  if (a === 192 && b === 168) return true; // private
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT (RFC 6598)
+  return false;
+}
+
+function isPrivateIPv6(ip) {
+  const normalized = String(ip || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!normalized) return true;
+  if (normalized === '::1' || normalized === '::') return true; // loopback / unspecified
+  if (normalized.startsWith('fe80:')) return true; // link-local
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // unique local (fc00::/7)
+
+  // IPv4-mapped IPv6, e.g. ::ffff:169.254.169.254
+  const mapped = normalized.match(/::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mapped) return isPrivateIPv4(mapped[1]);
+  return false;
+}
+
+/**
+ * Blocks obviously non-public hosts to reduce SSRF risk (loopback, private ranges,
+ * link-local / cloud metadata endpoints). Note: this is a best-effort string/IP check and
+ * does not resolve DNS, so it does not defend against DNS-rebinding to an internal IP.
+ */
+function isBlockedStreamHost(hostname) {
+  const host = String(hostname || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === 'metadata.google.internal') return true;
+  if (net.isIPv4(host)) return isPrivateIPv4(host);
+  if (net.isIPv6(host)) return isPrivateIPv6(host);
+  return false;
+}
+
+/**
+ * Whether the server is allowed to fetch/install the yt-dlp toolchain at runtime
+ * (download the binary from GitHub, or bootstrap a Python venv + pip install).
+ * Explicit opt-in/out via VR_STREAM_ALLOW_RUNTIME_BOOTSTRAP always wins; otherwise this is
+ * disabled in production so images ship a pre-installed yt-dlp instead of fetching at request time.
+ */
+function isRuntimeYtDlpBootstrapAllowed() {
+  const explicit = String(process.env.VR_STREAM_ALLOW_RUNTIME_BOOTSTRAP || '').trim().toLowerCase();
+  if (explicit === 'true') return true;
+  if (explicit === 'false') return false;
+  return process.env.NODE_ENV !== 'production';
 }
 
 function isYoutubeUrl(parsedUrl) {
@@ -358,6 +417,10 @@ async function ensurePythonYtDlpVirtualEnv(timeoutMs) {
     return paths;
   }
 
+  if (!isRuntimeYtDlpBootstrapAllowed()) {
+    throw new Error('Python yt-dlp bootstrap (venv + pip install) is disabled in production. Pre-install yt-dlp in the image or set VR_STREAM_ALLOW_RUNTIME_BOOTSTRAP=true.');
+  }
+
   if (!pythonYtDlpBootstrapPromise) {
     pythonYtDlpBootstrapPromise = (async () => {
       const root = getPythonVenvRoot();
@@ -419,6 +482,10 @@ async function ensureManagedYtDlpBinary(timeoutMs) {
     throw new Error('Managed yt-dlp download disabled by VR_STREAM_SKIP_YTDLP_DOWNLOAD=true');
   }
 
+  if (!isRuntimeYtDlpBootstrapAllowed()) {
+    throw new Error('Managed yt-dlp download from GitHub is disabled in production. Pre-install yt-dlp in the image or set VR_STREAM_ALLOW_RUNTIME_BOOTSTRAP=true.');
+  }
+
   const YTDlpWrap = tryLoadYtDlpWrap();
   if (!YTDlpWrap || typeof YTDlpWrap.default?.downloadFromGithub !== 'function') {
     throw new Error('yt-dlp-wrap missing downloadFromGithub()');
@@ -475,10 +542,6 @@ async function _resolveYouTubeViaYtDlpWrap(sourceUrl, preferredFormat, timeoutMs
   return selected;
 }
 
-async function resolveYouTubeViaYtDlpDirectUrl(command, sourceUrl, preferredFormat, timeoutMs) {
-  return resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, [], sourceUrl, preferredFormat, timeoutMs);
-}
-
 async function resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, prefixArgs, sourceUrl, preferredFormat, timeoutMs) {
   const selector = preferredFormat === 'm3u8'
     ? 'best[protocol*=m3u8][vcodec!=none]/best[acodec!=none][vcodec!=none][ext=mp4]/best[acodec!=none][vcodec!=none]/best'
@@ -499,25 +562,31 @@ async function resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, prefixArgs, so
   return { url: resolved, format: inferredFormat };
 }
 
+// Shared core: run a yt-dlp-style command with -J (JSON dump), pick the best playable format,
+// and fall back to -g (direct URL) when the JSON has no directly-playable format. Used by the
+// managed, PATH and python strategies so each no longer re-implements the parse/pick/fallback.
+async function resolveViaYtDlpJson(command, prefixArgs, sourceUrl, preferredFormat, timeoutMs) {
+  const output = await execFileAsync(command, [...prefixArgs, '-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(output || '{}');
+  } catch (err) {
+    throw new Error(`yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
+  }
+
+  const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
+  if (selected) return selected;
+
+  return resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, prefixArgs, sourceUrl, preferredFormat, timeoutMs);
+}
+
 async function resolveYouTubeViaYtDlp(sourceUrl, preferredFormat, timeoutMs) {
-  const executableCandidates = getYtDlpExecutableCandidates();
   let lastError = null;
 
-  for (const command of executableCandidates) {
+  for (const command of getYtDlpExecutableCandidates()) {
     try {
-      const output = await execFileAsync(command, ['-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
-      let parsed;
-      try {
-        parsed = JSON.parse(output || '{}');
-      } catch (err) {
-        throw new Error(`yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
-      }
-      const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
-      if (!selected) {
-        return resolveYouTubeViaYtDlpDirectUrl(command, sourceUrl, preferredFormat, timeoutMs);
-      }
-
-      return selected;
+      return await resolveViaYtDlpJson(command, [], sourceUrl, preferredFormat, timeoutMs);
     } catch (err) {
       lastError = err;
     }
@@ -529,44 +598,19 @@ async function resolveYouTubeViaYtDlp(sourceUrl, preferredFormat, timeoutMs) {
 async function resolveYouTubeViaPythonYtDlp(sourceUrl, preferredFormat, timeoutMs) {
   let lastError = null;
 
-  for (const candidate of getPythonYtDlpCandidates()) {
-    const { command, prefixArgs } = candidate;
+  for (const { command, prefixArgs } of getPythonYtDlpCandidates()) {
     try {
-      const output = await execFileAsync(command, [...prefixArgs, '-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
-      let parsed;
-      try {
-        parsed = JSON.parse(output || '{}');
-      } catch (err) {
-        throw new Error(`python yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
-      }
-
-      const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
-      if (!selected) {
-        return resolveYouTubeViaYtDlpDirectUrlWithPrefix(command, prefixArgs, sourceUrl, preferredFormat, timeoutMs);
-      }
-
-      return selected;
+      return await resolveViaYtDlpJson(command, prefixArgs, sourceUrl, preferredFormat, timeoutMs);
     } catch (err) {
       lastError = err;
     }
   }
 
+  // Last resort: bootstrap an isolated yt-dlp into a Python venv (allowed only outside production).
   try {
     const paths = await ensurePythonYtDlpVirtualEnv(timeoutMs);
-    const output = await execFileAsync(paths.python, ['-m', 'yt_dlp', '-J', '--no-playlist', '--no-warnings', sourceUrl], Math.max(timeoutMs * 2, 30000));
-    let parsed;
-    try {
-      parsed = JSON.parse(output || '{}');
-    } catch (err) {
-      throw new Error(`python venv yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
-    }
-
-    const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
-    if (!selected) {
-      return resolveYouTubeViaYtDlpDirectUrlWithPrefix(paths.python, ['-m', 'yt_dlp'], sourceUrl, preferredFormat, Math.max(timeoutMs * 2, 30000));
-    }
-
-    return selected;
+    const venvTimeout = Math.max(timeoutMs * 2, 30000);
+    return await resolveViaYtDlpJson(paths.python, ['-m', 'yt_dlp'], sourceUrl, preferredFormat, venvTimeout);
   } catch (err) {
     lastError = err;
   }
@@ -574,39 +618,9 @@ async function resolveYouTubeViaPythonYtDlp(sourceUrl, preferredFormat, timeoutM
   throw lastError || new Error('python -m yt_dlp was not available');
 }
 
-async function resolveYouTubeViaYtDlpLegacyCommand(sourceUrl, preferredFormat, timeoutMs) {
-  const output = await execFileAsync('yt-dlp', ['-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
-  let parsed;
-  try {
-    parsed = JSON.parse(output || '{}');
-  } catch (err) {
-    throw new Error(`yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
-  }
-  const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
-  if (!selected) {
-    return resolveYouTubeViaYtDlpDirectUrl('yt-dlp', sourceUrl, preferredFormat, timeoutMs);
-  }
-
-  return selected;
-}
-
 async function resolveYouTubeViaManagedYtDlp(sourceUrl, preferredFormat, timeoutMs) {
   const binaryPath = await ensureManagedYtDlpBinary(timeoutMs);
-  const output = await execFileAsync(binaryPath, ['-J', '--no-playlist', '--no-warnings', sourceUrl], timeoutMs);
-
-  let parsed;
-  try {
-    parsed = JSON.parse(output || '{}');
-  } catch (err) {
-    throw new Error(`managed yt-dlp parse failure: ${normalizeErrorDetails(err)}`);
-  }
-
-  const selected = pickBestFormat(parsed && parsed.formats, preferredFormat);
-  if (!selected) {
-    return resolveYouTubeViaYtDlpDirectUrl(binaryPath, sourceUrl, preferredFormat, timeoutMs);
-  }
-
-  return selected;
+  return resolveViaYtDlpJson(binaryPath, [], sourceUrl, preferredFormat, timeoutMs);
 }
 
 async function resolveYouTubeStream(sourceUrl, preferredFormat, timeoutMs, retries) {
@@ -651,15 +665,6 @@ async function resolveYouTubeStream(sourceUrl, preferredFormat, timeoutMs, retri
 
   try {
     return await withRetries(
-      () => resolveYouTubeViaYtDlpLegacyCommand(normalizedSourceUrl, preferredFormat, timeoutMs),
-      retries
-    );
-  } catch (err) {
-    errors.push(buildResolverFailureDetail('yt-dlp-legacy', err));
-  }
-
-  try {
-    return await withRetries(
       () => resolveYouTubeViaYtdlCore(normalizedSourceUrl, preferredFormat, timeoutMs),
       retries
     );
@@ -684,6 +689,16 @@ async function resolveStream(input) {
       error: {
         code: 'INVALID_INPUT',
         message: 'sourceUrl must be a valid http/https URL'
+      }
+    };
+  }
+
+  if (isBlockedStreamHost(parsedUrl.hostname)) {
+    return {
+      success: false,
+      error: {
+        code: 'BLOCKED_HOST',
+        message: 'sourceUrl host is not allowed'
       }
     };
   }
@@ -743,5 +758,7 @@ module.exports = {
   normalizePreferredFormat,
   safeUrlParse,
   isYoutubeUrl,
-  isDirectPlayableUrl
+  isDirectPlayableUrl,
+  isBlockedStreamHost,
+  isRuntimeYtDlpBootstrapAllowed
 };

@@ -201,9 +201,9 @@
       window.LearningRender.updateSidebarUI({ preserveCollapsedActiveSection: true });
     }
 
-    // Refresh gamification
-    if (typeof refreshGamificationUI === 'function') {
-      refreshGamificationUI();
+    // Refresh gamification (defined as a global in show/app.js)
+    if (typeof window.refreshGamificationUI === 'function') {
+      window.refreshGamificationUI();
     }
   }
 

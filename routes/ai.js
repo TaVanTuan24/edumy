@@ -370,7 +370,7 @@ function parseSlideJson(raw, options) {
     try {
         return parseAiSlideResponse(raw, options)
     } catch (error) {
-        console.warn('AI Slide Parse Error:', error.message)
+        logger.warn({ err: error }, 'AI Slide Parse Error')
         return {
             semanticSlides: [],
             slides: createFallbackResolvedSlides(options && options.topic),
@@ -398,7 +398,7 @@ async function generateWithRetry(prompt, retries, options) {
             if (isAiConfigurationError(error)) {
                 throw error
             }
-            console.warn('AI Slide Retry', attempt + 1, error.message)
+            logger.warn({ err: error, attempt: attempt + 1 }, 'AI Slide Retry')
         }
     }
 

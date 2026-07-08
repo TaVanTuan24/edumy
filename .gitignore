@@ -58,7 +58,7 @@ tmp/
 # archive/  # Uncomment only if you want to stop tracking
 
 # QA screenshots (auto-generated)
-qa-shhots/
+qa-shots/
 
 # Uploads (if stored locally before cloudinary)
 uploads/

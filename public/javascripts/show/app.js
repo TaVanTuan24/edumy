@@ -254,17 +254,6 @@
     };
   }
 
-  function setLessonProgress(lessonId, completed, syncBackend) {
-    const deps = window.LearningStore;
-    deps.setLessonProgress(lessonId, completed);
-
-    if (syncBackend) {
-      const lesson = deps.getLessonById(lessonId);
-      const videoUrl = lesson && (lesson.preview || (lesson.content && lesson.content.videoUrl)) || '';
-      syncProgressBackend(videoUrl, completed, lessonId);
-    }
-  }
-
   function syncLessonProgressChange(lessonId, completed) {
     const deps = window.LearningStore;
     const previous = deps.isLessonCompleted(lessonId);
@@ -637,11 +626,6 @@
 
   var editingReviewId = null;
 
-  function getCsrfToken() {
-    var el = document.querySelector('#reviewForm input[name="_csrf"]');
-    return el ? el.value : '';
-  }
-
   function resetReviewForm() {
     editingReviewId = null;
     var ratingInput = document.getElementById('rating');
@@ -761,7 +745,7 @@
     if (ratingInputEl) ratingInputEl.focus();
   }
 
-  function deleteReview(reviewId) {
+  function deleteReview(_reviewId) {
     var deps = window.LearningStore;
     var course = deps.store.course || {};
     var notify = typeof window.showAppToast === 'function'

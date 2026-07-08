@@ -1,6 +1,7 @@
 const Course = require('../models/course');
 const UserCourseProgress = require('../models/userCourseProgress');
 const { getCourseAnalytics, countTotalLessons, buildLessonTitleMap, getReflectionAnalytics } = require('../services/analyticsService');
+const logger = require('../utils/logger');
 
 module.exports.renderDashboard = async (req, res) => {
     try {
@@ -28,7 +29,7 @@ module.exports.renderDashboard = async (req, res) => {
         });
 
     } catch (err) {
-        console.error('[Admin Analytics] Dashboard Error:', err);
+        logger.error({ err }, '[Admin Analytics] Dashboard Error');
         req.flash('error', 'Could not load analytics dashboard');
         res.redirect('/admin');
     }
@@ -70,7 +71,7 @@ module.exports.renderLearnerDetail = async (req, res) => {
             quizResults: formattedQuizResults
         });
     } catch (err) {
-        console.error('[Admin Analytics] Learner Detail Error:', err);
+        logger.error({ err }, '[Admin Analytics] Learner Detail Error');
         req.flash('error', 'Could not load learner details');
         res.redirect(`/admin`);
     }

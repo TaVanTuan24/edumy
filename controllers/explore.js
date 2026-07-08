@@ -9,7 +9,9 @@ const { isCourseSummaryStale, readStoredCourseSummary } = require('../services/a
 const { ANALYTICS_EVENTS, trackEventSafe } = require('../services/analyticsEventService');
 
 module.exports.showExplore = async (req, res) => {
-    const allCourses = await Course.find({}).populate('reviews');
+    // Draft/archived courses never appear in the catalog. Filter them in the query to avoid
+    // loading them (and their reviews); the isCourseCatalogVisible guard below still runs.
+    const allCourses = await Course.find({ status: { $nin: ['draft', 'archived'] } }).populate('reviews');
     const user = await User.findById(req.user._id);
     const enrolledIdSet = user.getEnrolledCourseIdSet();
 

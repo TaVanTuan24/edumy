@@ -75,10 +75,6 @@ async function getCourseAnalytics(courseId, timeRange = 'all') {
     // but for overview stats like completion rate we need ALL time progress.
     // For Activity trend we can filter by lastAccessed locally.
     const allProgressDocs = await UserCourseProgress.find({ course: cId }).lean();
-    
-    const progressDocs = allProgressDocs.filter(doc => 
-        (timeRange === 'all') ? true : (new Date(doc.lastAccessed || doc.updatedAt) >= startDate)
-    );
 
     const totalLessons = countTotalLessons(course);
     
@@ -175,7 +171,6 @@ async function getCourseAnalytics(courseId, timeRange = 'all') {
     
     // Reviews
     const reviews = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
-    const reviewsInRange = reviews.filter(r => new Date(r.createdAt) >= startDate);
     const totalReviews = reviews.length;
     const avgRating = totalReviews ? (reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / totalReviews).toFixed(1) : 0;
     

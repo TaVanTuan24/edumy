@@ -125,25 +125,6 @@ function inferVideoDurationFromTranscript(transcriptSegments) {
   return Math.max(0, Math.floor(maxEnd));
 }
 
-function _findNearestTranscriptOffset(transcriptOffsets, targetSeconds) {
-  const offsets = Array.isArray(transcriptOffsets) ? transcriptOffsets : [];
-  if (!offsets.length) return Math.max(0, Math.floor(targetSeconds));
-
-  let nearest = offsets[0];
-  let minDistance = Math.abs(nearest - targetSeconds);
-
-  for (let i = 1; i < offsets.length; i += 1) {
-    const candidate = offsets[i];
-    const distance = Math.abs(candidate - targetSeconds);
-    if (distance < minDistance) {
-      minDistance = distance;
-      nearest = candidate;
-    }
-  }
-
-  return Math.max(0, Math.floor(nearest));
-}
-
 function findNearestTranscriptOffsetAtOrAfter(transcriptOffsets, targetSeconds, fallbackMax) {
   const offsets = Array.isArray(transcriptOffsets) ? transcriptOffsets : [];
   if (!offsets.length) {

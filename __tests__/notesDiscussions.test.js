@@ -95,7 +95,6 @@ describe('TC-15: Notes and discussions', () => {
     });
 
     test('discussion reply requires authorization', () => {
-      const userId = 'user-2';
       const isAuthenticated = true;
       expect(isAuthenticated).toBe(true);
 

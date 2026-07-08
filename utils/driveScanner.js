@@ -2,6 +2,7 @@ const { google } = require('googleapis');
 const { buildDrivePreviewUrl } = require('./driveVideoMetadata');
 const { prepareLessonForWrite } = require('./courseStats');
 const { stripFileExtension } = require('./formatLessonName');
+const logger = require('./logger');
 
 const drive = google.drive({
   version: 'v3',
@@ -47,12 +48,12 @@ async function scanDriveStructure(folderId) {
         lessons.push(lesson);
 
         if (!durationResult.ok) {
-          console.log('[drive-scan] video duration unavailable', {
+          logger.debug({
             fileId: file.id,
             mimeType: file.mimeType,
             metadataFound: durationResult.metadataFound,
             skipReason: durationResult.skipReason
-          });
+          }, '[drive-scan] video duration unavailable');
         }
       }
     }

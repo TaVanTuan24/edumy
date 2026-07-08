@@ -38,8 +38,12 @@ describe('TC-22: VR completion sync', () => {
     });
 
     test('lessonId must be a non-empty string', () => {
-      expect(typeof 'lesson-1' === 'string' && 'lesson-1'.trim().length > 0).toBe(true);
-      expect(typeof '' === 'string' && ''.trim().length > 0).toBe(false);
+      function isNonEmptyString(value) {
+        return typeof value === 'string' && value.trim().length > 0;
+      }
+
+      expect(isNonEmptyString('lesson-1')).toBe(true);
+      expect(isNonEmptyString('')).toBe(false);
     });
 
     test('watchTime must be a non-negative number', () => {

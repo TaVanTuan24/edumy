@@ -4,6 +4,7 @@ const { cloudinary } = require('../config/cloudinary');
 const { buildGamificationViewModel, awardGamification } = require('../utils/gamification');
 const { isAdminUser, sanitizeReturnTo } = require('../middleware');
 const { isGoogleAuthConfigured } = require('../services/googleAuthService');
+const logger = require('../utils/logger');
 
 const AUTH_RETURN_TO_EXCLUDES = new Set([
     '/login',
@@ -150,7 +151,7 @@ module.exports.ensureGoogleAuthConfigured = (req, res, next) => {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-        console.warn('[google-auth] Attempted to use Google OAuth without full configuration.');
+        logger.warn('[google-auth] Attempted to use Google OAuth without full configuration.');
     }
 
     req.flash('error', 'Google login is not configured right now. Please use email and password.');
@@ -255,7 +256,7 @@ module.exports.updateAvatar = async (req, res) => {
         try {
             await cloudinary.uploader.destroy(previousFilename);
         } catch (err) {
-            console.error('Failed to remove previous avatar from Cloudinary:', err);
+            logger.error({ err }, 'Failed to remove previous avatar from Cloudinary');
         }
     }
 

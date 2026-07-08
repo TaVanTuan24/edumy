@@ -9,6 +9,8 @@ const { resolveStream, safeUrlParse } = require('../services/streamResolver');
 const { createStreamProxyToken, verifyStreamProxyToken } = require('../utils/signStreamToken');
 const { getCanonicalSections } = require('../utils/courseContentAdapter');
 const { stripFileExtension } = require('../utils/formatLessonName');
+const logger = require('../utils/logger');
+const { getOrCreateProgress, incrementLessonView, upsertQuizResult } = require('../utils/progressActivity');
 
 function getEnrolledCourseIdStrings(userDoc) {
   const ids = [];
@@ -368,94 +370,109 @@ function extractStructuredSlidePages(reqOrLesson, maybeLesson) {
   return pages;
 }
 
-function normalizeQuizQuestions(lesson) {
-  const sourceRows = [];
-
-  const appendRows = (rows) => {
-    if (!Array.isArray(rows)) return;
-    for (const row of rows) {
-      if (row) sourceRows.push(row);
+// Flatten the given arrays into a single list of truthy quiz rows.
+function collectQuizRows(...sources) {
+  const rows = [];
+  for (const source of sources) {
+    if (!Array.isArray(source)) continue;
+    for (const row of source) {
+      if (row) rows.push(row);
     }
-  };
+  }
+  return rows;
+}
 
-  appendRows(lesson && lesson.quiz);
-  appendRows(lesson && lesson.questions);
-  appendRows(lesson && lesson.interactiveQuizzes);
-  appendRows(lesson && lesson.content && lesson.content.quiz);
-  appendRows(lesson && lesson.content && lesson.content.questions);
-  appendRows(lesson && lesson.content && lesson.content.interactiveQuizzes);
+// Parse a single quiz row into { question, options, correctIndex, explanation }.
+// Resolves the correct index across 0/1-based indices and answer-as-text payloads.
+// Returns null when the row has no question or no options.
+function normalizeQuizRow(row) {
+  if (!row) return null;
+
+  const question = String(
+    row.question || row.content || row.prompt || row.title || row.text || ''
+  ).trim();
+
+  let rawOptions = [];
+  if (Array.isArray(row.options)) rawOptions = row.options;
+  else if (Array.isArray(row.answers)) rawOptions = row.answers;
+  else if (Array.isArray(row.choices)) rawOptions = row.choices;
+  else if (row.options && typeof row.options === 'object') rawOptions = Object.values(row.options);
+
+  const options = rawOptions
+    .map((opt) => {
+      if (opt == null) return '';
+      if (typeof opt === 'string') return opt.trim();
+      if (typeof opt === 'object') {
+        return String(opt.text || opt.label || opt.value || '').trim();
+      }
+      return String(opt).trim();
+    })
+    .filter(Boolean);
+
+  if (!question || options.length === 0) return null;
+
+  const correctIndexRaw = Number(
+    row.correctIndex
+    ?? row.correctAnswerIndex
+    ?? row.correctOptionIndex
+    ?? row.answerIndex
+    ?? row.correct_answer_index
+    ?? row.correct
+    ?? row.correctAnswer
+    ?? 0
+  );
+
+  let correctIndex = Number.isFinite(correctIndexRaw) ? Math.round(correctIndexRaw) : 0;
+
+  // Handle one-based index style payloads.
+  if (correctIndex >= 1 && correctIndex <= options.length) {
+    correctIndex -= 1;
+  }
+
+  // Handle correct answer represented as option text.
+  if (typeof row.correctAnswer === 'string') {
+    const byText = options.findIndex((opt) => opt.toLowerCase() === row.correctAnswer.trim().toLowerCase());
+    if (byText >= 0) {
+      correctIndex = byText;
+    }
+  }
+
+  correctIndex = Math.max(0, Math.min(options.length - 1, correctIndex));
+
+  const explanation = String(
+    row.explanation
+    || row.explain
+    || row.reason
+    || row.solution
+    || row.wrongExplanation
+    || row.feedback
+    || row.description
+    || ''
+  ).trim();
+
+  return { question, options, correctIndex, explanation };
+}
+
+function normalizeQuizQuestions(lesson) {
+  const rows = collectQuizRows(
+    lesson && lesson.quiz,
+    lesson && lesson.questions,
+    lesson && lesson.interactiveQuizzes,
+    lesson && lesson.content && lesson.content.quiz,
+    lesson && lesson.content && lesson.content.questions,
+    lesson && lesson.content && lesson.content.interactiveQuizzes
+  );
 
   const normalized = [];
-  for (const row of sourceRows) {
-    if (!row) continue;
-
-    const question = String(
-      row.question || row.content || row.prompt || row.title || row.text || ''
-    ).trim();
-
-    let rawOptions = [];
-    if (Array.isArray(row.options)) rawOptions = row.options;
-    else if (Array.isArray(row.answers)) rawOptions = row.answers;
-    else if (Array.isArray(row.choices)) rawOptions = row.choices;
-    else if (row.options && typeof row.options === 'object') rawOptions = Object.values(row.options);
-
-    const options = rawOptions
-      .map((opt) => {
-        if (opt == null) return '';
-        if (typeof opt === 'string') return opt.trim();
-        if (typeof opt === 'object') {
-          return String(opt.text || opt.label || opt.value || '').trim();
-        }
-        return String(opt).trim();
-      })
-      .filter(Boolean);
-
-    const correctIndexRaw = Number(
-      row.correctIndex
-      ?? row.correctAnswerIndex
-      ?? row.correctOptionIndex
-      ?? row.answerIndex
-      ?? row.correct_answer_index
-      ?? row.correct
-      ?? row.correctAnswer
-      ?? 0
-    );
-
-    if (!question || options.length === 0) continue;
-
-    let computedCorrectIndex = Number.isFinite(correctIndexRaw)
-      ? Math.round(correctIndexRaw)
-      : 0;
-
-    // Handle one-based index style payloads.
-    if (computedCorrectIndex >= 1 && computedCorrectIndex <= options.length) {
-      computedCorrectIndex -= 1;
-    }
-
-    // Handle correct answer represented as option text.
-    if (typeof row.correctAnswer === 'string') {
-      const byText = options.findIndex((opt) => opt.toLowerCase() === row.correctAnswer.trim().toLowerCase());
-      if (byText >= 0) {
-        computedCorrectIndex = byText;
-      }
-    }
-
-    computedCorrectIndex = Math.max(0, Math.min(options.length - 1, computedCorrectIndex));
+  for (const row of rows) {
+    const base = normalizeQuizRow(row);
+    if (!base) continue;
 
     normalized.push({
-      question,
-      options,
-      explanation: String(
-        row.explanation
-        || row.explain
-        || row.reason
-        || row.solution
-        || row.wrongExplanation
-        || row.feedback
-        || row.description
-        || ''
-      ).trim(),
-      correctIndex: computedCorrectIndex
+      question: base.question,
+      options: base.options,
+      explanation: base.explanation,
+      correctIndex: base.correctIndex
     });
   }
 
@@ -463,47 +480,17 @@ function normalizeQuizQuestions(lesson) {
 }
 
 function normalizeTimedQuizQuestions(lesson) {
-  const sourceRows = [];
-
-  const appendRows = (rows) => {
-    if (!Array.isArray(rows)) return;
-    for (const row of rows) {
-      if (row) sourceRows.push(row);
-    }
-  };
-
-  appendRows(lesson && lesson.interactiveQuizzes);
-  appendRows(lesson && lesson.timedQuizzes);
-  appendRows(lesson && lesson.popupQuizzes);
-  appendRows(lesson && lesson.videoQuizzes);
-  appendRows(lesson && lesson.content && lesson.content.interactiveQuizzes);
-  appendRows(lesson && lesson.content && lesson.content.timedQuizzes);
+  const rows = collectQuizRows(
+    lesson && lesson.interactiveQuizzes,
+    lesson && lesson.timedQuizzes,
+    lesson && lesson.popupQuizzes,
+    lesson && lesson.videoQuizzes,
+    lesson && lesson.content && lesson.content.interactiveQuizzes,
+    lesson && lesson.content && lesson.content.timedQuizzes
+  );
 
   const normalized = [];
-  for (const row of sourceRows) {
-    if (!row) continue;
-
-    const question = String(
-      row.question || row.content || row.prompt || row.title || row.text || ''
-    ).trim();
-
-    let rawOptions = [];
-    if (Array.isArray(row.options)) rawOptions = row.options;
-    else if (Array.isArray(row.answers)) rawOptions = row.answers;
-    else if (Array.isArray(row.choices)) rawOptions = row.choices;
-    else if (row.options && typeof row.options === 'object') rawOptions = Object.values(row.options);
-
-    const options = rawOptions
-      .map((opt) => {
-        if (opt == null) return '';
-        if (typeof opt === 'string') return opt.trim();
-        if (typeof opt === 'object') {
-          return String(opt.text || opt.label || opt.value || '').trim();
-        }
-        return String(opt).trim();
-      })
-      .filter(Boolean);
-
+  for (const row of rows) {
     const rawTrigger = row.triggerTimeSec
       ?? row.triggerTime
       ?? row.time
@@ -513,56 +500,21 @@ function normalizeTimedQuizQuestions(lesson) {
       ?? row.startAt
       ?? row.at;
 
-    const hasTrigger = !(rawTrigger == null || String(rawTrigger).trim() === '');
+    // Timed quizzes only apply when a trigger time is present.
+    if (rawTrigger == null || String(rawTrigger).trim() === '') continue;
 
-    const correctIndexRaw = Number(
-      row.correctIndex
-      ?? row.correctAnswerIndex
-      ?? row.correctOptionIndex
-      ?? row.answerIndex
-      ?? row.correct_answer_index
-      ?? row.correct
-      ?? row.correctAnswer
-      ?? 0
-    );
-
-    if (!question || options.length === 0 || !hasTrigger) continue;
-
-    let computedCorrectIndex = Number.isFinite(correctIndexRaw)
-      ? Math.round(correctIndexRaw)
-      : 0;
-
-    if (computedCorrectIndex >= 1 && computedCorrectIndex <= options.length) {
-      computedCorrectIndex -= 1;
-    }
-
-    if (typeof row.correctAnswer === 'string') {
-      const byText = options.findIndex((opt) => opt.toLowerCase() === row.correctAnswer.trim().toLowerCase());
-      if (byText >= 0) {
-        computedCorrectIndex = byText;
-      }
-    }
-
-    computedCorrectIndex = Math.max(0, Math.min(options.length - 1, computedCorrectIndex));
+    const base = normalizeQuizRow(row);
+    if (!base) continue;
 
     const triggerNumber = Number(rawTrigger);
     const triggerTimeSec = Number.isFinite(triggerNumber) ? Math.max(0, triggerNumber) : undefined;
 
     normalized.push({
       id: String(row._id || row.id || ''),
-      question,
-      options,
-      correctIndex: computedCorrectIndex,
-      explanation: String(
-        row.explanation
-        || row.explain
-        || row.reason
-        || row.solution
-        || row.wrongExplanation
-        || row.feedback
-        || row.description
-        || ''
-      ).trim(),
+      question: base.question,
+      options: base.options,
+      correctIndex: base.correctIndex,
+      explanation: base.explanation,
       ...(typeof triggerTimeSec === 'number' ? { triggerTimeSec } : {}),
       ...(typeof rawTrigger === 'string' ? { timecode: rawTrigger.trim() } : {})
     });
@@ -571,13 +523,13 @@ function normalizeTimedQuizQuestions(lesson) {
   return normalized;
 }
 
-function getThumbnailUrl(courseDoc) {
+function getThumbnailUrl(courseDoc, precomputedLessons) {
   if (Array.isArray(courseDoc && courseDoc.images) && courseDoc.images.length > 0) {
     const firstImage = courseDoc.images.find((img) => img && img.url);
     if (firstImage && firstImage.url) return firstImage.url;
   }
 
-  const lessons = getCourseLessons(courseDoc);
+  const lessons = Array.isArray(precomputedLessons) ? precomputedLessons : getCourseLessons(courseDoc);
   for (const lesson of lessons) {
     if (lesson.videoUrl) return lesson.videoUrl;
 
@@ -649,7 +601,7 @@ module.exports.getVrCourses = async (req, res) => {
         id: String(course._id),
         title: String(course.title || ''),
         description: String(course.description || ''),
-        thumbnailUrl: getThumbnailUrl(course),
+        thumbnailUrl: getThumbnailUrl(course, lessons),
         progress: percentage,
         totalLessons,
         completedLessons
@@ -733,7 +685,7 @@ module.exports.getVrCourseLessons = async (req, res) => {
       isCompleted: completedSet.has(String(lesson.id))
     };
 
-    console.log('[VR] lesson payload shaped:', JSON.stringify({
+    logger.debug({
       courseId,
       lessonId: shapedLesson.id,
       title: shapedLesson.title,
@@ -745,7 +697,7 @@ module.exports.getVrCourseLessons = async (req, res) => {
       quizCount: shapedLesson.quizQuestionsCount,
       timedQuizCount: shapedLesson.timedQuizzes.length,
       hasVideoUrl: Boolean(shapedLesson.videoUrl)
-    }));
+    }, '[VR] lesson payload shaped');
 
     return shapedLesson;
   });
@@ -837,11 +789,7 @@ module.exports.updateVrCourseProgress = async (req, res) => {
   }
 
   try {
-    const progressDoc = await UserCourseProgress.findOneAndUpdate(
-      { user: req.user._id, course: courseId },
-      { $setOnInsert: { user: req.user._id, course: courseId } },
-      { new: true, upsert: true }
-    );
+    const progressDoc = await getOrCreateProgress(req.user._id, courseId);
 
     const hasLesson = Array.isArray(progressDoc.completedLessons)
       && progressDoc.completedLessons.includes(lessonKey);
@@ -852,14 +800,7 @@ module.exports.updateVrCourseProgress = async (req, res) => {
       progressDoc.completedLessons = progressDoc.completedLessons.filter((id) => id !== lessonKey);
     }
 
-    if (progressDoc.lessonViews && typeof progressDoc.lessonViews.get === 'function') {
-      const current = Number(progressDoc.lessonViews.get(lessonKey) || 0);
-      progressDoc.lessonViews.set(lessonKey, current + 1);
-    } else {
-      progressDoc.lessonViews = progressDoc.lessonViews || {};
-      const current = Number(progressDoc.lessonViews[lessonKey] || 0);
-      progressDoc.lessonViews[lessonKey] = current + 1;
-    }
+    incrementLessonView(progressDoc, lessonKey);
 
     const watchDelta = Number(watchTime);
     if (Number.isFinite(watchDelta) && watchDelta > 0) {
@@ -887,7 +828,7 @@ module.exports.updateVrCourseProgress = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[VR progress update error]', err);
+    logger.error({ err }, '[VR progress update error]');
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error'
@@ -959,26 +900,9 @@ module.exports.saveVrQuizResult = async (req, res) => {
     }
 
     const quizKey = quizId.trim();
-    const progressDoc = await UserCourseProgress.findOneAndUpdate(
-      { user: req.user._id, course: courseId },
-      { $setOnInsert: { user: req.user._id, course: courseId } },
-      { new: true, upsert: true }
-    );
+    const progressDoc = await getOrCreateProgress(req.user._id, courseId);
 
-    const existingIndex = Array.isArray(progressDoc.quizResults)
-      ? progressDoc.quizResults.findIndex((entry) => String(entry.quizId) === quizKey)
-      : -1;
-
-    if (existingIndex >= 0) {
-      progressDoc.quizResults[existingIndex].score = parsedScore;
-      progressDoc.quizResults[existingIndex].total = parsedTotal;
-    } else {
-      progressDoc.quizResults.push({
-        quizId: quizKey,
-        score: parsedScore,
-        total: parsedTotal
-      });
-    }
+    upsertQuizResult(progressDoc, { quizId: quizKey, score: parsedScore, total: parsedTotal });
 
     progressDoc.lastAccessed = new Date();
     progressDoc.lastLessonId = quizKey;
@@ -1016,7 +940,7 @@ module.exports.saveVrQuizResult = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[VR quiz result save error]', err);
+    logger.error({ err }, '[VR quiz result save error]');
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error'
@@ -1070,13 +994,9 @@ function isHostAllowed(hostname, patterns) {
 
 function logStreamEvent(payload) {
   try {
-    console.log(JSON.stringify({
-      domain: 'vr.stream',
-      ts: new Date().toISOString(),
-      ...payload
-    }));
+    logger.info({ domain: 'vr.stream', ...payload }, 'vr.stream');
   } catch {
-    console.log('[vr.stream]', payload);
+    logger.info({ payload }, '[vr.stream]');
   }
 }
 

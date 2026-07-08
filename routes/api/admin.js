@@ -10,6 +10,7 @@ const {
 const { prepareLessonForWrite, syncCourseAggregateFields } = require('../../utils/courseStats');
 const { adminApiLimiter } = require('../../utils/rateLimiters');
 const { logAuditEvent } = require('../../utils/auditLogger');
+const logger = require('../../utils/logger');
 
 const VALID_LESSON_TYPES = new Set(['video', 'slide', 'quiz']);
 
@@ -34,35 +35,9 @@ async function loadCourseForEditing(courseId) {
 }
 
 async function saveCourseContent(course) {
-    console.log('[CourseEditor][API] canonical sections before save:', JSON.stringify(
-        (course.sections || []).map((section) => ({
-            id: String(section && section._id || ''),
-            title: String(section && section.title || ''),
-            lessons: Array.isArray(section && section.lessons)
-                ? section.lessons.map((lesson) => ({
-                    id: String(lesson && lesson._id || ''),
-                    title: String(lesson && lesson.title || ''),
-                    type: String(lesson && lesson.type || '')
-                }))
-                : []
-        }))
-    ));
     syncCourseContent(course);
     syncCourseAggregateFields(course);
     await course.save();
-    console.log('[CourseEditor][API] canonical sections after save:', JSON.stringify(
-        (course.sections || []).map((section) => ({
-            id: String(section && section._id || ''),
-            title: String(section && section.title || ''),
-            lessons: Array.isArray(section && section.lessons)
-                ? section.lessons.map((lesson) => ({
-                    id: String(lesson && lesson._id || ''),
-                    title: String(lesson && lesson.title || ''),
-                    type: String(lesson && lesson.type || '')
-                }))
-                : []
-        }))
-    ));
     return course;
 }
 
@@ -108,7 +83,7 @@ router.post('/section/reorder', async (req, res) => {
 
         res.json({ success: true, sections: course.sections });
     } catch (err) {
-        console.error('Reorder sections error:', err);
+        logger.error({ err }, 'Reorder sections error:');
         res.status(500).json({ error: 'Failed to reorder sections' });
     }
 });
@@ -140,7 +115,7 @@ router.post('/section', async (req, res) => {
         });
         res.json({ success: true, section: addedSection });
     } catch (err) {
-        console.error('Add section error:', err);
+        logger.error({ err }, 'Add section error:');
         res.status(500).json({ error: 'Failed to add section' });
     }
 });
@@ -170,7 +145,7 @@ router.put('/section/:courseId/:sectionId', async (req, res) => {
 
         res.json({ success: true, section });
     } catch (err) {
-        console.error('Update section error:', err);
+        logger.error({ err }, 'Update section error:');
         res.status(500).json({ error: 'Failed to update section' });
     }
 });
@@ -196,7 +171,7 @@ router.delete('/section/:courseId/:sectionId', async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        console.error('Delete section error:', err);
+        logger.error({ err }, 'Delete section error:');
         res.status(500).json({ error: 'Failed to delete section' });
     }
 });
@@ -207,7 +182,6 @@ router.delete('/section/:courseId/:sectionId', async (req, res) => {
 router.post('/lesson', async (req, res) => {
     try {
         const { courseId, sectionId, title, type, videoUrl, preview, description } = req.body;
-        console.log('[CourseEditor][API] incoming add lesson payload:', JSON.stringify({ courseId, sectionId, title, type, videoUrl, preview, description }));
         const normalizedType = String(type || '').trim().toLowerCase();
 
         if (!VALID_LESSON_TYPES.has(normalizedType)) {
@@ -246,7 +220,7 @@ router.post('/lesson', async (req, res) => {
         reindexSections(course);
         await saveCourseContent(course);
 
-        console.log('Saved item:', newLesson);
+        logger.debug({ item: newLesson }, 'Saved item');
 
         const addedLesson = section.lessons[section.lessons.length - 1];
         await recordAdminAudit(req, 'lesson_added', 'lesson', String(addedLesson && addedLesson._id || ''), {
@@ -257,7 +231,7 @@ router.post('/lesson', async (req, res) => {
         });
         res.json({ success: true, lesson: addedLesson, sectionId });
     } catch (err) {
-        console.error('Add lesson error:', err);
+        logger.error({ err }, 'Add lesson error:');
         res.status(500).json({ error: 'Failed to add lesson' });
     }
 });
@@ -312,7 +286,7 @@ router.put('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
 
         res.json({ success: true, lesson });
     } catch (err) {
-        console.error('Update lesson error:', err);
+        logger.error({ err }, 'Update lesson error:');
         res.status(500).json({ error: 'Failed to update lesson' });
     }
 });
@@ -344,7 +318,7 @@ router.delete('/lesson/:courseId/:sectionId/:lessonId', async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        console.error('Delete lesson error:', err);
+        logger.error({ err }, 'Delete lesson error:');
         res.status(500).json({ error: 'Failed to delete lesson' });
     }
 });
@@ -361,28 +335,11 @@ router.post('/lesson/reorder', async (req, res) => {
             sourceIndex,
             destIndex
         } = req.body;
-        console.log('[CourseEditor][API] incoming reorder payload:', JSON.stringify({
-            courseId,
-            sourceSectionId,
-            destSectionId,
-            sourceSectionIndex,
-            destSectionIndex,
-            sourceIndex,
-            destIndex
-        }));
         
         const course = await loadCourseForEditing(courseId);
         if (!course) {
             return res.status(404).json({ error: 'Course not found' });
         }
-
-        console.log('[CourseEditor][API] canonical sections before reorder:', JSON.stringify(
-            (course.sections || []).map((section) => ({
-                id: String(section && section._id || ''),
-                title: String(section && section.title || ''),
-                lessonIds: Array.isArray(section && section.lessons) ? section.lessons.map((lesson) => String(lesson && lesson._id || '')) : []
-            }))
-        ));
 
         const parsedSourceSectionIndex = parseInt(sourceSectionIndex, 10);
         const parsedDestSectionIndex = parseInt(destSectionIndex, 10);
@@ -435,17 +392,9 @@ router.post('/lesson/reorder', async (req, res) => {
             destSectionId: destSection && String(destSection._id)
         });
 
-        console.log('[CourseEditor][API] canonical sections after reorder:', JSON.stringify(
-            (course.sections || []).map((section) => ({
-                id: String(section && section._id || ''),
-                title: String(section && section.title || ''),
-                lessonIds: Array.isArray(section && section.lessons) ? section.lessons.map((lesson) => String(lesson && lesson._id || '')) : []
-            }))
-        ));
-
         res.json({ success: true, sections: course.sections });
     } catch (err) {
-        console.error('Reorder lesson error:', err);
+        logger.error({ err }, 'Reorder lesson error:');
         res.status(500).json({ error: 'Failed to reorder lesson' });
     }
 });
@@ -474,7 +423,7 @@ router.get('/library', async (req, res) => {
 
         res.json({ success: true, items: normalizedItems });
     } catch (err) {
-        console.error('Get library error:', err);
+        logger.error({ err }, 'Get library error:');
         res.status(500).json({ error: 'Failed to get library items' });
     }
 });
@@ -517,7 +466,7 @@ router.post('/library', async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Add to library error:', err);
+        logger.error({ err }, 'Add to library error:');
         res.status(500).json({ error: 'Failed to add to library' });
     }
 });
@@ -538,7 +487,7 @@ router.delete('/library/:id', async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        console.error('Delete library item error:', err);
+        logger.error({ err }, 'Delete library item error:');
         res.status(500).json({ error: 'Failed to delete library item' });
     }
 });
@@ -591,7 +540,7 @@ router.post('/lesson/from-library', async (req, res) => {
         const addedLesson = section.lessons[section.lessons.length - 1];
         res.json({ success: true, lesson: addedLesson });
     } catch (err) {
-        console.error('Create from library error:', err);
+        logger.error({ err }, 'Create from library error:');
         res.status(500).json({ error: 'Failed to create lesson from library' });
     }
 });
@@ -655,7 +604,7 @@ router.post('/course/add-item', async (req, res) => {
 
         res.json({ success: true, item: newItem });
     } catch (err) {
-        console.error('Add library item error:', err);
+        logger.error({ err }, 'Add library item error:');
         res.status(500).json({ success: false, error: 'Failed to add item' });
     }
 });
@@ -746,7 +695,7 @@ router.post('/lesson/to-library', async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Save to library error:', err);
+        logger.error({ err }, 'Save to library error:');
         res.status(500).json({ error: 'Failed to save to library' });
     }
 });

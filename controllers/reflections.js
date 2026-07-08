@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const Course = require('../models/course');
 const Reflection = require('../models/Reflection');
 const AnalyticsEvent = require('../models/analyticsEvent');
-const ExpressError = require('../utils/ExpressError');
 const logger = require('../utils/logger');
 const { generateReflectionSuggestions, generateReflectionSummary } = require('../services/ai/reflectionAiService');
 

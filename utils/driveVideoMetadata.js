@@ -1,8 +1,9 @@
 const { google } = require('googleapis');
+const logger = require('./logger');
 
 function logDriveDurationDebug(enabled, message, payload) {
   if (!enabled) return;
-  console.log(`[drive-duration] ${message}`, payload);
+  logger.debug({ payload }, `[drive-duration] ${message}`);
 }
 
 function extractDriveFileMeta(inputUrl) {
@@ -228,16 +229,10 @@ async function resolveGoogleDriveVideoDuration(input, options = {}) {
   return result;
 }
 
-async function fetchGoogleDriveVideoDurationSeconds(fileId, options = {}) {
-  const result = await resolveGoogleDriveVideoDuration({ fileId, resourceKey: options.resourceKey }, options);
-  return result.ok ? result.durationSeconds : null;
-}
-
 module.exports = {
   buildDrivePreviewUrl,
   extractDriveFileMeta,
   fetchGoogleDriveFileMetadata,
-  fetchGoogleDriveVideoDurationSeconds,
   isDriveVideoMimeType,
   resolveGoogleDriveVideoDuration
 };

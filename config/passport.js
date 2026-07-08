@@ -3,6 +3,7 @@ const LocalStrategy = require('passport-local');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/user');
 const { GoogleAuthError, isGoogleAuthConfigured, resolveGoogleUser } = require('../services/googleAuthService');
+const logger = require('../utils/logger');
 
 passport.use(new LocalStrategy(User.authenticate()));
 
@@ -19,7 +20,7 @@ if (isGoogleAuthConfigured()) {
                 profile,
                 currentUserId: req.user && req.user._id ? req.user._id : null,
                 UserModel: User,
-                logger: console
+                logger
             });
 
             return done(null, result.user);
@@ -28,15 +29,13 @@ if (isGoogleAuthConfigured()) {
                 return done(null, false, { message: err.message });
             }
 
-            if (process.env.NODE_ENV !== 'production') {
-                console.error('[google-auth] unexpected strategy error', err);
-            }
+            logger.error({ err }, '[google-auth] unexpected strategy error');
 
             return done(null, false, { message: 'Google login failed. Please try again.' });
         }
     }));
 } else if (process.env.NODE_ENV !== 'production') {
-    console.warn('[google-auth] Google OAuth is disabled because GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_CALLBACK_URL is missing.');
+    logger.warn('[google-auth] Google OAuth is disabled because GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_CALLBACK_URL is missing.');
 }
 
 passport.serializeUser(User.serializeUser());

@@ -5,8 +5,6 @@
  * separating transcript context from lesson context.
  */
 
-const { stripHtml } = require('../../utils/aiHelpers');
-
 function buildCourseTutorPrompt({ question, contextLessonId, contextType, contextSlide, transcriptChunks, lessonChunks }) {
   return `
 You are an AI tutor helping a student in a specific lesson.

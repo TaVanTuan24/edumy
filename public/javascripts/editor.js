@@ -16,7 +16,6 @@
     const LIBRARY_GROUP = 'course-content';
     const DEBUG_DND = false;
     let selectedSectionId = '';
-    let selectedSectionIndex = -1;
     const HIT_TEST_DEBUG = false;
     let highlightedHitElement = null;
     let addItemModal = null;
@@ -650,9 +649,7 @@
 
     function setSelectedSection(sectionCtx) {
         const sectionId = String(sectionCtx && sectionCtx.sectionId || '').trim();
-        const parsedIndex = parseInt(sectionCtx && sectionCtx.sectionIndex, 10);
         selectedSectionId = sectionId;
-        selectedSectionIndex = Number.isNaN(parsedIndex) ? -1 : parsedIndex;
 
         document.querySelectorAll('.section-card.is-selected-for-library').forEach((card) => {
             card.classList.remove('is-selected-for-library');
@@ -2050,57 +2047,6 @@
     }
 
     // ==================== DRAG & DROP ====================
-    function handleDragOver(e) {
-        if (document.body.classList.contains('is-sorting')) return;
-        const lessonList = e.target.closest('.lesson-list');
-        if (lessonList && hasLibraryPayload(e)) {
-            e.preventDefault();
-            lessonList.classList.add('drag-over');
-            lessonList.classList.add('is-drag-over');
-        }
-    }
-
-    function handleDragLeave(e) {
-        if (document.body.classList.contains('is-sorting')) return;
-        const lessonList = e.target.closest('.lesson-list');
-        if (lessonList && hasLibraryPayload(e)) {
-            lessonList.classList.remove('drag-over');
-            lessonList.classList.remove('is-drag-over');
-        }
-    }
-
-    async function handleDrop(e) {
-        if (document.body.classList.contains('is-sorting')) return;
-        const lessonList = e.target.closest('.lesson-list');
-        if (!lessonList) return;
-        
-        e.preventDefault();
-        lessonList.classList.remove('drag-over');
-        lessonList.classList.remove('is-drag-over');
-
-        if (!hasLibraryPayload(e)) return;
-
-        const sectionId = lessonList.dataset.sectionId;
-        let itemId = e.dataTransfer.getData('id');
-        let itemType = e.dataTransfer.getData('type');
-
-        const data = e.dataTransfer.getData('application/json');
-        if ((!itemId || !itemType) && data) {
-            const item = JSON.parse(data);
-            if (item && item.fromLibrary) {
-                itemId = item.id;
-                itemType = item.type;
-            }
-        }
-
-        if (!itemId || !itemType) {
-            showToast('Invalid library item data.', 'danger');
-            return;
-        }
-
-        await addItemToSection(sectionId, itemType, itemId);
-    }
-
     async function handleLibrarySortableAdd(evt) {
         const lessonList = evt && evt.to ? evt.to : null;
         const libraryItem = evt && evt.item ? evt.item : null;
@@ -2123,12 +2069,6 @@
             console.log('[CourseEditor][DND] add to section', { sectionId, itemId, itemType });
         }
         await addItemToSection(sectionId, itemType, itemId);
-    }
-
-    function hasLibraryPayload(e) {
-        if (!e || !e.dataTransfer || !e.dataTransfer.types) return false;
-        const types = Array.from(e.dataTransfer.types);
-        return types.includes('application/json') || (types.includes('id') && types.includes('type'));
     }
 
     async function addItemToSection(sectionId, type, refId) {
@@ -2410,32 +2350,6 @@
         } catch {
             content.innerHTML = '<div class="library-empty"><p>Error loading</p></div>';
         }
-    }
-
-    function handleLibraryDrag(e) {
-        const libraryItem = e.target.closest('.library-item');
-        if (!libraryItem) return;
-
-        const item = {
-            fromLibrary: true,
-            id: libraryItem.dataset.id,
-            type: libraryItem.dataset.type
-        };
-        e.dataTransfer.setData('application/json', JSON.stringify(item));
-        if (item.id) {
-            e.dataTransfer.setData('id', item.id);
-        }
-        if (item.type) {
-            e.dataTransfer.setData('type', item.type);
-        }
-        document.body.classList.add('library-dragging');
-    }
-
-    function handleLibraryDragEnd() {
-        document.body.classList.remove('library-dragging');
-        document.querySelectorAll('.lesson-list.drag-over, .lesson-list.is-drag-over, .lesson-list.sortable-over').forEach((list) => {
-            list.classList.remove('drag-over', 'is-drag-over', 'sortable-over');
-        });
     }
 
     function initLibrarySortable(container) {

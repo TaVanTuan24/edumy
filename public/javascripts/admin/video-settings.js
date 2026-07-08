@@ -1030,7 +1030,7 @@
       return;
     }
 
-    list.innerHTML = state.quizzes.map(function(quiz, index) {
+    list.innerHTML = state.quizzes.map(function(quiz, _index) {
       const quizId = getQuizIdentity(quiz);
       return '' +
         '<article class="quiz-item">' +

@@ -1,4 +1,5 @@
 const crypto = require('crypto')
+const logger = require('./logger')
 
 const ALGORITHM = 'aes-256-gcm'
 let warnedAboutEncryptionSecret = false
@@ -16,7 +17,7 @@ function getEncryptionKey() {
 
     if (!isProduction && !encryptionSecret && !warnedAboutEncryptionSecret) {
         warnedAboutEncryptionSecret = true
-        console.warn('[ai-settings] USER_AI_KEY_ENCRYPTION_SECRET is not set. Falling back to SESSION_SECRET for local development.')
+        logger.warn('[ai-settings] USER_AI_KEY_ENCRYPTION_SECRET is not set. Falling back to SESSION_SECRET for local development.')
     }
 
     return crypto.createHash('sha256').update(String(secret)).digest()

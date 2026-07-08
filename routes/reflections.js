@@ -2,10 +2,11 @@
 
 const express = require('express');
 const router = express.Router();
-const { isLoggedIn, isAdmin, requireCourseAccess } = require('../middleware');
+const { isLoggedIn, isAdmin } = require('../middleware');
 const catchAsync = require('../utils/catchAsync');
 const { adminActionLimiter } = require('../utils/rateLimiters');
 const reflectionsController = require('../controllers/reflections');
+const logger = require('../utils/logger');
 
 // ==================== Admin routes ====================
 // All admin routes require login + admin role
@@ -90,12 +91,12 @@ router.use((err, req, res, next) => {
     return next(err);
   }
 
-  console.error('[Reflections API Error]', {
+  logger.error({
     path: req.originalUrl,
     method: req.method,
     statusCode,
     message
-  });
+  }, '[Reflections API Error]');
 
   return res.status(statusCode).json({
     success: false,

@@ -5,6 +5,7 @@ const { isLoggedIn, isAdmin } = require('../middleware');
 const catchAsync = require('../utils/catchAsync');
 const transcriptController = require('../controllers/transcript');
 const { adminActionLimiter } = require('../utils/rateLimiters');
+const logger = require('../utils/logger');
 
 router.get('/:videoId/transcript-status', isLoggedIn, isAdmin, catchAsync(transcriptController.transcriptStatus));
 router.post('/:videoId/transcript', isLoggedIn, isAdmin, adminActionLimiter, catchAsync(transcriptController.fetchAndSaveTranscript));
@@ -23,12 +24,12 @@ router.use((err, req, res, next) => {
 		return next(err);
 	}
 
-	console.error('[Videos API Error]', {
+	logger.error({
 		path: req.originalUrl,
 		method: req.method,
 		statusCode,
 		message
-	});
+	}, '[Videos API Error]');
 
 	return res.status(statusCode).json({
 		success: false,

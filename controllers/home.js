@@ -1,6 +1,7 @@
 const Course = require('../models/course');
 const User = require('../models/user');
 const { isCourseCatalogVisible } = require('../utils/courseLifecycle');
+const logger = require('../utils/logger');
 
 function buildFallbackViewModel() {
   return {
@@ -21,7 +22,7 @@ module.exports.renderHome = async (req, res) => {
 
   try {
     const [featuredCourses, totalUsers, courseStats] = await Promise.all([
-      Course.find({})
+      Course.find({ status: { $nin: ['draft', 'archived'] } })
         .select('title topic description images totalLessonCount updatedAt')
         .sort({ updatedAt: -1 })
         .lean(),
@@ -54,7 +55,7 @@ module.exports.renderHome = async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('[Home] Failed to build home page data:', error.message);
+    logger.error({ err: error }, '[Home] Failed to build home page data');
     return res.render('home', fallback);
   }
 };

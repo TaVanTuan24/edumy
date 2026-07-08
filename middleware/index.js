@@ -37,23 +37,42 @@ const storeReturnTo = (req, res, next) => {
 };
 
 
+// Parsing the admin env vars on every request is wasteful. Memoize the parsed result and only
+// recompute when the underlying env string actually changes (keeps runtime overrides/tests working).
+let adminEmailsCache = { raw: null, value: [] };
+let adminIdsCache = { raw: null, value: new Set() };
+
 function getConfiguredAdminEmails() {
-  const rawAdminEmails = String(process.env.ADMIN_EMAILS || '').trim();
-  return rawAdminEmails
-    ? rawAdminEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
-    : [];
+  const raw = String(process.env.ADMIN_EMAILS || '');
+  if (raw !== adminEmailsCache.raw) {
+    const trimmed = raw.trim();
+    adminEmailsCache = {
+      raw,
+      value: trimmed
+        ? trimmed.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
+        : []
+    };
+  }
+  return adminEmailsCache.value;
 }
 
 function getConfiguredAdminIds() {
-  const rawAdminIds = String(process.env.ADMIN_USER_IDS || '').trim();
-  const configuredAdminIds = rawAdminIds
-    ? rawAdminIds.split(',').map((id) => id.trim()).filter(Boolean)
-    : [];
+  const raw = String(process.env.ADMIN_USER_IDS || '');
+  if (raw !== adminIdsCache.raw) {
+    const trimmed = raw.trim();
+    const configuredAdminIds = trimmed
+      ? trimmed.split(',').map((id) => id.trim()).filter(Boolean)
+      : [];
 
-  return new Set([
-    ...DEFAULT_ADMIN_USER_IDS,
-    ...configuredAdminIds
-  ].filter((id) => mongoose.isValidObjectId(id)));
+    adminIdsCache = {
+      raw,
+      value: new Set([
+        ...DEFAULT_ADMIN_USER_IDS,
+        ...configuredAdminIds
+      ].filter((id) => mongoose.isValidObjectId(id)))
+    };
+  }
+  return adminIdsCache.value;
 }
 
 function isAdminUser(user) {

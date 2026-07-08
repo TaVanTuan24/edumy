@@ -23,7 +23,16 @@ function verifyCsrfToken(token, sessionId) {
   const payload = `${sessionId || 'anon'}:${timestamp}:${random}`;
   const expectedHmac = crypto.createHmac('sha256', CSRF_SECRET).update(payload).digest('hex');
 
-  if (!crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expectedHmac, 'hex'))) {
+  const submittedBuffer = Buffer.from(hmac, 'hex');
+  const expectedBuffer = Buffer.from(expectedHmac, 'hex');
+
+  // timingSafeEqual throws when buffer lengths differ (e.g. a malformed/truncated token).
+  // Guard the length first so a bad token yields a clean rejection instead of a 500.
+  if (submittedBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  if (!crypto.timingSafeEqual(submittedBuffer, expectedBuffer)) {
     return false;
   }
 
@@ -40,9 +49,8 @@ function extractToken(req) {
   // 2. Check request body (for form submissions)
   if (req.body && req.body[TOKEN_NAME]) return req.body[TOKEN_NAME];
 
-  // 3. Check query string
-  if (req.query && req.query[TOKEN_NAME]) return req.query[TOKEN_NAME];
-
+  // Note: tokens are intentionally NOT read from the query string. URLs are logged by
+  // servers/proxies and leak via the Referer header, so a token in the query is a disclosure risk.
   return null;
 }
 

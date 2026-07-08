@@ -1,4 +1,4 @@
-const { normalizePreferredFormat, safeUrlParse } = require('../services/streamResolver');
+const { normalizePreferredFormat, safeUrlParse, isBlockedStreamHost } = require('../services/streamResolver');
 
 module.exports = function validateStreamRequest(req, res, next) {
   const body = req.body || {};
@@ -15,12 +15,23 @@ module.exports = function validateStreamRequest(req, res, next) {
     });
   }
 
-  if (!safeUrlParse(sourceUrl)) {
+  const parsedSourceUrl = safeUrlParse(sourceUrl);
+  if (!parsedSourceUrl) {
     return res.status(400).json({
       success: false,
       error: {
         code: 'INVALID_INPUT',
         message: 'sourceUrl must be a valid http/https URL'
+      }
+    });
+  }
+
+  if (isBlockedStreamHost(parsedSourceUrl.hostname)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'BLOCKED_HOST',
+        message: 'sourceUrl host is not allowed'
       }
     });
   }

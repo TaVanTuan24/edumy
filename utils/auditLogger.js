@@ -1,4 +1,5 @@
 const AuditLog = require('../models/AuditLog');
+const logger = require('./logger');
 
 function sanitizeValue(value) {
   if (Array.isArray(value)) {
@@ -29,7 +30,7 @@ async function logAuditEvent({ req, userId, action, targetType, targetId, metada
       metadata: sanitizeValue(metadata)
     });
   } catch (error) {
-    console.error('[AuditLog] Failed to write audit log:', error.message);
+    logger.error({ err: error }, '[AuditLog] Failed to write audit log');
   }
 }
 

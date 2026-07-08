@@ -241,7 +241,6 @@ async function fetchViaYtdlp(videoId) {
   const ts = Date.now();
   const rand = Math.random().toString(36).slice(2, 6);
   const baseName = 'yt_tr_' + videoId + '_' + ts + '_' + rand;
-  const outputPath = path.join(tmpDir, baseName + '.%(ext)s');
 
   // Try with preferred format cascade first, then fall back to 'best'
   const formatAttempts = [
@@ -578,7 +577,7 @@ function parseSrt(content) {
     if (timeLineIndex < 0) continue;
 
     const timeMatch = lines[timeLineIndex].match(
-      /(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})/
+      /(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})/
     );
 
     if (!timeMatch) continue;
@@ -665,25 +664,27 @@ function ttmlTimeToSeconds(timeStr) {
 // Entity decoding (using \x26 for & to prevent formatter unescaping)
 // ---------------------------------------------------------------------------
 
-function decodeEntities(str) {
-  const amp = /\x26amp;/g;
-  const lt = /\x26lt;/g;
-  const gt = /\x26gt;/g;
-  const quot = /\x26quot;/g;
-  const apos = /\x26apos;/g;
-  const hash39 = /\x26#39;/g;
-  const hexEntity = /\x26#x([0-9a-fA-F]+);/g;
-  const decEntity = /\x26#(\d+);/g;
+// Compiled once at module scope — decodeEntities runs per subtitle segment.
+// Safe to share: String.prototype.replace resets a global regex's lastIndex after each call.
+const ENTITY_AMP = /\x26amp;/g;
+const ENTITY_LT = /\x26lt;/g;
+const ENTITY_GT = /\x26gt;/g;
+const ENTITY_QUOT = /\x26quot;/g;
+const ENTITY_APOS = /\x26apos;/g;
+const ENTITY_HASH39 = /\x26#39;/g;
+const ENTITY_HEX = /\x26#x([0-9a-fA-F]+);/g;
+const ENTITY_DEC = /\x26#(\d+);/g;
 
+function decodeEntities(str) {
   return String(str || '')
-    .replace(amp, '&')
-    .replace(lt, '<')
-    .replace(gt, '>')
-    .replace(quot, '"')
-    .replace(hash39, "'")
-    .replace(apos, "'")
-    .replace(hexEntity, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(decEntity, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+    .replace(ENTITY_AMP, '&')
+    .replace(ENTITY_LT, '<')
+    .replace(ENTITY_GT, '>')
+    .replace(ENTITY_QUOT, '"')
+    .replace(ENTITY_HASH39, "'")
+    .replace(ENTITY_APOS, "'")
+    .replace(ENTITY_HEX, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(ENTITY_DEC, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
 }
 
 // ---------------------------------------------------------------------------
@@ -711,7 +712,7 @@ async function checkYtdlpAvailability() {
   const ytdlpPath = getYtdlpPath();
 
   return new Promise((resolve) => {
-    execFile(ytdlpPath, ['--version'], { timeout: 10000 }, (err, stdout, stderr) => {
+    execFile(ytdlpPath, ['--version'], { timeout: 10000 }, (err, stdout, _stderr) => {
       if (err) {
         logger.warn({
           ytdlpPath,

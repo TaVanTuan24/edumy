@@ -20,7 +20,7 @@
           break;
         }
       }
-    } catch (_e) {}
+    } catch (_e) { /* ignore cookie read errors */ }
 
     return cookieValue;
   }

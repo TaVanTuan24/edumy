@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const ExpressError = require('../utils/ExpressError');
+const { getJwtSecret } = require('../utils/jwtSecret');
 
 function getBearerToken(req) {
   const authHeader = req.get('Authorization') || '';
@@ -11,10 +12,6 @@ function getBearerToken(req) {
   }
 
   return token.trim();
-}
-
-function getJwtSecret() {
-  return process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
 }
 
 function isStreamApiRequest(req) {

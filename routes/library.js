@@ -3,6 +3,7 @@ const router = express.Router();
 const ContentLibrary = require('../models/contentLibrary');
 const Course = require('../models/course');
 const { isLoggedIn } = require('../middleware');
+const logger = require('../utils/logger');
 
 router.post('/library/save-slide', isLoggedIn, async (req, res) => {
     try {
@@ -31,7 +32,7 @@ router.post('/library/save-slide', isLoggedIn, async (req, res) => {
 
         res.json({ success: true, item: item });
     } catch (error) {
-        console.error('Save slide to library error:', error);
+        logger.error({ err: error }, 'Save slide to library error');
         res.status(500).json({ success: false, error: 'Failed to save slide' });
     }
 });
@@ -63,7 +64,7 @@ router.delete('/library/:id', isLoggedIn, async (req, res) => {
 
         res.json({ success: true });
     } catch (error) {
-        console.error('Delete library item error:', error);
+        logger.error({ err: error }, 'Delete library item error');
         res.status(500).json({ success: false, error: 'Failed to delete item' });
     }
 });

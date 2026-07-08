@@ -14,7 +14,6 @@ const AnalyticsEvent = require('../models/analyticsEvent');
 const { ANALYTICS_EVENTS, trackEventSafe } = require('../services/analyticsEventService');
 const { buildLearnerDashboard } = require('../services/learnerDashboardService');
 const { getEffectiveCourseStatus } = require('../utils/courseLifecycle');
-const { findLessonContext } = require('../utils/lessonLocator');
 const { buildLessonAiContext, buildLessonAiPrompt } = require('../services/lessonAiContextService');
 const { generatePromptReply, normalizeAiModel } = require('../services/ai/chatOrchestrator');
 const {
@@ -27,6 +26,14 @@ const {
   getCanonicalSections,
   syncCourseContent
 } = require('../utils/courseContentAdapter');
+const {
+  getOrCreateProgress,
+  appendRecentActivity,
+  setResumeMetadata,
+  incrementLessonView,
+  upsertQuizResult,
+  markUserLearningActivity
+} = require('../utils/progressActivity');
 
 function countCourseLessons(course) {
   const sections = getCanonicalSections(course);
@@ -210,56 +217,6 @@ function resolveCourseImages({ files, imageUrl, thumbnailMode }) {
   };
 }
 
-
-function appendRecentActivity(progressDoc, activity) {
-  const entry = {
-    type: String(activity && activity.type || 'activity'),
-    label: String(activity && activity.label || 'Learning activity'),
-    lessonId: String(activity && activity.lessonId || ''),
-    lessonName: String(activity && activity.lessonName || ''),
-    lessonType: String(activity && activity.lessonType || ''),
-    sectionIndex: Number.isInteger(Number(activity && activity.sectionIndex)) ? Number(activity.sectionIndex) : null,
-    lessonIndex: Number.isInteger(Number(activity && activity.lessonIndex)) ? Number(activity.lessonIndex) : null,
-    createdAt: activity && activity.createdAt ? new Date(activity.createdAt) : new Date()
-  };
-
-  progressDoc.recentActivity = Array.isArray(progressDoc.recentActivity) ? progressDoc.recentActivity : [];
-  progressDoc.recentActivity.push(entry);
-  progressDoc.recentActivity = progressDoc.recentActivity
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-    .slice(-20);
-}
-
-function setResumeMetadata(progressDoc, course, payload = {}) {
-  const sectionIndex = Number.isInteger(Number(payload.sectionIndex)) ? Number(payload.sectionIndex) : null;
-  const lessonIndex = Number.isInteger(Number(payload.lessonIndex)) ? Number(payload.lessonIndex) : null;
-  const lessonId = String(payload.lessonId || '').trim();
-  const lessonName = String(payload.lessonName || '').trim();
-  const lessonType = String(payload.lessonType || '').trim();
-
-  let lessonContext = null;
-  if (course) {
-    lessonContext = findLessonContext(course, {
-      lessonId,
-      sectionIndex,
-      lessonIndex
-    });
-  }
-
-  progressDoc.lastLessonId = lessonId || String(lessonContext && lessonContext.lesson && lessonContext.lesson._id || progressDoc.lastLessonId || '');
-  progressDoc.lastLessonName = lessonName || String(lessonContext && lessonContext.lesson && lessonContext.lesson.title || progressDoc.lastLessonName || '');
-  progressDoc.lastLessonType = lessonType || String(lessonContext && lessonContext.lesson && lessonContext.lesson.type || progressDoc.lastLessonType || '');
-  progressDoc.lastSectionIndex = sectionIndex !== null ? sectionIndex : (lessonContext ? lessonContext.sectionIndex : progressDoc.lastSectionIndex);
-  progressDoc.lastLessonIndex = lessonIndex !== null ? lessonIndex : (lessonContext ? lessonContext.lessonIndex : progressDoc.lastLessonIndex);
-}
-
-async function markUserLearningActivity(userId, activityDate) {
-  const user = await User.findById(userId);
-  if (!user) return null;
-
-  await recordLearningActivity(user, activityDate, { save: true });
-  return user;
-}
 
 async function markCourseSeenForUser(userId, course) {
   if (!userId || !course) return { hadUpdate: false, markedSeen: false };
@@ -613,11 +570,7 @@ module.exports.updateProgress = async (req, res) => {
     }
 
     if (lessonId) {
-      const progressDoc = await UserCourseProgress.findOneAndUpdate(
-        { user: userId, course: courseObjectId },
-        { $setOnInsert: { user: userId, course: courseObjectId } },
-        { new: true, upsert: true }
-      );
+      const progressDoc = await getOrCreateProgress(userId, courseObjectId);
 
       const lessonKey = String(lessonId);
       const hasLesson = progressDoc.completedLessons.includes(lessonKey);
@@ -630,14 +583,7 @@ module.exports.updateProgress = async (req, res) => {
         progressDoc.completedLessons = progressDoc.completedLessons.filter((id) => id !== lessonKey);
       }
 
-      if (progressDoc.lessonViews && typeof progressDoc.lessonViews.get === 'function') {
-        const current = Number(progressDoc.lessonViews.get(lessonKey) || 0);
-        progressDoc.lessonViews.set(lessonKey, current + 1);
-      } else {
-        progressDoc.lessonViews = progressDoc.lessonViews || {};
-        const current = Number(progressDoc.lessonViews[lessonKey] || 0);
-        progressDoc.lessonViews[lessonKey] = current + 1;
-      }
+      incrementLessonView(progressDoc, lessonKey);
 
       const course = await Course.findById(courseObjectId).select('sections');
       progressDoc.lastAccessed = new Date();
@@ -738,23 +684,12 @@ module.exports.saveQuizResult = async (req, res) => {
     }
 
     const courseObjectId = new mongoose.Types.ObjectId(courseId);
-    const progressDoc = await UserCourseProgress.findOneAndUpdate(
-      { user: userId, course: courseObjectId },
-      { $setOnInsert: { user: userId, course: courseObjectId } },
-      { new: true, upsert: true }
-    );
+    const progressDoc = await getOrCreateProgress(userId, courseObjectId);
 
     const quizKey = String(quizId);
     const nextScore = Number(score) || 0;
     const nextTotal = Number(total) || 0;
-    const existingIndex = progressDoc.quizResults.findIndex((entry) => String(entry.quizId) === quizKey);
-
-    if (existingIndex >= 0) {
-      progressDoc.quizResults[existingIndex].score = nextScore;
-      progressDoc.quizResults[existingIndex].total = nextTotal;
-    } else {
-      progressDoc.quizResults.push({ quizId: quizKey, score: nextScore, total: nextTotal });
-    }
+    upsertQuizResult(progressDoc, { quizId: quizKey, score: nextScore, total: nextTotal });
 
     const course = await Course.findById(courseObjectId).select('sections');
     progressDoc.lastAccessed = new Date();
@@ -808,166 +743,141 @@ module.exports.saveQuizResult = async (req, res) => {
 };
 
 module.exports.saveNote = async (req, res) => {
-  try {
-    const { courseId } = req.params;
-    const { sectionIndex, content } = req.body;
-    const userId = req.user._id;
+  const { courseId } = req.params;
+  const { sectionIndex, content } = req.body;
+  const userId = req.user._id;
 
-    let note = await Note.findOne({ user: userId, course: courseId, sectionIndex });
-    if (!note) {
-      note = new Note({ user: userId, course: courseId, sectionIndex, content });
-    } else {
-      note.content = content;
-    }
-
-    await note.save();
-    res.json({ success: true });
-  } catch (err) {
-    logger.error({ err }, '[Notes error]');
-    res.status(500).json({ success: false, error: err.message });
+  let note = await Note.findOne({ user: userId, course: courseId, sectionIndex });
+  if (!note) {
+    note = new Note({ user: userId, course: courseId, sectionIndex, content });
+  } else {
+    note.content = content;
   }
+
+  await note.save();
+  res.json({ success: true });
 };
 
 module.exports.createReview = async (req, res) => {
-  try {
-    const courseId = req.params.id;
-    const rating = Number(req.body.rating);
-    const comment = String(req.body.comment || '').trim();
+  const courseId = req.params.id;
+  const rating = Number(req.body.rating);
+  const comment = String(req.body.comment || '').trim();
 
-    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-      return res.status(400).json({ success: false, error: 'Invalid rating' });
-    }
-
-    const course = await Course.findById(courseId);
-    if (!course) {
-      return res.status(404).json({ success: false, error: 'Course not found' });
-    }
-
-    course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
-
-    const userId = req.user && req.user._id;
-    const existingIndex = course.reviewEntries.findIndex(
-      (r) => String(r.user) === String(userId)
-    );
-
-    if (existingIndex !== -1) {
-      return res.status(409).json({ success: false, error: 'You have already reviewed this course. You can edit your existing review instead.' });
-    }
-
-    course.reviewEntries.push({
-      user: userId,
-      rating: rating,
-      comment: comment
-    });
-
-    await course.save();
-    res.json({ success: true });
-  } catch (err) {
-    logger.error({ err }, '[Review Create Error]');
-    res.status(500).json({ success: false, error: err.message });
+  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+    return res.status(400).json({ success: false, error: 'Invalid rating' });
   }
+
+  const course = await Course.findById(courseId);
+  if (!course) {
+    return res.status(404).json({ success: false, error: 'Course not found' });
+  }
+
+  course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+
+  const userId = req.user && req.user._id;
+  const existingIndex = course.reviewEntries.findIndex(
+    (r) => String(r.user) === String(userId)
+  );
+
+  if (existingIndex !== -1) {
+    return res.status(409).json({ success: false, error: 'You have already reviewed this course. You can edit your existing review instead.' });
+  }
+
+  course.reviewEntries.push({
+    user: userId,
+    rating: rating,
+    comment: comment
+  });
+
+  await course.save();
+  res.json({ success: true });
 };
 
 module.exports.updateReview = async (req, res) => {
-  try {
-    const courseId = req.params.id;
-    const rating = Number(req.body.rating);
-    const comment = String(req.body.comment || '').trim();
+  const courseId = req.params.id;
+  const rating = Number(req.body.rating);
+  const comment = String(req.body.comment || '').trim();
 
-    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-      return res.status(400).json({ success: false, error: 'Invalid rating' });
-    }
-
-    const course = await Course.findById(courseId);
-    if (!course) {
-      return res.status(404).json({ success: false, error: 'Course not found' });
-    }
-
-    course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
-
-    const userId = req.user && req.user._id;
-    const existingIndex = course.reviewEntries.findIndex(
-      (r) => String(r.user) === String(userId)
-    );
-
-    if (existingIndex === -1) {
-      return res.status(404).json({ success: false, error: 'You have not reviewed this course yet.' });
-    }
-
-    course.reviewEntries[existingIndex].rating = rating;
-    course.reviewEntries[existingIndex].comment = comment;
-    course.reviewEntries[existingIndex].createdAt = new Date();
-
-    await course.save();
-    res.json({ success: true });
-  } catch (err) {
-    logger.error({ err }, '[Review Update Error]');
-    res.status(500).json({ success: false, error: err.message });
+  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+    return res.status(400).json({ success: false, error: 'Invalid rating' });
   }
+
+  const course = await Course.findById(courseId);
+  if (!course) {
+    return res.status(404).json({ success: false, error: 'Course not found' });
+  }
+
+  course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+
+  const userId = req.user && req.user._id;
+  const existingIndex = course.reviewEntries.findIndex(
+    (r) => String(r.user) === String(userId)
+  );
+
+  if (existingIndex === -1) {
+    return res.status(404).json({ success: false, error: 'You have not reviewed this course yet.' });
+  }
+
+  course.reviewEntries[existingIndex].rating = rating;
+  course.reviewEntries[existingIndex].comment = comment;
+  course.reviewEntries[existingIndex].createdAt = new Date();
+
+  await course.save();
+  res.json({ success: true });
 };
 
 module.exports.deleteReview = async (req, res) => {
-  try {
-    const courseId = req.params.id;
-    const course = await Course.findById(courseId);
+  const courseId = req.params.id;
+  const course = await Course.findById(courseId);
 
-    if (!course) {
-      return res.status(404).json({ success: false, error: 'Course not found' });
-    }
-
-    course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
-
-    const userId = req.user && req.user._id;
-    const existingIndex = course.reviewEntries.findIndex(
-      (r) => String(r.user) === String(userId)
-    );
-
-    if (existingIndex === -1) {
-      return res.status(404).json({ success: false, error: 'You have not reviewed this course yet.' });
-    }
-
-    course.reviewEntries.splice(existingIndex, 1);
-    await course.save();
-    res.json({ success: true });
-  } catch (err) {
-    logger.error({ err }, '[Review Delete Error]');
-    res.status(500).json({ success: false, error: err.message });
+  if (!course) {
+    return res.status(404).json({ success: false, error: 'Course not found' });
   }
+
+  course.reviewEntries = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+
+  const userId = req.user && req.user._id;
+  const existingIndex = course.reviewEntries.findIndex(
+    (r) => String(r.user) === String(userId)
+  );
+
+  if (existingIndex === -1) {
+    return res.status(404).json({ success: false, error: 'You have not reviewed this course yet.' });
+  }
+
+  course.reviewEntries.splice(existingIndex, 1);
+  await course.save();
+  res.json({ success: true });
 };
 
 module.exports.getReviews = async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id)
-      .populate('reviewEntries.user', 'username');
+  const course = await Course.findById(req.params.id)
+    .populate('reviewEntries.user', 'username');
 
-    if (!course) {
-      return res.status(404).json({ success: false, error: 'Course not found' });
-    }
-
-    const reviews = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
-    const total = reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0);
-    const avg = reviews.length ? total / reviews.length : 0;
-
-    const currentUserId = req.user ? String(req.user._id) : '';
-
-    res.json({
-      success: true,
-      reviews: reviews.map((r) => ({
-        id: String(r._id || ''),
-        userId: r.user ? String(r.user._id || r.user) : '',
-        user: r.user && r.user.username ? r.user.username : '',
-        rating: r.rating,
-        comment: r.comment,
-        createdAt: r.createdAt,
-        isOwn: r.user ? String(r.user._id || r.user) === currentUserId : false
-      })),
-      averageRating: avg,
-      reviewCount: reviews.length
-    });
-  } catch (err) {
-    logger.error({ err }, '[Review Fetch Error]');
-    res.status(500).json({ success: false, error: err.message });
+  if (!course) {
+    return res.status(404).json({ success: false, error: 'Course not found' });
   }
+
+  const reviews = Array.isArray(course.reviewEntries) ? course.reviewEntries : [];
+  const total = reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0);
+  const avg = reviews.length ? total / reviews.length : 0;
+
+  const currentUserId = req.user ? String(req.user._id) : '';
+
+  res.json({
+    success: true,
+    reviews: reviews.map((r) => ({
+      id: String(r._id || ''),
+      userId: r.user ? String(r.user._id || r.user) : '',
+      user: r.user && r.user.username ? r.user.username : '',
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.createdAt,
+      isOwn: r.user ? String(r.user._id || r.user) === currentUserId : false
+    })),
+    averageRating: avg,
+    reviewCount: reviews.length
+  });
 };
 
 module.exports.askLessonAi = async (req, res) => {

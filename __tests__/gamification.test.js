@@ -7,8 +7,7 @@ const {
   LEVELS,
   getLevelInfo,
   buildGamificationViewModel,
-  recordLearningActivity,
-  getCurrentStreakValue
+  recordLearningActivity
 } = require('../utils/gamification');
 
 function createMockUser(overrides = {}) {

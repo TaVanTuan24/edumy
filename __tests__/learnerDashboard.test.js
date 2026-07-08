@@ -83,10 +83,6 @@ describe('TC-18: Learner dashboard', () => {
         { courseId: 'c3', title: 'Course C', progressPercent: 30, lastAccessed: new Date('2026-04-05') }
       ];
 
-      const continueLearning = myCourses.find(
-        (c) => c.progressPercent > 0 && c.progressPercent < 100
-      ) || myCourses[0];
-
       // The first in-progress course (sorted by lastAccessed desc)
       const sorted = myCourses
         .filter((c) => c.progressPercent > 0 && c.progressPercent < 100)

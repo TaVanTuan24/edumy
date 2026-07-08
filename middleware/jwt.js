@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const ExpressError = require('../utils/ExpressError');
+const { getJwtSecret } = require('../utils/jwtSecret');
 
 function getBearerToken(req) {
   const authHeader = req.get('Authorization') || '';
@@ -17,7 +18,7 @@ async function attachJwtUser(req, res, next) {
   const token = getBearerToken(req);
   if (!token) return next();
 
-  const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+  const secret = getJwtSecret();
   if (!secret) {
     return next(new ExpressError('JWT secret is not configured', 500));
   }

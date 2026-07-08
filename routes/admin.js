@@ -5,6 +5,7 @@ const multer = require('multer');
 const http = require('http');
 const https = require('https');
 const path = require('path');
+const logger = require('../utils/logger');
 const { isLoggedIn, isAdmin } = require('../middleware');
 const Course = require('../models/course');
 const User = require('../models/user');
@@ -159,35 +160,9 @@ async function loadEditableCourse(courseId) {
 }
 
 async function saveEditableCourse(course) {
-    console.log('[CourseEditor] canonical sections before save:', JSON.stringify(
-        (course.sections || []).map((section) => ({
-            id: String(section && section._id || ''),
-            title: String(section && section.title || ''),
-            lessons: Array.isArray(section && section.lessons)
-                ? section.lessons.map((lesson) => ({
-                    id: String(lesson && lesson._id || ''),
-                    title: String(lesson && lesson.title || ''),
-                    type: String(lesson && lesson.type || '')
-                }))
-                : []
-        }))
-    ))
     syncCourseContent(course)
     syncCourseAggregateFields(course)
     await course.save()
-    console.log('[CourseEditor] canonical sections after save:', JSON.stringify(
-        (course.sections || []).map((section) => ({
-            id: String(section && section._id || ''),
-            title: String(section && section.title || ''),
-            lessons: Array.isArray(section && section.lessons)
-                ? section.lessons.map((lesson) => ({
-                    id: String(lesson && lesson._id || ''),
-                    title: String(lesson && lesson.title || ''),
-                    type: String(lesson && lesson.type || '')
-                }))
-                : []
-        }))
-    ))
     return course
 }
 
@@ -670,7 +645,7 @@ router.get('/', async (req, res) => {
             statusFilter
         });
     } catch (err) {
-        console.error("Dashboard Load Error:", err);
+        logger.error({ err }, 'Dashboard Load Error:');
         res.status(500).send("Internal Server Error");
     }
 });
@@ -1026,12 +1001,6 @@ router.get('/courses/:id/slide-editor', async (req, res) => {
 router.put('/course/:id/slide-editor/save', async (req, res) => {
     try {
         const { sectionIndex, lessonIndex, title, content } = req.body
-        console.log('[CourseEditor] slide save payload:', JSON.stringify({
-            sectionIndex,
-            lessonIndex,
-            title,
-            slideCount: Array.isArray(content && content.slides) ? content.slides.length : 0
-        }))
 
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const parsedLessonIndex = parseInt(lessonIndex, 10)
@@ -1078,13 +1047,6 @@ router.put('/course/:id/slide-editor/save', async (req, res) => {
         course.markModified('sections')
 
         await saveEditableCourse(course)
-        console.log('[CourseEditor] canonical lesson after slide save:', JSON.stringify({
-            sectionIndex: parsedSectionIndex,
-            lessonIndex: parsedLessonIndex,
-            lessonId: String(lesson && lesson._id || ''),
-            title: lesson.title,
-            slideCount: Array.isArray(lesson.content && lesson.content.slides) ? lesson.content.slides.length : 0
-        }))
         await recordAdminAudit(req, 'slide_deck_saved', 'lesson', String(lesson && lesson._id || ''), {
             courseId: String(course._id),
             title: lesson.title,
@@ -1135,7 +1097,7 @@ router.post('/slides/:courseId/:sectionIndex/:lessonIndex/import-pdf', (req, res
         const uploadResult = await uploadPdfBufferToCloudinary(req.file, 'CourseLessonPdfs')
         const deliveryUrl = getUploadedCloudinaryPdfUrl(uploadResult)
         if (process.env.NODE_ENV !== 'production') {
-            console.log('[SlideEditor] Cloudinary PDF secure_url:', deliveryUrl || '(missing)')
+            logger.debug({ secureUrl: deliveryUrl || '(missing)' }, '[SlideEditor] Cloudinary PDF secure_url')
         }
 
         if (!deliveryUrl || !isPublicCloudinaryRawUploadUrl(deliveryUrl)) {
@@ -1312,7 +1274,6 @@ router.get('/courses/:id/editor-new', async (req, res) => {
 router.put('/course/:id/lesson/edit', async (req, res) => {
     try {
         const { sectionIndex, lessonIndex, name, url, interactiveQuizzes } = req.body
-        console.log('[CourseEditor] incoming lesson edit payload:', JSON.stringify({ sectionIndex, lessonIndex, name, url, interactiveQuizzesCount: Array.isArray(interactiveQuizzes) ? interactiveQuizzes.length : 0 }))
 
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const parsedLessonIndex = parseInt(lessonIndex, 10)
@@ -1397,7 +1358,6 @@ router.delete('/course/:id/lesson/delete', async (req, res) => {
 router.put('/course/:id/lesson/add', async (req, res) => {
     try {
         const { sectionIndex, name, url, type } = req.body
-        console.log('[CourseEditor] incoming add lesson payload:', JSON.stringify({ sectionIndex, name, url, type }))
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const itemType = normalizeItemType(type, 'video')
 
@@ -1427,7 +1387,7 @@ router.put('/course/:id/lesson/add', async (req, res) => {
         reindexCanonicalSections(course)
         await saveEditableCourse(course)
 
-        console.log('Saved item:', newItem)
+        logger.debug({ item: newItem }, 'Saved item')
         const savedItem = videos[videos.length - 1]
         await recordAdminAudit(req, 'lesson_added', 'lesson', String(savedItem && savedItem._id || ''), {
             courseId: String(course._id),
@@ -1451,14 +1411,6 @@ router.put('/course/:id/lesson/reorder', async (req, res) => {
             sourceIndex,
             destIndex
         } = req.body
-        console.log('[CourseEditor] incoming lesson reorder payload:', JSON.stringify({
-            sectionIndex,
-            lessonsCount: Array.isArray(lessons) ? lessons.length : null,
-            sourceSectionIndex,
-            destSectionIndex,
-            sourceIndex,
-            destIndex
-        }))
 
         const course = await loadEditableCourse(req.params.id)
         if (!course) {
@@ -1633,7 +1585,6 @@ router.post("/course/:id/section/add", async (req, res) => {
 router.post("/course/:id/quiz/add", async (req, res) => {
     try {
         const { sectionIndex, name, type } = req.body
-        console.log('[CourseEditor] incoming add quiz payload:', JSON.stringify({ sectionIndex, name, type }))
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const itemType = normalizeItemType(type, 'quiz')
 
@@ -1662,7 +1613,7 @@ router.post("/course/:id/quiz/add", async (req, res) => {
         reindexCanonicalSections(course)
         await saveEditableCourse(course)
 
-        console.log('Saved item:', newItem)
+        logger.debug({ item: newItem }, 'Saved item')
 
         res.json({ success: true, item: newItem })
     } catch (err) {
@@ -1675,7 +1626,6 @@ router.post("/course/:id/quiz/add", async (req, res) => {
 router.post("/course/:id/slide/add", async (req, res) => {
     try {
         const { sectionIndex, name, type } = req.body
-        console.log('[CourseEditor] incoming add slide payload:', JSON.stringify({ sectionIndex, name, type }))
         const parsedSectionIndex = parseInt(sectionIndex, 10)
         const itemType = normalizeItemType(type, 'slide')
 
@@ -1705,7 +1655,7 @@ router.post("/course/:id/slide/add", async (req, res) => {
         reindexCanonicalSections(course)
         await saveEditableCourse(course)
 
-        console.log('Saved item:', newItem)
+        logger.debug({ item: newItem }, 'Saved item')
 
         res.json({ success: true, item: newItem })
     } catch (err) {
@@ -1730,7 +1680,7 @@ router.get('/course/:id/lesson/:sectionIndex/:lessonIndex', async (req, res) => 
             return res.json({ success: false, error: 'Lesson not found' })
         }
 
-        console.log('RAW LESSON FROM API:', lesson)
+        logger.debug({ lesson }, 'RAW LESSON FROM API')
         res.json({ success: true, lesson })
     } catch (err) {
         res.json({ success: false, error: err.message })
@@ -1955,16 +1905,6 @@ router.get(
                 ).map((question) => buildEditorQuizQuestionResponse(question))
             }
             : null
-        console.log('[CourseEditor] quiz lesson payload returned to editor:', JSON.stringify({
-            sectionIndex,
-            quizIndex,
-            questionCount: Array.isArray(quizForEditor && quizForEditor.questions) ? quizForEditor.questions.length : 0,
-            title: quizForEditor && quizForEditor.title,
-            answersPerQuestion: Array.isArray(quizForEditor && quizForEditor.questions)
-                ? quizForEditor.questions.map((question) => Array.isArray(question.answers) ? question.answers.length : 0)
-                : []
-        }))
-
         res.render("admin/quizEditor", {
             course,
             quiz: quizForEditor,
@@ -1988,18 +1928,6 @@ router.post(
                 correct,
                 correctIndex
             } = req.body
-            console.log('[CourseEditor] quiz save payload:', JSON.stringify({
-                mode: 'add',
-                sectionIndex,
-                quizIndex,
-                question,
-                answersCount: Array.isArray(answers) ? answers.length : 0,
-                optionsCount: Array.isArray(options) ? options.length : 0,
-                choicesCount: Array.isArray(choices) ? choices.length : 0,
-                correctIndex,
-                correct
-            }))
-
             const parsedSectionIndex = parseInt(sectionIndex, 10)
             const parsedQuizIndex = parseInt(quizIndex, 10)
 
@@ -2057,11 +1985,6 @@ router.post(
 
             await saveEditableCourse(course)
             const questionIndex = questions.length - 1
-            console.log('[CourseEditor] quiz payload after backend normalization:', JSON.stringify({
-                mode: 'add',
-                questionIndex,
-                question: buildEditorQuizQuestionResponse(questions[questionIndex])
-            }))
             await recordAdminAudit(req, 'quiz_question_added', 'lesson', String(quizLesson && quizLesson._id || ''), {
                 courseId: String(course._id),
                 questionIndex
@@ -2092,18 +2015,6 @@ router.put(
                 options = [],
                 correctIndex
             } = req.body
-            console.log('[CourseEditor] quiz save payload:', JSON.stringify({
-                mode: 'update',
-                sectionIndex,
-                quizIndex,
-                questionIndex,
-                question,
-                answersCount: Array.isArray(answers) ? answers.length : 0,
-                optionsCount: Array.isArray(options) ? options.length : 0,
-                choicesCount: Array.isArray(choices) ? choices.length : 0,
-                correctIndex
-            }))
-
             const parsedSectionIndex = parseInt(sectionIndex, 10)
             const parsedQuizIndex = parseInt(quizIndex, 10)
             const parsedCorrectIndex = parseInt(correctIndex, 10)
@@ -2166,11 +2077,6 @@ router.put(
             quizLesson.content = { ...(quizLesson.content || {}), questions }
             course.markModified('sections')
             await saveEditableCourse(course)
-            console.log('[CourseEditor] quiz payload after backend normalization:', JSON.stringify({
-                mode: 'update',
-                questionIndex: resolvedQuestionIndex,
-                question: buildEditorQuizQuestionResponse(questions[resolvedQuestionIndex])
-            }))
             await recordAdminAudit(req, 'quiz_question_updated', 'lesson', String(quizLesson && quizLesson._id || ''), {
                 courseId: String(course._id),
                 questionIndex: resolvedQuestionIndex
@@ -2310,22 +2216,6 @@ router.put(
         } catch (err) {
             res.status(500).json({ success: false, error: err.message })
         }
-    })
-router.get(
-    "/course/:courseId/quiz/:sectionIndex/:quizIndex",
-    async (req, res) => {
-
-        const { courseId, sectionIndex, quizIndex } = req.params
-
-        const course = await loadEditableCourse(courseId)
-        if (!course) {
-            return res.status(404).send('Course not found')
-        }
-
-        const quiz = getCanonicalLesson(course, Number(sectionIndex), Number(quizIndex))
-
-        res.render("quizPlayer", { quiz })
-
     })
 
 // ==================== SLIDES MANAGEMENT ====================

@@ -522,7 +522,7 @@
 
     if (summary.commonUnderstandings && summary.commonUnderstandings.length) {
       html += '<div class="mb-2"><strong class="small">Common Understandings:</strong><ul class="mb-0 small">';
-      for (var i = 0; i < summary.commonUnderstandings.length; i++) {
+      for (let i = 0; i < summary.commonUnderstandings.length; i++) {
         html += '<li>' + escapeHtml(summary.commonUnderstandings[i]) + '</li>';
       }
       html += '</ul></div>';
@@ -530,7 +530,7 @@
 
     if (summary.commonConfusions && summary.commonConfusions.length) {
       html += '<div class="mb-2"><strong class="small">Common Confusions:</strong><ul class="mb-0 small">';
-      for (var i = 0; i < summary.commonConfusions.length; i++) {
+      for (let i = 0; i < summary.commonConfusions.length; i++) {
         html += '<li>' + escapeHtml(summary.commonConfusions[i]) + '</li>';
       }
       html += '</ul></div>';
@@ -538,7 +538,7 @@
 
     if (summary.representativeResponses && summary.representativeResponses.length) {
       html += '<div class="mb-2"><strong class="small">Representative Responses:</strong><ul class="mb-0 small">';
-      for (var i = 0; i < summary.representativeResponses.length; i++) {
+      for (let i = 0; i < summary.representativeResponses.length; i++) {
         html += '<li><em>' + escapeHtml(summary.representativeResponses[i]) + '</em></li>';
       }
       html += '</ul></div>';
@@ -546,7 +546,7 @@
 
     if (summary.improvementSuggestions && summary.improvementSuggestions.length) {
       html += '<div class="mb-2"><strong class="small">Improvement Suggestions:</strong><ul class="mb-0 small">';
-      for (var i = 0; i < summary.improvementSuggestions.length; i++) {
+      for (let i = 0; i < summary.improvementSuggestions.length; i++) {
         html += '<li>' + escapeHtml(summary.improvementSuggestions[i]) + '</li>';
       }
       html += '</ul></div>';

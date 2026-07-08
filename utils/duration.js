@@ -117,17 +117,6 @@ function getLessonVideoUrl(lesson) {
   return String(lesson.videoUrl || '').trim();
 }
 
-function computeLessonDurationDelta(previousLesson, nextLesson) {
-  const previousDuration = String(previousLesson && previousLesson.type || '').trim().toLowerCase() === 'video'
-    ? (getResolvableLessonDurationSeconds(previousLesson) || 0)
-    : 0;
-  const nextDuration = String(nextLesson && nextLesson.type || '').trim().toLowerCase() === 'video'
-    ? (getResolvableLessonDurationSeconds(nextLesson) || 0)
-    : 0;
-
-  return nextDuration - previousDuration;
-}
-
 async function syncLessonDuration(lesson, options = {}) {
   const debug = Boolean(options.debug);
 
@@ -225,7 +214,6 @@ async function syncLessonDuration(lesson, options = {}) {
 module.exports = {
   applyLessonDurationFields,
   clearLessonDurationFields,
-  computeLessonDurationDelta,
   ensureLessonContentObject,
   formatDuration,
   getLessonVideoUrl,

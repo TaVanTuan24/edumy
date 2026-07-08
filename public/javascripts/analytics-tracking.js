@@ -32,7 +32,7 @@
           return decodeURIComponent(cookie.substring('XSRF-TOKEN='.length));
         }
       }
-    } catch (_err) {}
+    } catch (_err) { /* ignore cookie read errors */ }
 
     return '';
   }
@@ -113,7 +113,7 @@
         if (navigator.sendBeacon('/analytics/events', blob)) {
           return Promise.resolve();
         }
-      } catch (_err) {}
+      } catch (_err) { /* fall back to fetch below */ }
     }
 
     var fetcher = typeof window.csrfFetch === 'function' ? window.csrfFetch : window.fetch;

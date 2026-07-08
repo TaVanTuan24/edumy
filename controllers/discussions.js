@@ -54,7 +54,7 @@ module.exports.listQuestions = async (req, res) => {
 
   const docs = await Discussion.find(filter)
     .populate('author', 'username')
-    .sort(sort === 'newest' ? { createdAt: -1 } : { createdAt: -1 })
+    .sort({ createdAt: -1 })
     .lean();
 
   const questions = docs

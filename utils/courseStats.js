@@ -1,10 +1,10 @@
 const {
-  computeLessonDurationDelta,
   formatDuration,
   getResolvableLessonDurationSeconds,
   getStoredLessonDurationSeconds,
   syncLessonDuration
 } = require('./duration');
+const logger = require('./logger');
 
 function isObjectLike(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -83,21 +83,6 @@ function rebuildStoredCourseStats(course) {
   };
 }
 
-function applyCourseStatsDelta(course, delta = {}) {
-  if (!course || typeof course !== 'object') return course;
-
-  const nextDuration = Math.max(0, (Number(course.totalDurationSeconds) || 0) + (Number(delta.totalDurationSeconds) || 0));
-  const nextLessons = Math.max(0, (Number(course.totalLessonCount) || 0) + (Number(delta.totalLessonCount) || 0));
-  const nextVideos = Math.max(0, (Number(course.totalVideoCount) || 0) + (Number(delta.totalVideoCount) || 0));
-
-  course.totalDurationSeconds = nextDuration;
-  course.totalDurationFormatted = nextDuration > 0 ? formatDuration(nextDuration) : '';
-  course.totalLessonCount = nextLessons;
-  course.totalVideoCount = nextVideos;
-  course.totalSectionCount = Array.isArray(course.sections) ? course.sections.length : 0;
-  return course;
-}
-
 function syncCourseAggregateFields(course) {
   if (!course || typeof course !== 'object') return course;
 
@@ -147,7 +132,7 @@ async function rebuildCourseDurationData(course, options = {}) {
       const afterDuration = getStoredLessonDurationSeconds(lesson);
 
       if (debug) {
-        console.log('[course-stats] rebuild lesson', {
+        logger.debug({
           courseId,
           sectionIndex,
           lessonIndex,
@@ -157,7 +142,7 @@ async function rebuildCourseDurationData(course, options = {}) {
           beforeDurationSeconds: beforeDuration,
           afterDurationSeconds: afterDuration,
           reason: result.skipReason || ''
-        });
+        }, '[course-stats] rebuild lesson');
       }
 
       if (afterDuration && afterDuration !== beforeDuration) {
@@ -181,9 +166,7 @@ async function rebuildCourseDurationData(course, options = {}) {
 }
 
 module.exports = {
-  applyCourseStatsDelta,
   buildStoredCourseStats,
-  computeLessonDurationDelta,
   getSafeSections,
   getSectionLessons,
   isVideoLesson,
